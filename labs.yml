@@ -1,0 +1,10 @@
+---
+name: blueprint
+description: Common libraries for Databricks Labs
+install:
+  script: src/databricks/labs/ucx/install.py
+entrypoint: src/databricks/labs/ucx/cli.py
+min_python: 3.10
+commands:
+  - name: init
+    description: initializes new project
