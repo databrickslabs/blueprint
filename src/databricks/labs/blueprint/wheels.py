@@ -12,10 +12,14 @@ from databricks.sdk import WorkspaceClient
 from databricks.sdk.mixins.compute import SemVer
 from databricks.sdk.service.workspace import ImportFormat
 
+from databricks.labs.blueprint.entrypoint import find_project_root
+
 logger = logging.getLogger(__name__)
 
 
 class Wheels(AbstractContextManager):
+    """Wheel builder"""
+
     def __init__(self, ws: WorkspaceClient, install_folder: str, released_version: str):
         self._ws = ws
         self._this_file = Path(__file__)
@@ -23,6 +27,7 @@ class Wheels(AbstractContextManager):
         self._released_version = released_version
 
     def version(self):
+        """Returns current version of the project"""
         if hasattr(self, "__version"):
             return self.__version
         project_root = find_project_root()
@@ -78,7 +83,13 @@ class Wheels(AbstractContextManager):
         return self._remote_wheel
 
     def _build_wheel(self, tmp_dir: str, *, verbose: bool = False):
-        """Helper to build the wheel package"""
+        """Helper to build the wheel package
+
+        :param tmp_dir: str:
+        :param *:
+        :param verbose: bool:  (Default value = False)
+
+        """
         stdout = subprocess.STDOUT
         stderr = subprocess.STDOUT
         if not verbose:
@@ -106,20 +117,3 @@ class Wheels(AbstractContextManager):
         )
         # get wheel name as first file in the temp directory
         return next(Path(tmp_dir).glob("*.whl"))
-
-
-def find_project_root() -> Path:
-    def _find_dir_with_leaf(folder: Path, leaf: str) -> Path | None:
-        root = folder.root
-        while str(folder.absolute()) != root:
-            if (folder / leaf).exists():
-                return folder
-            folder = folder.parent
-        return None
-
-    for leaf in ["pyproject.toml", "setup.py"]:
-        root = _find_dir_with_leaf(Path(__file__), leaf)
-        if root is not None:
-            return root
-    msg = "Cannot find project root"
-    raise NotADirectoryError(msg)

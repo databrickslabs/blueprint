@@ -119,7 +119,12 @@ class Threads(Generic[Result]):
 
     @staticmethod
     def _wrap_result(func, name):
-        """This method emulates GoLang's error return style"""
+        """This method emulates GoLang's error return style
+
+        :param func: callable
+        :param name: human-readable task name
+
+        """
 
         @functools.wraps(func)
         def inner(*args, **kwargs):

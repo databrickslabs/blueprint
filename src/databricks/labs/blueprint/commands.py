@@ -21,11 +21,18 @@ _LOG = logging.getLogger("databricks.sdk")
 
 
 class _ReturnToPrintJsonTransformer(ast.NodeTransformer):
+    """Changes return X to print(json.dumps(X))"""
+
     def __init__(self) -> None:
         self._has_json_import = False
         self.has_return = False
 
     def apply(self, raw_node: ast.AST) -> ast.AST:
+        """Applies relevant AST transformations to python code
+
+        :param raw_node: ast.AST:
+
+        """
         node: ast.Module = self.visit(raw_node)
         if self.has_return and not self._has_json_import:
             new_import: ast.stmt = ast.parse("import json").body[0]
@@ -33,6 +40,11 @@ class _ReturnToPrintJsonTransformer(ast.NodeTransformer):
         return node
 
     def visit_Import(self, node: ast.Import) -> ast.Import:  # noqa: N802
+        """Detects if code has a json import
+
+        :param node: ast.Import:
+
+        """
         for name in node.names:
             if "json" != ast.unparse(name):
                 continue
@@ -41,6 +53,11 @@ class _ReturnToPrintJsonTransformer(ast.NodeTransformer):
         return node
 
     def visit_Return(self, node):  # noqa: N802
+        """Rewrites return to print(json.dumps(...))
+
+        :param node:
+
+        """
         value = node.value
         if not value:
             # Remove the original return statement
@@ -53,6 +70,8 @@ class _ReturnToPrintJsonTransformer(ast.NodeTransformer):
 
 
 class CommandExecutor:
+    """Executes commands on Databricks Clusters"""
+
     def __init__(self, ws: WorkspaceClient, cluster_id: str | None = None, language: Language = Language.PYTHON):
         if not cluster_id:
             cluster_id = ws.config.cluster_id
@@ -67,7 +86,12 @@ class CommandExecutor:
         self._lock = threading.Lock()
         self._ctx: ContextStatusResponse | None = None
 
-    def run(self, code):
+    def run(self, code: str):
+        """Executes code on Databricks cluster and returns a result or throws the exception
+
+        :param code: executable code
+
+        """
         code = self._trim_leading_whitespace(code)
 
         if self._language == Language.PYTHON:
@@ -83,6 +107,8 @@ class CommandExecutor:
         ).result()
 
         results = result.results
+        if not results:
+            raise Exception("no results found")
         if result.status == compute.CommandStatus.FINISHED:
             self._raise_if_failed(results)
             if (
@@ -91,13 +117,19 @@ class CommandExecutor:
                 and json_serialize_transform.has_return
             ):
                 # parse json from converted return statement
+                assert results.data is not None
                 return json.loads(results.data)
             return results.data
         else:
             # there might be an opportunity to convert builtin exceptions
             raise Exception(results.summary)
 
-    def install_notebook_library(self, library):
+    def install_notebook_library(self, library: str):
+        """Installs a notebook-scoped library on a cluster
+
+        :param library: workspace-fs file path
+
+        """
         return self.run(
             f"""
             get_ipython().run_line_magic('pip', 'install {library}')
@@ -106,6 +138,7 @@ class CommandExecutor:
         )
 
     def _running_command_context(self) -> compute.ContextStatusResponse:
+        """Returns a running command execution context"""
         if self._ctx:
             return self._ctx
         with self._lock:
@@ -117,19 +150,39 @@ class CommandExecutor:
         return self._ctx
 
     def _is_failed(self, results: compute.Results) -> bool:
+        """Checks if command failed
+
+        :param results: compute.Results:
+
+        """
         return results.result_type == compute.ResultType.ERROR
 
     def _text(self, results: compute.Results) -> str:
+        """Retrieves text from a command
+
+        :param results: compute.Results:
+
+        """
         if results.result_type != compute.ResultType.TEXT:
             return ""
         return _out_re.sub("", str(results.data))
 
     def _raise_if_failed(self, results: compute.Results):
+        """Raises exception if command failed
+
+        :param results: compute.Results:
+
+        """
         if not self._is_failed(results):
             return
         raise DatabricksError(self._error_from_results(results))
 
     def _error_from_results(self, results: compute.Results):
+        """Converts results into an error
+
+        :param results: compute.Results:
+
+        """
         if not self._is_failed(results):
             return
         results_cause = results.cause
@@ -163,7 +216,11 @@ class CommandExecutor:
     @staticmethod
     def _trim_leading_whitespace(command_str: str) -> str:
         """Removes leading whitespace, so that Python code blocks that
-        are embedded into Python code still could be interpreted properly."""
+        are embedded into Python code still could be interpreted properly.
+
+        :param command_str: str:
+
+        """
         lines = command_str.replace("\t", "    ").split("\n")
         leading_whitespace = sys.maxsize
         if lines[0] == "":

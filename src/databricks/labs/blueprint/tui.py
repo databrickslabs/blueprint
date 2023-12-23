@@ -7,7 +7,16 @@ logger = logging.getLogger(__name__)
 
 
 class Prompts:
+    """ """
+
     def multi_select_from_dict(self, all_prompt: str, item_prompt: str, choices: dict[str, Any]) -> list[Any]:
+        """
+
+        :param all_prompt: str:
+        :param item_prompt: str:
+        :param choices: dict[str, Any]:
+
+        """
         selected: list[Any] = []
         if self.question(all_prompt, default="no") == "yes":
             return selected
@@ -24,10 +33,27 @@ class Prompts:
         return selected
 
     def choice_from_dict(self, text: str, choices: dict[str, Any], *, sort: bool = True) -> Any:
+        """
+
+        :param text: str:
+        :param choices: dict[str,Any]:
+        :param *:
+        :param sort: bool:  (Default value = True)
+
+        """
         key = self.choice(text, list(choices.keys()), sort=sort)
         return choices[key]
 
     def choice(self, text: str, choices: list[Any], *, max_attempts: int = 10, sort: bool = True) -> str:
+        """
+
+        :param text: str:
+        :param choices: list[Any]:
+        :param *:
+        :param max_attempts: int:  (Default value = 10)
+        :param sort: bool:  (Default value = True)
+
+        """
         if sort:
             choices = sorted(choices, key=str.casefold)
         numbered = "\n".join(f"\033[1m[{i}]\033[0m \033[36m{v}\033[0m" for i, v in enumerate(choices))
@@ -44,6 +70,13 @@ class Prompts:
         raise ValueError(msg)
 
     def confirm(self, text: str, *, max_attempts: int = 10):
+        """
+
+        :param text: str:
+        :param *:
+        :param max_attempts: int:  (Default value = 10)
+
+        """
         answer = self.question(text, valid_regex=r"[Yy][Ee][Ss]|[Nn][Oo]", default="no", max_attempts=max_attempts)
         return answer.lower() == "yes"
 
@@ -57,6 +90,18 @@ class Prompts:
         valid_regex: str | None = None,
         validate: Callable[[str], bool] | None = None,
     ) -> str:
+        """
+
+        :param text: str:
+        :param *:
+        :param default: str | None:  (Default value = None)
+        :param max_attempts: int:  (Default value = 10)
+        :param valid_number: bool:  (Default value = False)
+        :param valid_regex: str | None:  (Default value = None)
+        :param validate: Callable[[str]:
+        :param bool] | None:  (Default value = None)
+
+        """
         default_help = "" if default is None else f"\033[36m (default: {default})\033[0m"
         prompt = f"\033[1m{text}{default_help}: \033[0m"
         match_regex = None
@@ -85,11 +130,19 @@ class Prompts:
 
 
 class MockPrompts(Prompts):
+    """Testing utility for prompts"""
+
     def __init__(self, patterns_to_answers: dict[str, str]):
         patterns = [(re.compile(k), v) for k, v in patterns_to_answers.items()]
         self._questions_to_answers = sorted(patterns, key=lambda _: len(_[0].pattern), reverse=True)
 
     def question(self, text: str, default: str | None = None, **_) -> str:
+        """
+
+        :param text: str:
+        :param default: str | None:  (Default value = None)
+
+        """
         logger.info(f"Asking prompt: {text}")
         for question, answer in self._questions_to_answers:
             if not question.search(text):

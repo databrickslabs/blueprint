@@ -12,8 +12,7 @@ class RateLimiter:
     overloading a service.
 
     It uses a variation of the Leaky Bucket algorithm (https://en.wikipedia.org/wiki/Leaky_bucket)
-    for its simplicity.
-    """
+    for its simplicity."""
 
     def __init__(self, *, max_requests: int = 30, burst_period_seconds: int = 1):
         self._capacity = max_requests
@@ -30,8 +29,7 @@ class RateLimiter:
         to determine how much time remains in the current burst period. If the calculated delay is less than zero,
         it means that the burst period has elapsed, so it resets the request count and updates the last request
         timestamp. If the request count exceeds the allowed maximum (_max_requests), it sleeps for the remaining
-        time in the burst period (delay) to enforce the rate limit.
-        """
+        time in the burst period (delay) to enforce the rate limit."""
         with self._lock:
             now = time.time()
             delay = self._burst_period_seconds - (now - self._last)
@@ -48,6 +46,14 @@ class RateLimiter:
 
 
 def rate_limited(*, max_requests: int = 30, burst_period_seconds: int = 1):
+    """Limits execution frequency of decorated function
+
+    :param *: this function accepts keyword-only arguments
+    :param max_requests: int:  (Default value = 30)
+    :param burst_period_seconds: int:  (Default value = 1)
+
+    """
+
     def decorator(func):
         rate_limiter = RateLimiter(max_requests=max_requests, burst_period_seconds=burst_period_seconds)
 

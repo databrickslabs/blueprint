@@ -13,6 +13,8 @@ Resources = dict[str, str]
 
 
 class InstallState:
+    """Manages ~/.{project}/state.json file on WorkspaceFS to track installations"""
+
     def __init__(self, ws: WorkspaceClient, install_folder: str, version: int = 1):
         self._ws = ws
         self._state_file = f"{install_folder}/state.json"
@@ -29,6 +31,7 @@ class InstallState:
             return self._state["resources"][item]
 
     def _load(self):
+        """Loads remote state"""
         default_state = {"$version": self._version, "resources": {}}
         try:
             raw = json.load(self._ws.workspace.download(self._state_file))
@@ -44,6 +47,7 @@ class InstallState:
             return default_state
 
     def save(self):
+        """Saves remote state"""
         with self._lock:
             state_dump = json.dumps(self._state, indent=2).encode("utf8")
             self._ws.workspace.upload(self._state_file, state_dump, format=ImportFormat.AUTO, overwrite=True)
