@@ -2,14 +2,15 @@ import ast
 import html
 import json
 import logging
+import platform
 import re
 import sys
 import threading
+from typing import Any, Callable
 
-from databricks.sdk import WorkspaceClient
 from databricks.sdk.core import DatabricksError
+from databricks.sdk.mixins.compute import ClustersExt
 from databricks.sdk.service import compute
-from databricks.sdk.service.compute import ContextStatusResponse, Language
 
 _out_re = re.compile(r"Out\[[\d\s]+]:\s")
 _tag_re = re.compile(r"<[^>]*>")
@@ -20,31 +21,44 @@ _ascii_escape_re = re.compile(r"(\x9B|\x1B\[)[0-?]*[ -/]*[@-~]")
 _LOG = logging.getLogger("databricks.sdk")
 
 
-class _ReturnToPrintJsonTransformer(ast.NodeTransformer):
-    """Changes return X to print(json.dumps(X))"""
-
+class _ReturnToPrintJson(ast.NodeTransformer):
     def __init__(self) -> None:
         self._has_json_import = False
+        self._has_print = False
         self.has_return = False
 
+    @staticmethod
+    def transform(code: str) -> tuple[str, bool]:
+        major, minor, _ = platform.python_version_tuple()
+        unsupported_version = (int(major), int(minor)) < (3, 8)
+        has_return_in_last_line = code.splitlines()[-1].startswith("return ")
+
+        if unsupported_version and not has_return_in_last_line:
+            return code, False
+
+        if unsupported_version and has_return_in_last_line:
+            raise ValueError(
+                "dynamic conversion of return .. to print(json.dumps(..)) " "is only possible starting from Python 3.8"
+            )
+
+        # perform AST transformations for very repetitive tasks, like JSON serialization
+        code_tree = ast.parse(code)
+        transform = _ReturnToPrintJson()
+        new_tree = transform.apply(code_tree)
+        code = ast.unparse(new_tree)
+        return code, transform.has_return
+
     def apply(self, raw_node: ast.AST) -> ast.AST:
-        """Applies relevant AST transformations to python code
-
-        :param raw_node: ast.AST:
-
-        """
-        node: ast.Module = self.visit(raw_node)
+        node: ast.stmt = self.visit(raw_node)
+        if self.has_return and self._has_print:
+            msg = "cannot have print() call, return .. is converted to print(json.dumps(..))"
+            raise ValueError(msg)
         if self.has_return and not self._has_json_import:
             new_import: ast.stmt = ast.parse("import json").body[0]
-            node.body.insert(0, new_import)
+            node.body.insert(0, new_import)  # type: ignore[attr-defined]
         return node
 
     def visit_Import(self, node: ast.Import) -> ast.Import:  # noqa: N802
-        """Detects if code has a json import
-
-        :param node: ast.Import:
-
-        """
         for name in node.names:
             if "json" != ast.unparse(name):
                 continue
@@ -52,12 +66,12 @@ class _ReturnToPrintJsonTransformer(ast.NodeTransformer):
             break
         return node
 
+    def visit_Call(self, node: ast.Call):  # noqa: N802
+        if ast.unparse(node.func) == "print":
+            self._has_print = True
+        return node
+
     def visit_Return(self, node):  # noqa: N802
-        """Rewrites return to print(json.dumps(...))
-
-        :param node:
-
-        """
         value = node.value
         if not value:
             # Remove the original return statement
@@ -70,66 +84,52 @@ class _ReturnToPrintJsonTransformer(ast.NodeTransformer):
 
 
 class CommandExecutor:
-    """Executes commands on Databricks Clusters"""
-
-    def __init__(self, ws: WorkspaceClient, cluster_id: str | None = None, language: Language = Language.PYTHON):
-        if not cluster_id:
-            cluster_id = ws.config.cluster_id
-        if not cluster_id:
-            message = "cluster_id is required either in configuration or as an argument"
-            raise ValueError(ws.config.wrap_debug_info(message))
-        # TODO: this is taken from dbutils implementation, refactor it once this is merged to SDK
-        self._cluster_id = cluster_id
+    def __init__(
+        self,
+        clusters: ClustersExt,
+        command_execution: compute.CommandExecutionAPI,
+        cluster_id_provider: Callable[[], str],
+        *,
+        language: compute.Language = compute.Language.PYTHON,
+    ):
+        self._cluster_id_provider = cluster_id_provider
         self._language = language
-        self._clusters = ws.clusters
-        self._commands = ws.command_execution
+        self._clusters = clusters
+        self._commands = command_execution
         self._lock = threading.Lock()
-        self._ctx: ContextStatusResponse | None = None
+        self._ctx: compute.ContextStatusResponse | None = None
 
-    def run(self, code: str):
-        """Executes code on Databricks cluster and returns a result or throws the exception
-
-        :param code: executable code
-
-        """
+    def run(self, code: str, *, result_as_json=False, detect_return=True) -> Any:
         code = self._trim_leading_whitespace(code)
 
-        if self._language == Language.PYTHON:
-            # perform AST transformations for very repetitive tasks, like JSON serialization
-            code_tree = ast.parse(code)
-            json_serialize_transform = _ReturnToPrintJsonTransformer()
-            new_tree = json_serialize_transform.apply(code_tree)
-            code = ast.unparse(new_tree)
+        if self._language == compute.Language.PYTHON and detect_return and not result_as_json:
+            code, result_as_json = _ReturnToPrintJson.transform(code)
 
         ctx = self._running_command_context()
-        result = self._commands.execute(
-            cluster_id=self._cluster_id, language=self._language, context_id=ctx.id, command=code
+        cluster_id = self._cluster_id_provider()
+        command_status_response = self._commands.execute(
+            cluster_id=cluster_id, language=self._language, context_id=ctx.id, command=code
         ).result()
 
-        results = result.results
-        if not results:
-            raise Exception("no results found")
-        if result.status == compute.CommandStatus.FINISHED:
+        results = command_status_response.results
+        assert results is not None
+        if command_status_response.status == compute.CommandStatus.FINISHED:
             self._raise_if_failed(results)
-            if (
-                self._language == Language.PYTHON
-                and results.result_type == compute.ResultType.TEXT
-                and json_serialize_transform.has_return
-            ):
-                # parse json from converted return statement
-                assert results.data is not None
-                return json.loads(results.data)
+            if results.result_type == compute.ResultType.TEXT and result_as_json:
+                try:
+                    # parse json from converted return statement
+                    assert results.data is not None
+                    return json.loads(results.data)
+                except json.JSONDecodeError as e:
+                    _LOG.warning("cannot parse converted return statement. Just returning text", exc_info=e)
+                    return results.data
             return results.data
         else:
             # there might be an opportunity to convert builtin exceptions
-            raise Exception(results.summary)
+            assert results.summary is not None
+            raise DatabricksError(results.summary)
 
     def install_notebook_library(self, library: str):
-        """Installs a notebook-scoped library on a cluster
-
-        :param library: workspace-fs file path
-
-        """
         return self.run(
             f"""
             get_ipython().run_line_magic('pip', 'install {library}')
@@ -138,41 +138,27 @@ class CommandExecutor:
         )
 
     def _running_command_context(self) -> compute.ContextStatusResponse:
-        """Returns a running command execution context"""
         if self._ctx:
             return self._ctx
         with self._lock:
             if self._ctx:
                 return self._ctx
-            self._clusters.ensure_cluster_is_running(self._cluster_id)
-            command_wait = self._commands.create(cluster_id=self._cluster_id, language=self._language)
-            self._ctx = command_wait.result()
+            cluster_id = self._cluster_id_provider()
+            self._clusters.ensure_cluster_is_running(cluster_id)
+            self._ctx = self._commands.create(cluster_id=cluster_id, language=self._language).result()
         return self._ctx
 
-    def _is_failed(self, results: compute.Results) -> bool:
-        """Checks if command failed
-
-        :param results: compute.Results:
-
-        """
+    @staticmethod
+    def _is_failed(results: compute.Results) -> bool:
         return results.result_type == compute.ResultType.ERROR
 
-    def _text(self, results: compute.Results) -> str:
-        """Retrieves text from a command
-
-        :param results: compute.Results:
-
-        """
+    @staticmethod
+    def _text(results: compute.Results) -> str:
         if results.result_type != compute.ResultType.TEXT:
             return ""
         return _out_re.sub("", str(results.data))
 
     def _raise_if_failed(self, results: compute.Results):
-        """Raises exception if command failed
-
-        :param results: compute.Results:
-
-        """
         if not self._is_failed(results):
             return
         raise DatabricksError(self._error_from_results(results))
@@ -216,11 +202,7 @@ class CommandExecutor:
     @staticmethod
     def _trim_leading_whitespace(command_str: str) -> str:
         """Removes leading whitespace, so that Python code blocks that
-        are embedded into Python code still could be interpreted properly.
-
-        :param command_str: str:
-
-        """
+        are embedded into Python code still could be interpreted properly."""
         lines = command_str.replace("\t", "    ").split("\n")
         leading_whitespace = sys.maxsize
         if lines[0] == "":
@@ -242,4 +224,4 @@ class CommandExecutor:
                 new_command += line + "\n"
             else:
                 new_command += line[leading_whitespace:] + "\n"
-        return new_command
+        return new_command.strip()

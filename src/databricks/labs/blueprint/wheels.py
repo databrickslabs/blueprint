@@ -18,12 +18,13 @@ from databricks.labs.blueprint.installer import InstallState
 
 logger = logging.getLogger(__name__)
 
-_IGNORE_DIR_NAMES = {'.git', '.venv', '.databricks', '.mypy_cache', '.github', '.idea', '.coverage', 'htmlcov'}
+_IGNORE_DIR_NAMES = {".git", ".venv", ".databricks", ".mypy_cache", ".github", ".idea", ".coverage", "htmlcov"}
+
 
 class Wheels(AbstractContextManager):
     """Wheel builder"""
 
-    __version: str = None
+    __version: str | None = None
 
     def __init__(
         self,
@@ -33,7 +34,7 @@ class Wheels(AbstractContextManager):
         github_org: str = "databrickslabs",
         verbose: bool = False,
         version_file_name: str = "__about__.py",
-            project_root_finder: Callable[[], Path] | None = None
+        project_root_finder: Callable[[], Path] | None = None,
     ):
         if not project_root_finder:
             project_root_finder = find_project_root
@@ -47,7 +48,7 @@ class Wheels(AbstractContextManager):
 
     def is_git_checkout(self) -> bool:
         project_root = self._project_root_finder()
-        git_config = project_root / '.git' / 'config'
+        git_config = project_root / ".git" / "config"
         return git_config.exists()
 
     def is_unreleased_version(self) -> bool:
@@ -71,10 +72,12 @@ class Wheels(AbstractContextManager):
             return self.__version
         except Exception as err:
             product = self._install_state.product()
-            raise OSError(f"Cannot determine unreleased version. Please report this error "
+            raise OSError(
+                f"Cannot determine unreleased version. Please report this error "
                 f"message that you see on https://github.com/{self._github_org}/{product}/issues/new. "
                 f"Meanwhile, download, unpack, and install the latest released version from "
-                f"https://github.com/{self._github_org}/{product}/releases. Original error is: {err!s}") from None
+                f"https://github.com/{self._github_org}/{product}/releases. Original error is: {err!s}"
+            ) from None
 
     @staticmethod
     def _pep0440_version_from_git():
@@ -115,20 +118,20 @@ class Wheels(AbstractContextManager):
                     return file
                 if not file.is_dir():
                     continue
-                virtual_env_marker = file / 'pyvenv.cfg'
+                virtual_env_marker = file / "pyvenv.cfg"
                 if virtual_env_marker.exists():
                     continue
                 queue.append(file)
-        raise NotImplementedError(f'cannot find {names} in {root}')
+        raise NotImplementedError(f"cannot find {names} in {root}")
 
     @staticmethod
     def _read_version(version_file: Path) -> str:
-        version_data = {}
-        with version_file.open('r') as f:
+        version_data: dict[str, str] = {}
+        with version_file.open("r") as f:
             exec(f.read(), version_data)
-        if '__version__' not in version_data:
-            raise SyntaxError(f'Cannot find __version__')
-        return version_data['__version__']
+        if "__version__" not in version_data:
+            raise SyntaxError("Cannot find __version__")
+        return version_data["__version__"]
 
     def __enter__(self) -> "Wheels":
         self._tmp_dir = tempfile.TemporaryDirectory()

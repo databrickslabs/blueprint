@@ -24,7 +24,7 @@ class IllegalState(ValueError):
 class InstallState:
     """Manages ~/.{product}/state.json file on WorkspaceFS to track installations"""
 
-    _state: RawState = None
+    _state: RawState | None = None
 
     def __init__(
         self, ws: WorkspaceClient, product: str, config_version: int = 1, *, install_folder: str | None = None
@@ -75,7 +75,9 @@ class InstallState:
     def save(self) -> None:
         """Saves remote state"""
         with self._lock:
-            state: dict = self._state.copy()  # type: ignore[assignment]
+            state: dict = {}
+            if self._state:
+                state = self._state.copy()  # type: ignore[assignment]
             state["$version"] = self._config_version
             state_dump = json.dumps(state, indent=2).encode("utf8")
             self._ws.workspace.upload(
