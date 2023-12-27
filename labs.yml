@@ -2,9 +2,22 @@
 name: blueprint
 description: Common libraries for Databricks Labs
 install:
-  script: src/databricks/labs/ucx/install.py
-entrypoint: src/databricks/labs/ucx/cli.py
+  script: src/databricks/labs/blueprint/__init__.py
+entrypoint: src/databricks/labs/blueprint/__main__.py
 min_python: 3.10
 commands:
-  - name: init
+  - name: me
+    description: shows current username
+    flags:
+     - name: greeting
+       default: Hello
+       description: Greeting prefix
+  - name: workspaces
+    is_account: true
+    description: shows current workspaces
+  - name: init-project
+    is_unauthenticated: true
     description: initializes new project
+    flags:
+      - name: target
+        description: target folder

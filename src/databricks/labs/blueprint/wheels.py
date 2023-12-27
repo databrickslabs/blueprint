@@ -18,45 +18,33 @@ from databricks.labs.blueprint.installer import InstallState
 
 logger = logging.getLogger(__name__)
 
-_IGNORE_DIR_NAMES = {".git", ".venv", ".databricks", ".mypy_cache", ".github", ".idea", ".coverage", "htmlcov"}
+IGNORE_DIR_NAMES = {
+    ".git",
+    ".venv",
+    ".databricks",
+    ".mypy_cache",
+    ".github",
+    ".idea",
+    ".coverage",
+    "htmlcov",
+    "__pycache__",
+    "tests",
+}
 
 
-class Wheels(AbstractContextManager):
-    """Wheel builder"""
-
-    __version: str | None = None
-
+class ProductInfo:
     def __init__(
         self,
-        ws: WorkspaceClient,
-        install_state: InstallState,
         *,
-        github_org: str = "databrickslabs",
-        verbose: bool = False,
         version_file_name: str = "__about__.py",
         project_root_finder: Callable[[], Path] | None = None,
+        github_org: str = "databrickslabs",
     ):
         if not project_root_finder:
             project_root_finder = find_project_root
-        self._ws = ws
-        self._install_state = install_state
         self._github_org = github_org
-        self._verbose = verbose
         self._version_file_name = version_file_name
         self._project_root_finder = project_root_finder
-
-    def is_git_checkout(self) -> bool:
-        project_root = self._project_root_finder()
-        git_config = project_root / ".git" / "config"
-        return git_config.exists()
-
-    def is_unreleased_version(self) -> bool:
-        return "+" in self.version()
-
-    def released_version(self) -> str:
-        project_root = self._project_root_finder()
-        version_file = self._find_version_file(project_root, [self._version_file_name])
-        return self._read_version(version_file)
 
     def version(self):
         """Returns current version of the project"""
@@ -66,49 +54,53 @@ class Wheels(AbstractContextManager):
             # normal install, downloaded releases won't have the .git folder
             self.__version = self.released_version()
             return self.__version
+        self.__version = self.unreleased_version()
+        return self.__version
+
+    def product_name(self) -> str:
+        project_root = self._project_root_finder()
+        version_file = self.version_file_in(project_root)
+        version_file_folder = version_file.parent
+        return version_file_folder.name.replace("_", "-")
+
+    def released_version(self) -> str:
+        project_root = self._project_root_finder()
+        version_file = self.version_file_in(project_root)
+        return self._read_version(version_file)
+
+    def is_git_checkout(self) -> bool:
+        project_root = self._project_root_finder()
+        git_config = project_root / ".git" / "config"
+        return git_config.exists()
+
+    def is_unreleased_version(self) -> bool:
+        return "+" in self.version()
+
+    def unreleased_version(self) -> str:
         try:
-            self.__version = self._pep0440_version_from_git()
-            return self.__version
+            out = subprocess.run(["git", "describe", "--tags"], stdout=subprocess.PIPE, check=True)  # noqa S607
+            git_detached_version = out.stdout.decode("utf8")
+            dv = SemVer.parse(git_detached_version)
+            datestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+            # new commits on main branch since the last tag
+            new_commits = dv.pre_release.split("-")[0] if dv.pre_release else None
+            # show that it's a version different from the released one in stats
+            bump_patch = dv.patch + 1
+            # create something that is both https://semver.org and https://peps.python.org/pep-0440/
+            semver_and_pep0440 = f"{dv.major}.{dv.minor}.{bump_patch}+{new_commits}{datestamp}"
+            # validate the semver
+            SemVer.parse(semver_and_pep0440)
+            return semver_and_pep0440
         except subprocess.CalledProcessError as err:
-            logger.error(
+            logger.warning(
                 "Cannot determine unreleased version. This can be fixed by adding "
                 " `git fetch --prune --unshallow` to your CI configuration.",
                 exc_info=err,
             )
-            self.__version = self.released_version()
-            return self.__version
+            return self.released_version()
 
-    @staticmethod
-    def _pep0440_version_from_git():
-        out = subprocess.run(["git", "describe", "--tags"], stdout=subprocess.PIPE, check=True)  # noqa S607
-        git_detached_version = out.stdout.decode("utf8")
-        dv = SemVer.parse(git_detached_version)
-        datestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
-        # new commits on main branch since the last tag
-        new_commits = dv.pre_release.split("-")[0] if dv.pre_release else None
-        # show that it's a version different from the released one in stats
-        bump_patch = dv.patch + 1
-        # create something that is both https://semver.org and https://peps.python.org/pep-0440/
-        semver_and_pep0440 = f"{dv.major}.{dv.minor}.{bump_patch}+{new_commits}{datestamp}"
-        # validate the semver
-        SemVer.parse(semver_and_pep0440)
-        return semver_and_pep0440
-
-    def upload_to_dbfs(self) -> str:
-        with self._local_wheel.open("rb") as f:
-            self._ws.dbfs.mkdirs(self._remote_dir_name)
-            logger.info(f"Uploading wheel to dbfs:{self._remote_wheel}")
-            self._ws.dbfs.upload(self._remote_wheel, f, overwrite=True)
-        return self._remote_wheel
-
-    def upload_to_wsfs(self) -> str:
-        with self._local_wheel.open("rb") as f:
-            self._ws.workspace.mkdirs(self._remote_dir_name)
-            logger.info(f"Uploading wheel to /Workspace{self._remote_wheel}")
-            self._ws.workspace.upload(self._remote_wheel, f, overwrite=True, format=ImportFormat.AUTO)
-        return self._remote_wheel
-
-    def _find_version_file(self, root: Path, names: list[str]) -> Path:
+    def version_file_in(self, root: Path) -> Path:
+        names = [self._version_file_name]
         queue: list[Path] = [root]
         while queue:
             current = queue.pop(0)
@@ -131,6 +123,43 @@ class Wheels(AbstractContextManager):
         if "__version__" not in version_data:
             raise SyntaxError("Cannot find __version__")
         return version_data["__version__"]
+
+
+class Wheels(AbstractContextManager):
+    """Wheel builder"""
+
+    __version: str | None = None
+
+    def __init__(
+        self,
+        ws: WorkspaceClient,
+        install_state: InstallState,
+        product_info: ProductInfo,
+        *,
+        verbose: bool = False,
+        project_root_finder: Callable[[], Path] | None = None,
+    ):
+        if not project_root_finder:
+            project_root_finder = find_project_root
+        self._ws = ws
+        self._install_state = install_state
+        self._product_info = product_info
+        self._verbose = verbose
+        self._project_root_finder = project_root_finder
+
+    def upload_to_dbfs(self) -> str:
+        with self._local_wheel.open("rb") as f:
+            self._ws.dbfs.mkdirs(self._remote_dir_name)
+            logger.info(f"Uploading wheel to dbfs:{self._remote_wheel}")
+            self._ws.dbfs.upload(self._remote_wheel, f, overwrite=True)
+        return self._remote_wheel
+
+    def upload_to_wsfs(self) -> str:
+        with self._local_wheel.open("rb") as f:
+            self._ws.workspace.mkdirs(self._remote_dir_name)
+            logger.info(f"Uploading wheel to /Workspace{self._remote_wheel}")
+            self._ws.workspace.upload(self._remote_wheel, f, overwrite=True, format=ImportFormat.AUTO)
+        return self._remote_wheel
 
     def __enter__(self) -> "Wheels":
         self._tmp_dir = tempfile.TemporaryDirectory()
@@ -156,7 +185,7 @@ class Wheels(AbstractContextManager):
             stdout = subprocess.DEVNULL
             stderr = subprocess.DEVNULL
         project_root = self._project_root_finder()
-        if self.is_git_checkout() and self.is_unreleased_version():
+        if self._product_info.is_git_checkout() and self._product_info.is_unreleased_version():
             # working copy becomes project root for building a wheel
             project_root = self._copy_root_to(tmp_dir)
             # and override the version file
@@ -172,23 +201,23 @@ class Wheels(AbstractContextManager):
         return next(Path(tmp_dir).glob("*.whl"))
 
     def _override_version_to_unreleased(self, tmp_dir_path: Path):
-        version_file = self._find_version_file(tmp_dir_path, [self._version_file_name])
+        version_file = self._product_info.version_file_in(tmp_dir_path)
         with version_file.open("w") as f:
-            f.write(f'__version__ = "{self.version()}"')
+            f.write(f'__version__ = "{self._product_info.version()}"')
 
     def _copy_root_to(self, tmp_dir: str | Path):
         project_root = self._project_root_finder()
         tmp_dir_path = Path(tmp_dir) / "working-copy"
-        # copy everything to a temporary directory
-        shutil.copytree(project_root, tmp_dir_path, ignore=self._copy_ignore)
-        return tmp_dir_path
 
-    @staticmethod
-    def _copy_ignore(_, names: list[str]):
-        # callable(src, names) -> ignored_names
-        ignored_names = []
-        for name in names:
-            if name not in _IGNORE_DIR_NAMES:
-                continue
-            ignored_names.append(name)
-        return ignored_names
+        # copy everything to a temporary directory
+        def copy_ignore(_, names: list[str]):
+            # callable(src, names) -> ignored_names
+            ignored_names = []
+            for name in names:
+                if name not in IGNORE_DIR_NAMES:
+                    continue
+                ignored_names.append(name)
+            return ignored_names
+
+        shutil.copytree(project_root, tmp_dir_path, ignore=copy_ignore)
+        return tmp_dir_path

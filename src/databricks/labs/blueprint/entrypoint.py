@@ -16,8 +16,11 @@ def get_logger(file_name: str):
     entrypoint = Path(file_name).absolute()
 
     relative = entrypoint.relative_to(project_root).as_posix()
-    relative = relative.lstrip("src" + os.sep)
-    relative = relative.rstrip(".py")
+    relative = relative.removeprefix("src" + os.sep)
+    relative = relative.removesuffix("/__main__.py")
+    relative = relative.removesuffix("/__init__.py")
+    relative = relative.removesuffix("/cli.py")
+    relative = relative.removesuffix(".py")
     module_name = relative.replace(os.sep, ".")
 
     logger = logging.getLogger(module_name)

@@ -8,7 +8,7 @@ from databricks.sdk.service.workspace import ImportFormat
 from databricks.labs.blueprint.__about__ import __version__
 from databricks.labs.blueprint.entrypoint import is_in_debug
 from databricks.labs.blueprint.installer import InstallState
-from databricks.labs.blueprint.wheels import Wheels
+from databricks.labs.blueprint.wheels import ProductInfo, Wheels
 
 
 def test_build_and_upload_wheel():
@@ -16,7 +16,9 @@ def test_build_and_upload_wheel():
     state = create_autospec(InstallState)
     state.product.return_value = "blueprint"
     state.install_folder.return_value = "~/.blueprint"
-    wheels = Wheels(ws, state)
+    product_info = ProductInfo()
+
+    wheels = Wheels(ws, state, product_info)
     with wheels:
         assert os.path.exists(wheels._local_wheel)
 
@@ -40,27 +42,20 @@ def test_build_and_upload_wheel():
 def test_unreleased_version(tmp_path):
     if not is_in_debug():
         pytest.skip("fails without `git fetch --prune --unshallow` configured")
-    ws = create_autospec(WorkspaceClient)
-    state = create_autospec(InstallState)
-    state.product.return_value = "blueprint"
-    state.install_folder.return_value = "~/.blueprint"
-
-    wheels = Wheels(ws, state)
-    assert not __version__ == wheels.version()
-    assert __version__ == wheels.released_version()
-    assert wheels.is_unreleased_version()
-    assert wheels.is_git_checkout()
+    product_info = ProductInfo()
+    assert not __version__ == product_info.version()
+    assert __version__ == product_info.released_version()
+    assert product_info.is_unreleased_version()
+    assert product_info.is_git_checkout()
 
 
 def test_released_version(tmp_path):
     ws = create_autospec(WorkspaceClient)
     state = create_autospec(InstallState)
-    state.product.return_value = "blueprint"
-    state.install_folder.return_value = "~/.blueprint"
 
-    working_copy = Wheels(ws, state)._copy_root_to(tmp_path)
-    wheels = Wheels(ws, state, project_root_finder=lambda: working_copy)
+    working_copy = Wheels(ws, state, ProductInfo())._copy_root_to(tmp_path)
+    product_info = ProductInfo(project_root_finder=lambda: working_copy)
 
-    assert __version__ == wheels.version()
-    assert not wheels.is_unreleased_version()
-    assert not wheels.is_git_checkout()
+    assert __version__ == product_info.version()
+    assert not product_info.is_unreleased_version()
+    assert not product_info.is_git_checkout()
