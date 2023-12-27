@@ -1,10 +1,12 @@
 import os
 from unittest.mock import create_autospec
 
+import pytest
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.service.workspace import ImportFormat
 
 from databricks.labs.blueprint.__about__ import __version__
+from databricks.labs.blueprint.entrypoint import is_in_debug
 from databricks.labs.blueprint.installer import InstallState
 from databricks.labs.blueprint.wheels import Wheels
 
@@ -36,6 +38,8 @@ def test_build_and_upload_wheel():
 
 
 def test_unreleased_version(tmp_path):
+    if not is_in_debug():
+        pytest.skip("fails without `git fetch --prune --unshallow` configured")
     ws = create_autospec(WorkspaceClient)
     state = create_autospec(InstallState)
     state.product.return_value = "blueprint"
