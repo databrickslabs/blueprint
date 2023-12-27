@@ -13,6 +13,7 @@ from databricks.sdk.mixins.compute import SemVer
 from databricks.sdk.service.workspace import ImportFormat
 
 from databricks.labs.blueprint.entrypoint import find_project_root
+from databricks.labs.blueprint.installer import InstallState
 
 logger = logging.getLogger(__name__)
 
@@ -20,10 +21,18 @@ logger = logging.getLogger(__name__)
 class Wheels(AbstractContextManager):
     """Wheel builder"""
 
-    def __init__(self, ws: WorkspaceClient, install_folder: str, released_version: str):
+    def __init__(
+        self,
+        ws: WorkspaceClient,
+        install_state: InstallState,
+        released_version: str,
+        *,
+        github_org: str = "databrickslabs",
+    ):
         self._ws = ws
+        self._install_state = install_state
         self._this_file = Path(__file__)
-        self._install_folder = install_folder
+        self._github_org = github_org
         self._released_version = released_version
 
     def version(self):
@@ -50,19 +59,20 @@ class Wheels(AbstractContextManager):
             self.__version = semver_and_pep0440
             return semver_and_pep0440
         except Exception as err:
+            product = self._install_state.product()
             msg = (
                 f"Cannot determine unreleased version. Please report this error "
-                f"message that you see on https://github.com/databrickslabs/ucx/issues/new. "
+                f"message that you see on https://github.com/{self._github_org}/{product}/issues/new. "
                 f"Meanwhile, download, unpack, and install the latest released version from "
-                f"https://github.com/databrickslabs/ucx/releases. Original error is: {err!s}"
+                f"https://github.com/{self._github_org}/{product}/releases. Original error is: {err!s}"
             )
             raise OSError(msg) from None
 
     def __enter__(self) -> "Wheels":
         self._tmp_dir = tempfile.TemporaryDirectory()
         self._local_wheel = self._build_wheel(self._tmp_dir.name)
-        self._remote_wheel = f"{self._install_folder}/wheels/{self._local_wheel.name}"
-        self._remote_dirname = os.path.dirname(self._remote_wheel)
+        self._remote_wheel = f"{self._install_state.install_folder()}/wheels/{self._local_wheel.name}"
+        self._remote_dir_name = os.path.dirname(self._remote_wheel)
         return self
 
     def __exit__(self, __exc_type, __exc_value, __traceback):
@@ -70,14 +80,14 @@ class Wheels(AbstractContextManager):
 
     def upload_to_dbfs(self) -> str:
         with self._local_wheel.open("rb") as f:
-            self._ws.dbfs.mkdirs(self._remote_dirname)
+            self._ws.dbfs.mkdirs(self._remote_dir_name)
             logger.info(f"Uploading wheel to dbfs:{self._remote_wheel}")
             self._ws.dbfs.upload(self._remote_wheel, f, overwrite=True)
         return self._remote_wheel
 
     def upload_to_wsfs(self) -> str:
         with self._local_wheel.open("rb") as f:
-            self._ws.workspace.mkdirs(self._remote_dirname)
+            self._ws.workspace.mkdirs(self._remote_dir_name)
             logger.info(f"Uploading wheel to /Workspace{self._remote_wheel}")
             self._ws.workspace.upload(self._remote_wheel, f, overwrite=True, format=ImportFormat.AUTO)
         return self._remote_wheel
@@ -102,8 +112,7 @@ class Wheels(AbstractContextManager):
             # copy everything to a temporary directory
             shutil.copytree(project_root, tmp_dir_path)
             # and override the version file
-            # TODO: make it configurable
-            version_file = tmp_dir_path / "src/databricks/labs/ucx/__about__.py"
+            version_file = tmp_dir_path / f"src/databricks/labs/{self._install_state.product()}/__about__.py"
             with version_file.open("w") as f:
                 f.write(f'__version__ = "{self.version()}"')
             # working copy becomes project root for building a wheel
