@@ -70,8 +70,11 @@ class Wheels(AbstractContextManager):
             self.__version = self._pep0440_version_from_git()
             return self.__version
         except subprocess.CalledProcessError as err:
-            logger.error("Cannot determine unreleased version. This can be fixed by adding "
-                         " `git fetch --prune --unshallow` to your CI configuration.", exc_info=err)
+            logger.error(
+                "Cannot determine unreleased version. This can be fixed by adding "
+                " `git fetch --prune --unshallow` to your CI configuration.",
+                exc_info=err,
+            )
             self.__version = self.released_version()
             return self.__version
 
