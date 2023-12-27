@@ -40,7 +40,6 @@ class Wheels(AbstractContextManager):
             project_root_finder = find_project_root
         self._ws = ws
         self._install_state = install_state
-        self._this_file = Path(__file__)
         self._github_org = github_org
         self._verbose = verbose
         self._version_file_name = version_file_name
@@ -71,13 +70,9 @@ class Wheels(AbstractContextManager):
             self.__version = self._pep0440_version_from_git()
             return self.__version
         except Exception as err:
-            product = self._install_state.product()
-            raise OSError(
-                f"Cannot determine unreleased version. Please report this error "
-                f"message that you see on https://github.com/{self._github_org}/{product}/issues/new. "
-                f"Meanwhile, download, unpack, and install the latest released version from "
-                f"https://github.com/{self._github_org}/{product}/releases. Original error is: {err!s}"
-            ) from None
+            logger.error("Cannot determine unreleased version", exc_info=err)
+            self.__version = self.released_version()
+            return self.__version
 
     @staticmethod
     def _pep0440_version_from_git():
