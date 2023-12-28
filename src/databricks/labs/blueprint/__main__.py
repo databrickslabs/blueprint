@@ -109,11 +109,13 @@ def init_project(target):
     with (inner_package_dir / "__init__.py").open("w") as f:
         f.write(f"from databricks.labs.{project_name}.__about__ import __version__")
     with (inner_package_dir / "__about__.py").open("w") as f:
-        f.write('# DO NOT MODIFY THIS FILE BY HAND\n__version__ = "0.0.1"\n')
+        f.write('__version__ = "0.0.0"\n')
     with (dst_dir / "labs.yml").open("w") as f:
         f.write(labs_yml_file.replace("__app__", project_name))
     with (dst_dir / "CODEOWNERS").open("w") as f:
         f.write(f"* @nfx\n/src @databrickslabs/{project_name}-write\n/tests @databrickslabs/{project_name}-write\n")
+    with (dst_dir / "CHANGELOG.md").open("w") as f:
+        f.write(f"# Version changelog\n\n## 0.0.0\n\nInitial {project_name} commit\n")
 
 
 if "__main__" == __name__:
