@@ -1,5 +1,11 @@
 # Version changelog
 
+## 0.0.2
+
+* Added extensive library documentation ([#14](https://github.com/databrickslabs/blueprint/pull/14)).
+* Setup release to PyPI via GitHub OIDC ([#15](https://github.com/databrickslabs/blueprint/pull/15)).
+
+
 ## Release 0.0.1
 
 * Added `.codegen.json` and `CHANGELOG.md` templates for automated releases.
