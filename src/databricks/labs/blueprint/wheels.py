@@ -1,5 +1,4 @@
 import datetime
-import functools
 import logging
 import os
 import shutil
@@ -8,7 +7,6 @@ import sys
 import tempfile
 from contextlib import AbstractContextManager
 from pathlib import Path
-from typing import Callable
 
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.mixins.compute import SemVer
@@ -44,7 +42,7 @@ class ProductInfo:
         self._project_root = find_project_root(__file)
         self._version_file_name = version_file_name
         self._github_org = github_org
-    
+
     def project_root(self):
         # TODO: introduce the "in wheel detection", using the __about__.py as marker
         return self._project_root
@@ -131,12 +129,7 @@ class Wheels(AbstractContextManager):
     __version: str | None = None
 
     def __init__(
-        self,
-        ws: WorkspaceClient,
-        install_state: InstallState,
-        product_info: ProductInfo,
-        *,
-        verbose: bool = False
+        self, ws: WorkspaceClient, install_state: InstallState, product_info: ProductInfo, *, verbose: bool = False
     ):
         self._ws = ws
         self._install_state = install_state

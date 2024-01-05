@@ -6,7 +6,7 @@ from databricks.sdk import WorkspaceClient
 from databricks.sdk.service.workspace import ImportFormat
 
 from databricks.labs.blueprint.__about__ import __version__
-from databricks.labs.blueprint.entrypoint import find_project_root, is_in_debug
+from databricks.labs.blueprint.entrypoint import is_in_debug
 from databricks.labs.blueprint.installer import InstallState
 from databricks.labs.blueprint.wheels import ProductInfo, Wheels
 
