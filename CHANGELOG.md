@@ -1,5 +1,10 @@
 # Version changelog
 
+## 0.0.6
+
+* Make `find_project_root` more deterministic ([#23](https://github.com/databrickslabs/blueprint/pull/23)).
+
+
 ## 0.0.5
 
 * Make it work with `ucx` ([#21](https://github.com/databrickslabs/blueprint/pull/21)).
