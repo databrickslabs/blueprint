@@ -1,3 +1,4 @@
+import functools
 import json
 import logging
 from dataclasses import dataclass
@@ -31,8 +32,8 @@ class App:
         self._logger = get_logger(__file)
         self._product_info = ProductInfo()
 
-    def command(self, is_account: bool = False, is_unauthenticated: bool = False):
-        def decorator(func):
+    def command(self, fn=None, is_account: bool = False, is_unauthenticated: bool = False):
+        def register(func):
             command_name = func.__name__.replace("_", "-")
             if not func.__doc__:
                 raise SyntaxError(f"{func.__name__} must have some doc comment")
@@ -45,7 +46,10 @@ class App:
             )
             return func
 
-        return decorator
+        if fn is None:
+            return functools.partial(register)
+        register(fn)
+        return fn
 
     def _route(self, raw):
         payload = json.loads(raw)

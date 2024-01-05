@@ -29,6 +29,7 @@ Baseline for Databricks Labs projects written in Python. Sources are validated w
     - [Publishing Wheels to Databricks Workspace](#publishing-wheels-to-databricks-workspace)
   - [Databricks CLI's `databricks labs ...` Router](#databricks-clis-databricks-labs--router)
     - [Starting New Projects](#starting-new-projects)
+- [Notable Downstream Projects](#notable-downstream-projects)
 - [Project Support](#project-support)
 
 # Installation
@@ -538,6 +539,14 @@ After, create new project in a designated directory:
 ```
 databricks labs blueprint init-project --target /path/to/folder
 ```
+
+[[back to top](#databricks-labs-blueprint)]
+
+# Notable Downstream Projects
+
+This library is used in the following projects:
+
+- [UCX - Automated upgrade to Unity Catalog](https://github.com/databrickslabs/ucx)
 
 [[back to top](#databricks-labs-blueprint)]
 
