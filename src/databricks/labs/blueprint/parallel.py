@@ -17,10 +17,11 @@ logger = logging.getLogger(__name__)
 
 
 class ManyError(RuntimeError):
-    def __init__(self, errs):
-        strs = [str(_) for _ in errs]
-        msg = f'Detected {len(errs)} failures: {",".join(strs)}'
+    def __init__(self, errs: Sequence[BaseException]):
+        strs = sorted({f"{_.__class__.__name__}: {_!s}" for _ in errs})
+        msg = f'Detected {len(errs)} failures: {", ".join(strs)}'
         super().__init__(msg)
+        self.errs = errs
 
 
 class Threads(Generic[Result]):
@@ -49,10 +50,11 @@ class Threads(Generic[Result]):
         return cls(name, tasks, num_threads=num_threads)._run()
 
     @classmethod
-    def strict(cls, name: str, tasks: Sequence[Task[Result]]):
-        _, errs = cls.gather(name, tasks)
+    def strict(cls, name: str, tasks: Sequence[Task[Result]]) -> Iterable[Result]:
+        collected, errs = cls.gather(name, tasks)
         if errs:
             raise ManyError(errs)
+        return collected
 
     def _run(self) -> tuple[Iterable[Result], list[Exception]]:
         given_cnt = len(self._tasks)

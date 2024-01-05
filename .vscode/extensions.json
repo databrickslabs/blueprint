@@ -1,0 +1,8 @@
+{
+    "recommendations": [
+        "yzhang.markdown-all-in-one",
+        "databricks.databricks",
+        "ms-python.python",
+        "redhat.vscode-yaml"
+    ]
+}
