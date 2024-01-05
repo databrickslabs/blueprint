@@ -1,5 +1,10 @@
 # Version changelog
 
+## 0.0.4
+
+* Fixed sigstore action ([#19](https://github.com/databrickslabs/blueprint/pull/19)).
+
+
 ## 0.0.3
 
 * Sign artifacts with Sigstore ([#17](https://github.com/databrickslabs/blueprint/pull/17)).
