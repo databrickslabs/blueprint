@@ -2,6 +2,7 @@ import logging
 import os
 import sys
 from pathlib import Path
+from typing import Any
 
 from databricks.labs.blueprint.logger import install_logger
 
@@ -43,9 +44,9 @@ def run_main(main):
     main(*sys.argv[1:])
 
 
-def find_project_root() -> Path:
+def find_project_root(current: Any = None) -> Path:
     """Returns pathlib.Path for the nearest folder with pyproject.toml or setup.py file"""
-    this_path = Path(__file__)  # TODO: check if this works in downstreams
+    this_path = Path.cwd() if current is None else Path(current)
     # TODO: detect when in wheel
     for leaf in ["pyproject.toml", "setup.py"]:
         root = find_dir_with_leaf(this_path, leaf)

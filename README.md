@@ -1,6 +1,10 @@
 Databricks Labs Blueprint
 ---
 
+[![python](https://img.shields.io/badge/python-3.10,%203.11,%203.12-green)](https://github.com/databrickslabs/blueprint/actions/workflows/push.yml)
+[![codecov](https://codecov.io/github/databrickslabs/blueprint/graph/badge.svg?token=x1JSVddfZa)](https://codecov.io/github/databrickslabs/blueprint)
+
+
 Baseline for Databricks Labs projects written in Python. Sources are validated with `mypy`. See [Contributing instructions](CONTRIBUTING.md) if you would like to improve this project.
 
 - [Installation](#installation)
@@ -29,6 +33,7 @@ Baseline for Databricks Labs projects written in Python. Sources are validated w
     - [Publishing Wheels to Databricks Workspace](#publishing-wheels-to-databricks-workspace)
   - [Databricks CLI's `databricks labs ...` Router](#databricks-clis-databricks-labs--router)
     - [Starting New Projects](#starting-new-projects)
+- [Notable Downstream Projects](#notable-downstream-projects)
 - [Project Support](#project-support)
 
 # Installation
@@ -538,6 +543,14 @@ After, create new project in a designated directory:
 ```
 databricks labs blueprint init-project --target /path/to/folder
 ```
+
+[[back to top](#databricks-labs-blueprint)]
+
+# Notable Downstream Projects
+
+This library is used in the following projects:
+
+- [UCX - Automated upgrade to Unity Catalog](https://github.com/databrickslabs/ucx)
 
 [[back to top](#databricks-labs-blueprint)]
 
