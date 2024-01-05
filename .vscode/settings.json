@@ -1,0 +1,6 @@
+{
+    "python.analysis.inlayHints.pytestParameters": true,
+    "python.analysis.enablePytestExtra": true,
+    "python.testing.pytestEnabled": true,
+    "python.testing.pytestPath": ".venv/bin/pytest"
+}
