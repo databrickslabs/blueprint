@@ -1,5 +1,10 @@
 # Version changelog
 
+## 0.0.3
+
+* Sign artifacts with Sigstore ([#17](https://github.com/databrickslabs/blueprint/pull/17)).
+
+
 ## 0.0.2
 
 * Added extensive library documentation ([#14](https://github.com/databrickslabs/blueprint/pull/14)).
