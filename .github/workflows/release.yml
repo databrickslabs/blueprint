@@ -25,6 +25,13 @@ jobs:
         run: |
           pip install hatch==1.7.0
           hatch build
+      
+      - name: Sign artifacts with Sigstore
+        uses: sigstore/gh-action-sigstore-python@v1.2.3
+        with:
+          inputs: |
+            dist/databricks_*.whl
+            dist/databricks_*.tar.gz
 
       - name: Draft release
         uses: softprops/action-gh-release@v1

@@ -1,8 +1,9 @@
 Databricks Labs Blueprint
 ---
 
-Baseline for Databricks Labs projects written in Python. See [Contributing instructions](CONTRIBUTING.md) if you would like to improve this project.
+Baseline for Databricks Labs projects written in Python. Sources are validated with `mypy`. See [Contributing instructions](CONTRIBUTING.md) if you would like to improve this project.
 
+- [Installation](#installation)
 - [Batteries Included](#batteries-included)
   - [Basic Terminal User Interface (TUI) Primitives](#basic-terminal-user-interface-tui-primitives)
     - [Simple Text Questions](#simple-text-questions)
@@ -29,6 +30,14 @@ Baseline for Databricks Labs projects written in Python. See [Contributing instr
   - [Databricks CLI's `databricks labs ...` Router](#databricks-clis-databricks-labs--router)
     - [Starting New Projects](#starting-new-projects)
 - [Project Support](#project-support)
+
+# Installation
+
+You can install this project via `pip`:
+
+```
+pip install databricks-labs-blueprint
+```
 
 # Batteries Included
 
