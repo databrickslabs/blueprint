@@ -16,7 +16,7 @@ def test_build_and_upload_wheel():
     state = create_autospec(InstallState)
     state.product.return_value = "blueprint"
     state.install_folder.return_value = "~/.blueprint"
-    product_info = ProductInfo()
+    product_info = ProductInfo(__file__)
 
     wheels = Wheels(ws, state, product_info)
     with wheels:
@@ -42,7 +42,7 @@ def test_build_and_upload_wheel():
 def test_unreleased_version(tmp_path):
     if not is_in_debug():
         pytest.skip("fails without `git fetch --prune --unshallow` configured")
-    product_info = ProductInfo()
+    product_info = ProductInfo(__file__)
     assert not __version__ == product_info.version()
     assert __version__ == product_info.released_version()
     assert product_info.is_unreleased_version()
@@ -53,8 +53,8 @@ def test_released_version(tmp_path):
     ws = create_autospec(WorkspaceClient)
     state = create_autospec(InstallState)
 
-    working_copy = Wheels(ws, state, ProductInfo())._copy_root_to(tmp_path)
-    product_info = ProductInfo(project_root_finder=lambda: working_copy)
+    working_copy = Wheels(ws, state, ProductInfo(__file__))._copy_root_to(tmp_path)
+    product_info = ProductInfo(working_copy)
 
     assert __version__ == product_info.version()
     assert not product_info.is_unreleased_version()

@@ -7,7 +7,6 @@ import sys
 import tempfile
 from contextlib import AbstractContextManager
 from pathlib import Path
-from typing import Callable
 
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.mixins.compute import SemVer
@@ -35,16 +34,18 @@ IGNORE_DIR_NAMES = {
 class ProductInfo:
     def __init__(
         self,
+        __file: str,
         *,
         version_file_name: str = "__about__.py",
-        project_root_finder: Callable[[], Path] | None = None,
         github_org: str = "databrickslabs",
     ):
-        if not project_root_finder:
-            project_root_finder = find_project_root
-        self._github_org = github_org
+        self._project_root = find_project_root(__file)
         self._version_file_name = version_file_name
-        self._project_root_finder = project_root_finder
+        self._github_org = github_org
+
+    def project_root(self):
+        # TODO: introduce the "in wheel detection", using the __about__.py as marker
+        return self._project_root
 
     def version(self):
         """Returns current version of the project"""
@@ -58,19 +59,16 @@ class ProductInfo:
         return self.__version
 
     def product_name(self) -> str:
-        project_root = self._project_root_finder()
-        version_file = self.version_file_in(project_root)
+        version_file = self.version_file_in(self._project_root)
         version_file_folder = version_file.parent
         return version_file_folder.name.replace("_", "-")
 
     def released_version(self) -> str:
-        project_root = self._project_root_finder()
-        version_file = self.version_file_in(project_root)
+        version_file = self.version_file_in(self._project_root)
         return self._read_version(version_file)
 
     def is_git_checkout(self) -> bool:
-        project_root = self._project_root_finder()
-        git_config = project_root / ".git" / "config"
+        git_config = self._project_root / ".git" / "config"
         return git_config.exists()
 
     def is_unreleased_version(self) -> bool:
@@ -131,21 +129,12 @@ class Wheels(AbstractContextManager):
     __version: str | None = None
 
     def __init__(
-        self,
-        ws: WorkspaceClient,
-        install_state: InstallState,
-        product_info: ProductInfo,
-        *,
-        verbose: bool = False,
-        project_root_finder: Callable[[], Path] | None = None,
+        self, ws: WorkspaceClient, install_state: InstallState, product_info: ProductInfo, *, verbose: bool = False
     ):
-        if not project_root_finder:
-            project_root_finder = find_project_root
         self._ws = ws
         self._install_state = install_state
         self._product_info = product_info
         self._verbose = verbose
-        self._project_root_finder = project_root_finder
 
     def upload_to_dbfs(self) -> str:
         with self._local_wheel.open("rb") as f:
@@ -184,7 +173,7 @@ class Wheels(AbstractContextManager):
         if not verbose:
             stdout = subprocess.DEVNULL
             stderr = subprocess.DEVNULL
-        project_root = self._project_root_finder()
+        project_root = self._product_info.project_root()
         if self._product_info.is_git_checkout() and self._product_info.is_unreleased_version():
             # working copy becomes project root for building a wheel
             project_root = self._copy_root_to(tmp_dir)
@@ -206,7 +195,7 @@ class Wheels(AbstractContextManager):
             f.write(f'__version__ = "{self._product_info.version()}"')
 
     def _copy_root_to(self, tmp_dir: str | Path):
-        project_root = self._project_root_finder()
+        project_root = self._product_info.project_root()
         tmp_dir_path = Path(tmp_dir) / "working-copy"
 
         # copy everything to a temporary directory

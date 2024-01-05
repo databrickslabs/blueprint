@@ -61,7 +61,7 @@ def init_project(target):
     """Creates the required boilerplate structure"""
     prompts = Prompts()
 
-    project_root = find_project_root()
+    project_root = find_project_root(__file__)
     target_folder = Path(target)
 
     project_name = prompts.question("Name of the project", default=target_folder.name)

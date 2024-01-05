@@ -2,19 +2,18 @@ import logging
 import os
 import sys
 from pathlib import Path
-from typing import Any
 
 from databricks.labs.blueprint.logger import install_logger
 
 
-def get_logger(file_name: str):
+def get_logger(__file: str):
     """Used as `get_logger(__file__)` to return a relevant logger for a file
 
     :param file_name: str: use __file__ special constant
 
     """
-    project_root = find_project_root().absolute()
-    entrypoint = Path(file_name).absolute()
+    project_root = find_project_root(__file).absolute()
+    entrypoint = Path(__file).absolute()
 
     relative = entrypoint.relative_to(project_root).as_posix()
     relative = relative.removeprefix("src" + os.sep)
@@ -44,10 +43,13 @@ def run_main(main):
     main(*sys.argv[1:])
 
 
-def find_project_root(current: Any = None) -> Path:
-    """Returns pathlib.Path for the nearest folder with pyproject.toml or setup.py file"""
-    this_path = Path.cwd() if current is None else Path(current)
-    # TODO: detect when in wheel
+def find_project_root(__file: str) -> Path:
+    """Returns pathlib.Path for the nearest folder with pyproject.toml or setup.py file.
+
+    Idiomatic usage is: find_project_root(__file__)
+    """
+    this_path = Path(__file)
+    # TODO: detect when in wheel seems to be more challenging and pkgutil.get_data() might be necessary
     for leaf in ["pyproject.toml", "setup.py"]:
         root = find_dir_with_leaf(this_path, leaf)
         if root is not None:
