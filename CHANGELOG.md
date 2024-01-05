@@ -1,5 +1,10 @@
 # Version changelog
 
+## 0.0.5
+
+* Make it work with `ucx` ([#21](https://github.com/databrickslabs/blueprint/pull/21)).
+
+
 ## 0.0.4
 
 * Fixed sigstore action ([#19](https://github.com/databrickslabs/blueprint/pull/19)).
