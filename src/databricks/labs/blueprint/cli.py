@@ -30,7 +30,7 @@ class App:
     def __init__(self, __file: str):
         self._mapping: dict[str, Command] = {}
         self._logger = get_logger(__file)
-        self._product_info = ProductInfo()
+        self._product_info = ProductInfo(__file)
 
     def command(self, fn=None, is_account: bool = False, is_unauthenticated: bool = False):
         def register(func):

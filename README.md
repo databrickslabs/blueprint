@@ -378,7 +378,7 @@ When you deploy your Python app as a wheel, every time it has to have a differen
 ```python
 from databricks.labs.blueprint.wheels import ProductInfo
 
-product_info = ProductInfo()
+product_info = ProductInfo(__file__)
 version = product_info.released_version()
 logger.info(f'Version is: {version}')
 ```
@@ -390,7 +390,7 @@ logger.info(f'Version is: {version}')
 When you develop your wheel and iterate on testing it, it's often required to upload a file with different name each time you build it. We use `git describe --tags` command to fetch the latest SemVer-compatible tag (e.g. `v0.0.2`) and append the number of commits with timestamp to it. For example, if the released version is `v0.0.1`, then the unreleased version would be something like `0.0.2+120240105144650`. We verify that this version is compatible with both SemVer and [PEP 440](https://peps.python.org/pep-0440/).
 
 ```python
-product_info = ProductInfo()
+product_info = ProductInfo(__file__)
 
 version = product_info.unreleased_version()
 is_git = product_info.is_git_checkout()
@@ -411,7 +411,7 @@ Library can infer the name of application by taking the directory name when `__a
 from databricks.labs.blueprint.wheels import ProductInfo
 
 w = WorkspaceClient()
-product_info = ProductInfo()
+product_info = ProductInfo(__file__)
 logger.info(f'Product name is: {product_info.product_name()}')
 ```
 
@@ -427,7 +427,7 @@ from databricks.labs.blueprint.installer import InstallState
 from databricks.labs.blueprint.wheels import ProductInfo
 
 w = WorkspaceClient()
-product_info = ProductInfo()
+product_info = ProductInfo(__file__)
 state = InstallState(w, product_info.product_name())
 install_folder = state.install_folder()
 
@@ -446,7 +446,7 @@ from databricks.labs.blueprint.installer import InstallState
 from databricks.labs.blueprint.wheels import ProductInfo, Wheels
 
 w = WorkspaceClient()
-product_info = ProductInfo()
+product_info = ProductInfo(__file__)
 install_state = InstallState(w, product_info.product_name())
 
 with Wheels(w, install_state, product_info) as wheels:
