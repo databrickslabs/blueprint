@@ -7,10 +7,10 @@ logger = logging.getLogger(__name__)
 
 
 class Prompts:
-    """ """
+    """`input()` builtin on steroids"""
 
-    def multi_select_from_dict(self, all_prompt: str, item_prompt: str, choices: dict[str, Any]) -> list[Any]:
-        """
+    def multiple_choice_from_dict(self, item_prompt: str, choices: dict[str, Any]) -> list[Any]:
+        """Use to select multiple items from dictionary
 
         :param all_prompt: str:
         :param item_prompt: str:
@@ -18,12 +18,10 @@ class Prompts:
 
         """
         selected: list[Any] = []
-        if self.question(all_prompt, default="no") == "yes":
-            return selected
         dropdown = {"[DONE]": "done"} | choices
         while True:
             key = self.choice(item_prompt, list(dropdown.keys()))
-            if key == "done":
+            if key == "[DONE]":
                 break
             selected.append(choices[key])
             del dropdown[key]
@@ -33,7 +31,7 @@ class Prompts:
         return selected
 
     def choice_from_dict(self, text: str, choices: dict[str, Any], *, sort: bool = True) -> Any:
-        """
+        """Use to select a value from the dictionary by showing users sorted dictionary keys
 
         :param text: str:
         :param choices: dict[str,Any]:
@@ -45,7 +43,7 @@ class Prompts:
         return choices[key]
 
     def choice(self, text: str, choices: list[Any], *, max_attempts: int = 10, sort: bool = True) -> str:
-        """
+        """Use to select a value from a list
 
         :param text: str:
         :param choices: list[Any]:
@@ -57,7 +55,7 @@ class Prompts:
         if sort:
             choices = sorted(choices, key=str.casefold)
         numbered = "\n".join(f"\033[1m[{i}]\033[0m \033[36m{v}\033[0m" for i, v in enumerate(choices))
-        prompt = f"\033[1m{text}\033[0m\n{numbered}\nEnter a number between 0 and {len(choices) - 1}: "
+        prompt = f"\033[1m{text}\033[0m\n{numbered}\nEnter a number between 0 and {len(choices) - 1}"
         attempt = 0
         while attempt < max_attempts:
             attempt += 1
@@ -70,7 +68,7 @@ class Prompts:
         raise ValueError(msg)
 
     def confirm(self, text: str, *, max_attempts: int = 10):
-        """
+        """Use to guard any optional or destructive actions of your app
 
         :param text: str:
         :param *:
@@ -90,7 +88,7 @@ class Prompts:
         valid_regex: str | None = None,
         validate: Callable[[str], bool] | None = None,
     ) -> str:
-        """
+        """Use as testable alternative to `input()` builtin
 
         :param text: str:
         :param *:
@@ -98,8 +96,7 @@ class Prompts:
         :param max_attempts: int:  (Default value = 10)
         :param valid_number: bool:  (Default value = False)
         :param valid_regex: str | None:  (Default value = None)
-        :param validate: Callable[[str]:
-        :param bool] | None:  (Default value = None)
+        :param validate: Callable[[str], bool] | None:  (Default value = None)
 
         """
         default_help = "" if default is None else f"\033[36m (default: {default})\033[0m"

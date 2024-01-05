@@ -14,7 +14,7 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: Implementation :: CPython",
 ]
-dependencies = ["databricks-sdk"]
+dependencies = ["databricks-sdk>=0.16.0"]
 
 [project.urls]
 Issues = "https://github.com/databrickslabs/blueprint/issues"
