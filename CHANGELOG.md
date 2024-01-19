@@ -1,5 +1,10 @@
 # Version changelog
 
+## 0.1.0
+
+* Changed python requirement from 3.10.6 to 3.10 ([#25](https://github.com/databrickslabs/blueprint/pull/25)).
+
+
 ## 0.0.6
 
 * Make `find_project_root` more deterministic ([#23](https://github.com/databrickslabs/blueprint/pull/23)).
