@@ -1,6 +1,5 @@
 import io
 import json
-import typing
 from dataclasses import dataclass
 from unittest.mock import create_autospec
 
@@ -127,11 +126,15 @@ def test_save_typed_file():
 def test_load_typed_file():
     ws = create_autospec(WorkspaceClient)
     ws.current_user.me().user_name = "foo"
-    ws.workspace.download.return_value = io.StringIO(yaml.dump({
-        "$version": 2,
-        "num_threads": 20,
-        "inventory_database": "some_blueprint",
-    }))
+    ws.workspace.download.return_value = io.StringIO(
+        yaml.dump(
+            {
+                "$version": 2,
+                "num_threads": 20,
+                "inventory_database": "some_blueprint",
+            }
+        )
+    )
     state = InstallState(ws, "blueprint")
 
     cfg = state.load_typed_file(WorkspaceConfig)
@@ -142,17 +145,17 @@ def test_load_typed_file():
 def test_save_typed_file_array():
     state = MockInstallState()
 
-    state.save_typed_file([
-        Workspace(workspace_id=1234, workspace_name='first'),
-        Workspace(workspace_id=1235, workspace_name='second'),
-    ], filename='workspaces.json')
+    state.save_typed_file(
+        [
+            Workspace(workspace_id=1234, workspace_name="first"),
+            Workspace(workspace_id=1235, workspace_name="second"),
+        ],
+        filename="workspaces.json",
+    )
 
     state.assert_file_written(
         "workspaces.json",
-        [
-            {'workspace_id': 1234, 'workspace_name': 'first'},
-            {'workspace_id': 1235, 'workspace_name': 'second'}
-        ],
+        [{"workspace_id": 1234, "workspace_name": "first"}, {"workspace_id": 1235, "workspace_name": "second"}],
     )
 
 
