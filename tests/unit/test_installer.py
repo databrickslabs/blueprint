@@ -1,3 +1,4 @@
+import io
 import json
 import typing
 from dataclasses import dataclass
@@ -121,6 +122,22 @@ def test_save_typed_file():
         format=ImportFormat.AUTO,
         overwrite=True,
     )
+
+
+def test_load_typed_file():
+    ws = create_autospec(WorkspaceClient)
+    ws.current_user.me().user_name = "foo"
+    ws.workspace.download.return_value = io.StringIO(yaml.dump({
+        "$version": 2,
+        "num_threads": 20,
+        "inventory_database": "some_blueprint",
+    }))
+    state = InstallState(ws, "blueprint")
+
+    cfg = state.load_typed_file(WorkspaceConfig)
+
+    assert 20 == cfg.num_threads
+
 
 def test_save_typed_file_array():
     state = MockInstallState()

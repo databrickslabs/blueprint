@@ -20,7 +20,7 @@ from databricks.sdk.service.workspace import ImportFormat
 logger = logging.getLogger(__name__)
 
 Resources = dict[str, str]
-Json = dict[str, Any] | list[dict[str, Any]]
+Json = dict[str, Any]
 
 # @dataclass
 # class ConnectConfig:
@@ -210,20 +210,62 @@ class InstallState:
 
     def _overwrite(self, filename: str, raw: bytes):
         with self._lock:
-            self._ws.workspace.upload(
-                f"{self.install_folder()}/{filename}",
-                raw,  # type: ignore[arg-type]
-                format=ImportFormat.AUTO,
-                overwrite=True,
-            )
+            dst = f"{self.install_folder()}/{filename}"
+            attempt = partial(self._ws.workspace.upload, dst, raw, format=ImportFormat.AUTO, overwrite=True)
+            try:
+                attempt()
+            except NotFound:
+                self._ws.workspace.mkdirs(self.install_folder())
+                attempt()
+            return dst
 
     T = typing.TypeVar("T")
 
-    def load_typed_file(self, type_ref: typing.Type[T]) -> T:
+    def load_typed_file(self, type_ref: typing.Type[T], *, filename: str = None) -> T:
         # TODO: load with type_ref, convert JSON/YAML into a dataclass instance, discover format migrations from methods
         # TODO: detect databricks config and allow using it as part of dataclass instance
         # TODO: MockInstallState to get JSON/YAML created/loaded as dict-per-filename
+        if not filename and hasattr(type_ref, "__file__"):
+            filename = getattr(type_ref, "__file__")
+        elif not filename:
+            filename = f"{type_ref.__name__}.json"
+        expected_version = None
+        if hasattr(type_ref, "__version__"):
+            expected_version = getattr(type_ref, "__version__")
+        as_dict = self._load_content(filename)
+        if expected_version:
+            actual_version = as_dict.pop("$version", 1)
+            while actual_version < expected_version:
+                migrate = getattr(type_ref, f'v{actual_version}_migrate', None)
+                if not migrate:
+                    break
+                as_dict = migrate(as_dict)
+                actual_version = as_dict.pop("$version", 1)
+            if actual_version != expected_version:
+                raise IllegalState(f"expected state $version={expected_version}, got={actual_version}")
         raise NotImplementedError
+
+    def _load_yaml(self, raw: typing.BinaryIO) -> Json:
+        try:
+            try:
+                return yaml.safe_load(raw)
+            except yaml.YAMLError as err:
+                raise JSONDecodeError(str(err), '<yaml>', 0)
+        except ImportError:
+            raise SyntaxError("PyYAML is not installed. Fix: pip install databricks-labs-blueprint[yaml]")
+
+    def _load_content(self, filename: str) -> Json:
+        converters = {"json": json.load, "yml": self._load_yaml}
+        extension = filename.split(".")[-1]
+        if extension not in converters:
+            raise KeyError(f"Unknown extension: {extension}")
+        try:
+            with self._ws.workspace.download(f"{self.install_folder()}/{filename}") as f:
+                return converters[extension](f)
+        except JSONDecodeError:
+            return {}
+        except NotFound:
+            return {}
 
     def _dump_yaml(self, raw: Json) -> bytes:
         try:
@@ -344,12 +386,9 @@ class InstallState:
             self._ws.dbfs.upload(self._remote_wheel, f, overwrite=True)
         return self._remote_wheel
 
-    def upload_to_wsfs(self) -> str:
-        with self._local_wheel.open("rb") as f:
-            self._ws.workspace.mkdirs(self._remote_dir_name)
-            logger.info(f"Uploading wheel to /Workspace{self._remote_wheel}")
-            self._ws.workspace.upload(self._remote_wheel, f, overwrite=True, format=ImportFormat.AUTO)
-        return self._remote_wheel
+    def upload_to_wsfs(self, filename: str, raw: bytes) -> str:
+        # TODO: use in wheels
+        return self._overwrite(filename, raw)
 
     def _load_versioned_json(
         self,
@@ -448,7 +487,10 @@ class MockInstallState(InstallState):
     def _overwrite_content(self, filename: str, as_dict: Json):
         self._overwrites[filename] = as_dict
 
-    def assert_file_written(self, filename: str, expected: Json):
+    def _load_content(self, filename: str) -> Json:
+        return self._overwrites[filename]
+
+    def assert_file_written(self, filename: str, expected: Any):
         assert filename in self._overwrites, f"{filename} had no writes"
         actual = self._overwrites[filename]
         assert expected == actual, f"{filename} content missmatch"
