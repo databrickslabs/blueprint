@@ -6,9 +6,11 @@ import logging
 import threading
 import types
 import typing
+from functools import partial
 from json import JSONDecodeError
 from typing import TypedDict, Any, Callable, io
 
+import databricks.sdk.core
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.errors import NotFound
 from databricks.sdk.mixins import workspace
@@ -19,122 +21,122 @@ logger = logging.getLogger(__name__)
 Resources = dict[str, str]
 Json = dict[str, Any]
 
-@dataclass
-class ConnectConfig:
-    # Keep all the fields in sync with databricks.sdk.core.Config
-    host: str | None = None
-    account_id: str | None = None
-    token: str | None = None
-    client_id: str | None = None
-    client_secret: str | None = None
-    azure_client_id: str | None = None
-    azure_tenant_id: str | None = None
-    azure_client_secret: str | None = None
-    azure_environment: str | None = None
-    cluster_id: str | None = None
-    profile: str | None = None
-    debug_headers: bool | None = False
-    # Truncate JSON fields in HTTP requests and responses above this limit.
-    # If this occurs, the log message will include the text `... (XXX additional elements)`
-    debug_truncate_bytes: int | None = 250000
-    rate_limit: int | None = None
-    max_connections_per_pool: int | None = None
-    max_connection_pools: int | None = None
-
-    @staticmethod
-    def from_databricks_config(cfg: Config) -> "ConnectConfig":
-        return ConnectConfig(
-            host=cfg.host,
-            token=cfg.token,
-            client_id=cfg.client_id,
-            client_secret=cfg.client_secret,
-            azure_client_id=cfg.azure_client_id,
-            azure_tenant_id=cfg.azure_tenant_id,
-            azure_client_secret=cfg.azure_client_secret,
-            azure_environment=cfg.azure_environment,
-            cluster_id=cfg.cluster_id,
-            profile=cfg.profile,
-            debug_headers=cfg.debug_headers,
-            debug_truncate_bytes=cfg.debug_truncate_bytes,
-            rate_limit=cfg.rate_limit,
-            max_connection_pools=cfg.max_connection_pools,
-            max_connections_per_pool=cfg.max_connections_per_pool,
-        )
-
-    def to_databricks_config(self):
-        return Config(
-            host=self.host,
-            account_id=self.account_id,
-            token=self.token,
-            client_id=self.client_id,
-            client_secret=self.client_secret,
-            azure_client_id=self.azure_client_id,
-            azure_tenant_id=self.azure_tenant_id,
-            azure_client_secret=self.azure_client_secret,
-            azure_environment=self.azure_environment,
-            cluster_id=self.cluster_id,
-            profile=self.profile,
-            debug_headers=self.debug_headers,
-            debug_truncate_bytes=self.debug_truncate_bytes,
-            rate_limit=self.rate_limit,
-            max_connection_pools=self.max_connection_pools,
-            max_connections_per_pool=self.max_connections_per_pool,
-            product="ucx",
-            product_version=__version__,
-        )
-
-    @classmethod
-    def from_dict(cls, raw: dict):
-        return cls(**raw)
-
-class _Config(Generic[T]):
-    connect: ConnectConfig | None = None
-
-    @classmethod
-    @abstractmethod
-    def from_dict(cls, raw: dict[str, Any]) -> T:
-        ...
-
-    @classmethod
-    def from_bytes(cls, raw_str: str | bytes) -> T:
-        from yaml import safe_load
-
-        raw: dict[str, Any] = safe_load(raw_str)
-        empty: dict[str, Any] = {}
-        return cls.from_dict(empty if not raw else raw)
-
-    @classmethod
-    def from_file(cls, config_file: Path) -> T:
-        return cls.from_bytes(config_file.read_text())
-
-    def __post_init__(self):
-        if self.connect is None:
-            self.connect = ConnectConfig()
-
-    def to_databricks_config(self) -> Config:
-        connect = self.connect
-        if connect is None:
-            # default empty config
-            connect = ConnectConfig()
-        return connect.to_databricks_config()
-
-    def as_dict(self) -> dict[str, Any]:
-        from dataclasses import fields, is_dataclass
-
-        def inner(x):
-            if is_dataclass(x):
-                result = []
-                for f in fields(x):
-                    value = inner(getattr(x, f.name))
-                    if not value:
-                        continue
-                    result.append((f.name, value))
-                return dict(result)
-            return x
-
-        serialized = inner(self)
-        serialized["version"] = _CONFIG_VERSION
-        return serialized
+# @dataclass
+# class ConnectConfig:
+#     # Keep all the fields in sync with databricks.sdk.core.Config
+#     host: str | None = None
+#     account_id: str | None = None
+#     token: str | None = None
+#     client_id: str | None = None
+#     client_secret: str | None = None
+#     azure_client_id: str | None = None
+#     azure_tenant_id: str | None = None
+#     azure_client_secret: str | None = None
+#     azure_environment: str | None = None
+#     cluster_id: str | None = None
+#     profile: str | None = None
+#     debug_headers: bool | None = False
+#     # Truncate JSON fields in HTTP requests and responses above this limit.
+#     # If this occurs, the log message will include the text `... (XXX additional elements)`
+#     debug_truncate_bytes: int | None = 250000
+#     rate_limit: int | None = None
+#     max_connections_per_pool: int | None = None
+#     max_connection_pools: int | None = None
+#
+#     @staticmethod
+#     def from_databricks_config(cfg: Config) -> "ConnectConfig":
+#         return ConnectConfig(
+#             host=cfg.host,
+#             token=cfg.token,
+#             client_id=cfg.client_id,
+#             client_secret=cfg.client_secret,
+#             azure_client_id=cfg.azure_client_id,
+#             azure_tenant_id=cfg.azure_tenant_id,
+#             azure_client_secret=cfg.azure_client_secret,
+#             azure_environment=cfg.azure_environment,
+#             cluster_id=cfg.cluster_id,
+#             profile=cfg.profile,
+#             debug_headers=cfg.debug_headers,
+#             debug_truncate_bytes=cfg.debug_truncate_bytes,
+#             rate_limit=cfg.rate_limit,
+#             max_connection_pools=cfg.max_connection_pools,
+#             max_connections_per_pool=cfg.max_connections_per_pool,
+#         )
+#
+#     def to_databricks_config(self):
+#         return Config(
+#             host=self.host,
+#             account_id=self.account_id,
+#             token=self.token,
+#             client_id=self.client_id,
+#             client_secret=self.client_secret,
+#             azure_client_id=self.azure_client_id,
+#             azure_tenant_id=self.azure_tenant_id,
+#             azure_client_secret=self.azure_client_secret,
+#             azure_environment=self.azure_environment,
+#             cluster_id=self.cluster_id,
+#             profile=self.profile,
+#             debug_headers=self.debug_headers,
+#             debug_truncate_bytes=self.debug_truncate_bytes,
+#             rate_limit=self.rate_limit,
+#             max_connection_pools=self.max_connection_pools,
+#             max_connections_per_pool=self.max_connections_per_pool,
+#             product="ucx",
+#             product_version=__version__,
+#         )
+#
+#     @classmethod
+#     def from_dict(cls, raw: dict):
+#         return cls(**raw)
+#
+# class _Config(Generic[T]):
+#     connect: ConnectConfig | None = None
+#
+#     @classmethod
+#     @abstractmethod
+#     def from_dict(cls, raw: dict[str, Any]) -> T:
+#         ...
+#
+#     @classmethod
+#     def from_bytes(cls, raw_str: str | bytes) -> T:
+#         from yaml import safe_load
+#
+#         raw: dict[str, Any] = safe_load(raw_str)
+#         empty: dict[str, Any] = {}
+#         return cls.from_dict(empty if not raw else raw)
+#
+#     @classmethod
+#     def from_file(cls, config_file: Path) -> T:
+#         return cls.from_bytes(config_file.read_text())
+#
+#     def __post_init__(self):
+#         if self.connect is None:
+#             self.connect = ConnectConfig()
+#
+#     def to_databricks_config(self) -> Config:
+#         connect = self.connect
+#         if connect is None:
+#             # default empty config
+#             connect = ConnectConfig()
+#         return connect.to_databricks_config()
+#
+#     def as_dict(self) -> dict[str, Any]:
+#         from dataclasses import fields, is_dataclass
+#
+#         def inner(x):
+#             if is_dataclass(x):
+#                 result = []
+#                 for f in fields(x):
+#                     value = inner(getattr(x, f.name))
+#                     if not value:
+#                         continue
+#                     result.append((f.name, value))
+#                 return dict(result)
+#             return x
+#
+#         serialized = inner(self)
+#         serialized["version"] = _CONFIG_VERSION
+#         return serialized
 
 
 class RawState(TypedDict):
@@ -198,18 +200,20 @@ class InstallState:
 
     def save(self) -> None:
         """Saves remote state"""
+        state: dict = {}
+        if self._state:
+            state = self._state.copy()  # type: ignore[assignment]
+        state["$version"] = self._config_version
+        state_dump = json.dumps(state, indent=2).encode("utf8")
+        self._overwrite('state.json', state_dump)
+
+    def _overwrite(self, filename: str, raw: bytes):
         with self._lock:
-            state: dict = {}
-            if self._state:
-                state = self._state.copy()  # type: ignore[assignment]
-            state["$version"] = self._config_version
-            state_dump = json.dumps(state, indent=2).encode("utf8")
             self._ws.workspace.upload(
-                self._state_file(),
-                state_dump,  # type: ignore[arg-type]
+                f"{self.install_folder()}/{filename}",
+                raw,   # type: ignore[arg-type]
                 format=ImportFormat.AUTO,
-                overwrite=True,
-            )
+                overwrite=True)
 
     T = typing.TypeVar('T')
     def load_typed_file(self, type_ref: typing.Type[T]) -> T:
@@ -218,9 +222,78 @@ class InstallState:
         # TODO: MockInstallState to get JSON/YAML created/loaded as dict-per-filename
         raise NotImplementedError
 
-    def save_typed_file(self, inst: T):
+    _marshallers = {
+        'json': partial(json.dumps, indent=2),
+        'yml': partial()
+    }
+
+    def save_typed_file(self, inst: T, *, filename: str = None):
+        if not inst:
+            raise TypeError('missing value')
+        type_ref = type(inst)
+        if not filename and hasattr(inst, '__file__'):
+            filename = getattr(inst, '__file__')
+        elif not filename:
+            filename = f'{type_ref.__name__}.json'
+        version = None
+        if hasattr(inst, '__version__'):
+            version = getattr(inst, '__version__')
+        raw, _ = self._marshal(type_ref, [], inst)
+        if version:
+            raw['$version'] = version
+
+
+
+
         # TODO: save JSON/YML, versioned
         raise NotImplementedError
+
+    def _explain_why(self, type_ref: type, path: list[str], raw: Any) -> str:
+        if raw is None:
+            raw = "value is missing"
+        return f'{".".join(path)}: not a {type_ref.__name__}: {raw}'
+
+    def _marshal(self, type_ref: type, path: list[str], inst: Any) -> tuple[Any, bool]:
+        if dataclasses.is_dataclass(type_ref):
+            as_dict = {}
+            for field, hint in typing.get_type_hints(type_ref).items():
+                raw = getattr(inst, field)
+                value, ok = self._marshal(hint, [*path, field], raw)
+                if not ok:
+                    raise TypeError(self._explain_why(hint, [*path, field], raw))
+                if not value:
+                    continue
+                as_dict[field] = value
+            return as_dict, True
+        if isinstance(type_ref, types.GenericAlias):
+            type_args = typing.get_args(type_ref)
+            if not type_args:
+                raise TypeError(f"Missing type arguments: {type_args}")
+            values = []
+            hint = type_args[0]
+            if not inst:
+                return None, False
+            for i, v in enumerate(inst):
+                value, ok = self._marshal(hint, [*path, f"{i}"], v)
+                if not ok:
+                    raise TypeError(self._explain_why(hint,[*path, f"{i}"], v))
+                values.append(value)
+            return values, True
+        if isinstance(type_ref, types.UnionType):
+            combo = []
+            for variant in typing.get_args(type_ref):
+                value, ok = self._marshal(variant, [*path, f'(as {variant})'], inst)
+                if ok:
+                    return value, True
+                combo.append(self._explain_why(variant, [*path, f'(as {variant})'], inst))
+            raise TypeError(f'{".".join(path)}: union: {" or ".join(combo)}')
+        if isinstance(inst, databricks.sdk.core.Config):
+            return inst.as_dict(), True
+        if isinstance(inst, enum.Enum):
+            return inst.value, True
+        if type_ref == types.NoneType:
+            return inst, inst is None
+        return inst, True
 
     def load_csv(self, type_ref: typing.Type[T]) -> list[T]:
         # TODO: load/save arrays in CSV format
@@ -327,7 +400,4 @@ class InstallState:
             return False, self._explain_why(type_ref, raw, path)
         return False, f'{".".join(path)}: unknown: {raw}'
 
-    def _explain_why(self, type_ref: type, raw: Any, path: list[str]) -> str:
-        if raw is None:
-            raw = "value is missing"
-        return f'{".".join(path)}: not a {type_ref.__name__}: {raw}'
+
