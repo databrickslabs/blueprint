@@ -11,6 +11,7 @@ from json import JSONDecodeError
 from typing import TypedDict, Any, Callable, io
 
 import databricks.sdk.core
+import yaml
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.errors import NotFound
 from databricks.sdk.mixins import workspace
@@ -222,10 +223,11 @@ class InstallState:
         # TODO: MockInstallState to get JSON/YAML created/loaded as dict-per-filename
         raise NotImplementedError
 
-    _marshallers = {
-        'json': partial(json.dumps, indent=2),
-        'yml': partial()
-    }
+    def _dump_yaml(self, raw: Json) -> bytes:
+        try:
+            return yaml.dump(raw).encode("utf8")
+        except ImportError:
+            raise SyntaxError(f'PyYAML is not installed. Fix: pip install databricks-labs-blueprint[yaml]')
 
     def save_typed_file(self, inst: T, *, filename: str = None):
         if not inst:
@@ -238,15 +240,18 @@ class InstallState:
         version = None
         if hasattr(inst, '__version__'):
             version = getattr(inst, '__version__')
-        raw, _ = self._marshal(type_ref, [], inst)
+        as_dict, _ = self._marshal(type_ref, [], inst)
         if version:
-            raw['$version'] = version
+            as_dict['$version'] = version
+        self._overwrite_content(filename, as_dict)
+        return f'{self.install_folder()}/{filename}'
 
-
-
-
-        # TODO: save JSON/YML, versioned
-        raise NotImplementedError
+    def _overwrite_content(self, filename: str, as_dict: Json):
+        converters = {'json': partial(json.dumps, indent=2), 'yml': self._dump_yaml}
+        extension = filename.split('.')[-1]
+        if extension not in converters:
+            raise KeyError(f'Unknown extension: {extension}')
+        self._overwrite(filename, converters[extension](as_dict))
 
     def _explain_why(self, type_ref: type, path: list[str], raw: Any) -> str:
         if raw is None:
@@ -401,3 +406,23 @@ class InstallState:
         return False, f'{".".join(path)}: unknown: {raw}'
 
 
+class MockInstallState(InstallState):
+    """Install state testing toolbelt
+
+    register with PyTest:
+
+        pytest.register_assert_rewrite('databricks.labs.blueprint.installer')
+    """
+    def __init__(self):
+        self._overwrites: dict[str, Json] = {}
+
+    def install_folder(self) -> str:
+        return '~/mock/'
+
+    def _overwrite_content(self, filename: str, as_dict: Json):
+        self._overwrites[filename] = as_dict
+
+    def assert_file_written(self, filename: str, expected: Json):
+        assert filename in self._overwrites, f'{filename} had no writes'
+        actual = self._overwrites[filename]
+        assert expected == actual, f'{filename} content missmatch'

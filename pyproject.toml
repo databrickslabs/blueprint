@@ -36,6 +36,7 @@ path = "src/databricks/labs/blueprint/__about__.py"
 
 [tool.hatch.envs.default]
 dependencies = [
+    "databricks-labs-blueprint[yaml]",
     "coverage[toml]>=6.5",
     "pytest",
     "pytest-xdist",

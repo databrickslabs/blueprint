@@ -3,12 +3,13 @@ from dataclasses import dataclass
 from unittest.mock import create_autospec
 
 import pytest
+import yaml
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.core import Config
 from databricks.sdk.errors import NotFound
 from databricks.sdk.service.workspace import ImportFormat
 
-from databricks.labs.blueprint.installer import IllegalState, InstallState
+from databricks.labs.blueprint.installer import IllegalState, InstallState, MockInstallState
 
 
 def test_install_folder():
@@ -100,3 +101,31 @@ def test_save_typed_file():
     state.save_typed_file(WorkspaceConfig(
         inventory_database='some_blueprint'
     ))
+
+    ws.workspace.upload.assert_called_with(
+        "/Users/foo/.blueprint/config.yml",
+        yaml.dump({
+            '$version': 2,
+            'num_threads': 10,
+            'inventory_database': 'some_blueprint',
+            'workspace_start_path': '/',
+            'log_level': 'INFO'
+        }).encode("utf8"),
+        format=ImportFormat.AUTO,
+        overwrite=True,
+    )
+
+def test_mock_save_typed_file():
+    state = MockInstallState()
+
+    state.save_typed_file(WorkspaceConfig(
+        inventory_database='some_blueprint'
+    ))
+
+    state.assert_file_written('config.yml', {
+        '$version': 2,
+         'inventory_database': 'some_blueprint',
+         'log_level': 'INFO',
+         'num_threads': 10,
+         'workspace_start_path': '/'})
+
