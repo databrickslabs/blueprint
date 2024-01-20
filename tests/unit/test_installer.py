@@ -1,4 +1,5 @@
 import json
+import typing
 from dataclasses import dataclass
 from unittest.mock import create_autospec
 
@@ -7,6 +8,7 @@ import yaml
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.core import Config
 from databricks.sdk.errors import NotFound
+from databricks.sdk.service.provisioning import Workspace
 from databricks.sdk.service.workspace import ImportFormat
 
 from databricks.labs.blueprint.installer import (
@@ -118,6 +120,22 @@ def test_save_typed_file():
         ).encode("utf8"),
         format=ImportFormat.AUTO,
         overwrite=True,
+    )
+
+def test_save_typed_file_array():
+    state = MockInstallState()
+
+    state.save_typed_file([
+        Workspace(workspace_id=1234, workspace_name='first'),
+        Workspace(workspace_id=1235, workspace_name='second'),
+    ], filename='workspaces.json')
+
+    state.assert_file_written(
+        "workspaces.json",
+        [
+            {'workspace_id': 1234, 'workspace_name': 'first'},
+            {'workspace_id': 1235, 'workspace_name': 'second'}
+        ],
     )
 
 

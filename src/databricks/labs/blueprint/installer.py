@@ -20,7 +20,7 @@ from databricks.sdk.service.workspace import ImportFormat
 logger = logging.getLogger(__name__)
 
 Resources = dict[str, str]
-Json = dict[str, Any]
+Json = dict[str, Any] | list[dict[str, Any]]
 
 # @dataclass
 # class ConnectConfig:
@@ -172,7 +172,7 @@ class InstallState:
         self._install_folder = f"/Users/{me.user_name}/.{self._product}"
         return self._install_folder
 
-    def __getattr__(self, item: str) -> Resources:
+    def __ge_tattr__(self, item: str) -> Resources:
         with self._lock:
             if not self._state:
                 self._state = self._load()
@@ -262,6 +262,8 @@ class InstallState:
 
     def _marshal(self, type_ref: type, path: list[str], inst: Any) -> tuple[Any, bool]:
         if dataclasses.is_dataclass(type_ref):
+            if inst is None:
+                return None, False
             as_dict = {}
             for field, hint in typing.get_type_hints(type_ref).items():
                 raw = getattr(inst, field)
@@ -286,7 +288,7 @@ class InstallState:
                     raise TypeError(self._explain_why(hint, [*path, f"{i}"], v))
                 values.append(value)
             return values, True
-        if isinstance(type_ref, types.UnionType):
+        if isinstance(type_ref, (types.UnionType, typing._UnionGenericAlias)):
             combo = []
             for variant in typing.get_args(type_ref):
                 value, ok = self._marshal(variant, [*path, f"(as {variant})"], inst)
@@ -294,13 +296,30 @@ class InstallState:
                     return value, True
                 combo.append(self._explain_why(variant, [*path, f"(as {variant})"], inst))
             raise TypeError(f'{".".join(path)}: union: {" or ".join(combo)}')
+        if isinstance(type_ref, typing._GenericAlias):
+            if not inst:
+                return None, False
+            return inst, isinstance(inst, type_ref.__origin__)
         if isinstance(inst, databricks.sdk.core.Config):
             return inst.as_dict(), True
-        if isinstance(inst, enum.Enum):
+        if type_ref == list:
+            values = []
+            for i, v in enumerate(inst):
+                hint = type(v)
+                value, ok = self._marshal(hint, [*path, f"{i}"], v)
+                if not ok:
+                    raise TypeError(self._explain_why(hint, [*path, f"{i}"], v))
+                values.append(value)
+            return values, True
+        if isinstance(type_ref, enum.EnumMeta):
+            if not inst:
+                return None, False
             return inst.value, True
         if type_ref == types.NoneType:
             return inst, inst is None
-        return inst, True
+        if type_ref in (int, bool, float, str):
+            return inst, True
+        raise TypeError(f'{".".join(path)}: unknown: {inst}')
 
     def load_csv(self, type_ref: typing.Type[T]) -> list[T]:
         # TODO: load/save arrays in CSV format
@@ -418,8 +437,10 @@ class MockInstallState(InstallState):
         pytest.register_assert_rewrite('databricks.labs.blueprint.installer')
     """
 
-    def __init__(self):
-        self._overwrites: dict[str, Json] = {}
+    def __init__(self, overwrites: dict[str, Json] = None):
+        if not overwrites:
+            overwrites = {}
+        self._overwrites = overwrites
 
     def install_folder(self) -> str:
         return "~/mock/"
