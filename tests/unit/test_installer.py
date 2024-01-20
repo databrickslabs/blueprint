@@ -9,7 +9,11 @@ from databricks.sdk.core import Config
 from databricks.sdk.errors import NotFound
 from databricks.sdk.service.workspace import ImportFormat
 
-from databricks.labs.blueprint.installer import IllegalState, InstallState, MockInstallState
+from databricks.labs.blueprint.installer import (
+    IllegalState,
+    InstallState,
+    MockInstallState,
+)
 
 
 def test_install_folder():
@@ -78,9 +82,10 @@ def test_state_overwrite_existing():
         overwrite=True,
     )
 
+
 @dataclass
 class WorkspaceConfig:
-    __file__ = 'config.yml'
+    __file__ = "config.yml"
     __version__ = 2
 
     inventory_database: str
@@ -98,34 +103,36 @@ def test_save_typed_file():
     ws.current_user.me().user_name = "foo"
     state = InstallState(ws, "blueprint")
 
-    state.save_typed_file(WorkspaceConfig(
-        inventory_database='some_blueprint'
-    ))
+    state.save_typed_file(WorkspaceConfig(inventory_database="some_blueprint"))
 
     ws.workspace.upload.assert_called_with(
         "/Users/foo/.blueprint/config.yml",
-        yaml.dump({
-            '$version': 2,
-            'num_threads': 10,
-            'inventory_database': 'some_blueprint',
-            'workspace_start_path': '/',
-            'log_level': 'INFO'
-        }).encode("utf8"),
+        yaml.dump(
+            {
+                "$version": 2,
+                "num_threads": 10,
+                "inventory_database": "some_blueprint",
+                "workspace_start_path": "/",
+                "log_level": "INFO",
+            }
+        ).encode("utf8"),
         format=ImportFormat.AUTO,
         overwrite=True,
     )
 
+
 def test_mock_save_typed_file():
     state = MockInstallState()
 
-    state.save_typed_file(WorkspaceConfig(
-        inventory_database='some_blueprint'
-    ))
+    state.save_typed_file(WorkspaceConfig(inventory_database="some_blueprint"))
 
-    state.assert_file_written('config.yml', {
-        '$version': 2,
-         'inventory_database': 'some_blueprint',
-         'log_level': 'INFO',
-         'num_threads': 10,
-         'workspace_start_path': '/'})
-
+    state.assert_file_written(
+        "config.yml",
+        {
+            "$version": 2,
+            "inventory_database": "some_blueprint",
+            "log_level": "INFO",
+            "num_threads": 10,
+            "workspace_start_path": "/",
+        },
+    )

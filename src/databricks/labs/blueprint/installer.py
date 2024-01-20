@@ -8,7 +8,7 @@ import types
 import typing
 from functools import partial
 from json import JSONDecodeError
-from typing import TypedDict, Any, Callable, io
+from typing import Any, Callable, TypedDict, io
 
 import databricks.sdk.core
 import yaml
@@ -206,17 +206,19 @@ class InstallState:
             state = self._state.copy()  # type: ignore[assignment]
         state["$version"] = self._config_version
         state_dump = json.dumps(state, indent=2).encode("utf8")
-        self._overwrite('state.json', state_dump)
+        self._overwrite("state.json", state_dump)
 
     def _overwrite(self, filename: str, raw: bytes):
         with self._lock:
             self._ws.workspace.upload(
                 f"{self.install_folder()}/{filename}",
-                raw,   # type: ignore[arg-type]
+                raw,  # type: ignore[arg-type]
                 format=ImportFormat.AUTO,
-                overwrite=True)
+                overwrite=True,
+            )
 
-    T = typing.TypeVar('T')
+    T = typing.TypeVar("T")
+
     def load_typed_file(self, type_ref: typing.Type[T]) -> T:
         # TODO: load with type_ref, convert JSON/YAML into a dataclass instance, discover format migrations from methods
         # TODO: detect databricks config and allow using it as part of dataclass instance
@@ -227,30 +229,30 @@ class InstallState:
         try:
             return yaml.dump(raw).encode("utf8")
         except ImportError:
-            raise SyntaxError(f'PyYAML is not installed. Fix: pip install databricks-labs-blueprint[yaml]')
+            raise SyntaxError("PyYAML is not installed. Fix: pip install databricks-labs-blueprint[yaml]")
 
     def save_typed_file(self, inst: T, *, filename: str = None):
         if not inst:
-            raise TypeError('missing value')
+            raise TypeError("missing value")
         type_ref = type(inst)
-        if not filename and hasattr(inst, '__file__'):
-            filename = getattr(inst, '__file__')
+        if not filename and hasattr(inst, "__file__"):
+            filename = getattr(inst, "__file__")
         elif not filename:
-            filename = f'{type_ref.__name__}.json'
+            filename = f"{type_ref.__name__}.json"
         version = None
-        if hasattr(inst, '__version__'):
-            version = getattr(inst, '__version__')
+        if hasattr(inst, "__version__"):
+            version = getattr(inst, "__version__")
         as_dict, _ = self._marshal(type_ref, [], inst)
         if version:
-            as_dict['$version'] = version
+            as_dict["$version"] = version
         self._overwrite_content(filename, as_dict)
-        return f'{self.install_folder()}/{filename}'
+        return f"{self.install_folder()}/{filename}"
 
     def _overwrite_content(self, filename: str, as_dict: Json):
-        converters = {'json': partial(json.dumps, indent=2), 'yml': self._dump_yaml}
-        extension = filename.split('.')[-1]
+        converters = {"json": partial(json.dumps, indent=2), "yml": self._dump_yaml}
+        extension = filename.split(".")[-1]
         if extension not in converters:
-            raise KeyError(f'Unknown extension: {extension}')
+            raise KeyError(f"Unknown extension: {extension}")
         self._overwrite(filename, converters[extension](as_dict))
 
     def _explain_why(self, type_ref: type, path: list[str], raw: Any) -> str:
@@ -281,16 +283,16 @@ class InstallState:
             for i, v in enumerate(inst):
                 value, ok = self._marshal(hint, [*path, f"{i}"], v)
                 if not ok:
-                    raise TypeError(self._explain_why(hint,[*path, f"{i}"], v))
+                    raise TypeError(self._explain_why(hint, [*path, f"{i}"], v))
                 values.append(value)
             return values, True
         if isinstance(type_ref, types.UnionType):
             combo = []
             for variant in typing.get_args(type_ref):
-                value, ok = self._marshal(variant, [*path, f'(as {variant})'], inst)
+                value, ok = self._marshal(variant, [*path, f"(as {variant})"], inst)
                 if ok:
                     return value, True
-                combo.append(self._explain_why(variant, [*path, f'(as {variant})'], inst))
+                combo.append(self._explain_why(variant, [*path, f"(as {variant})"], inst))
             raise TypeError(f'{".".join(path)}: union: {" or ".join(combo)}')
         if isinstance(inst, databricks.sdk.core.Config):
             return inst.as_dict(), True
@@ -330,19 +332,21 @@ class InstallState:
             self._ws.workspace.upload(self._remote_wheel, f, overwrite=True, format=ImportFormat.AUTO)
         return self._remote_wheel
 
-    def _load_versioned_json(self,
-                   name: str,
-                   expected_version: int,
-                   parse_raw: Callable[[io.BinaryIO], Json] = json.load,
-                   format_migrations: list[Callable[[int, Json], Json]] = None) -> Json:
+    def _load_versioned_json(
+        self,
+        name: str,
+        expected_version: int,
+        parse_raw: Callable[[io.BinaryIO], Json] = json.load,
+        format_migrations: list[Callable[[int, Json], Json]] = None,
+    ) -> Json:
         if not format_migrations:
             format_migrations = []
-        target_file = f'{self.install_folder()}/{name}'
+        target_file = f"{self.install_folder()}/{name}"
         try:
             raw = parse_raw(self._ws.workspace.download(target_file))
             version = raw.pop("$version", None)
             if not version:
-                raise IllegalState('no $version found')
+                raise IllegalState("no $version found")
             for migrate in format_migrations:
                 raw = migrate(version, raw)
             if version != expected_version:
@@ -355,8 +359,8 @@ class InstallState:
             logger.warning(f"JSON state file corrupt: {self._state_file}")
             return {}
 
-    def _is_assignable(self,
-            type_ref: type, raw: Any, path: list[str], name_transform: Callable[[str], str]
+    def _is_assignable(
+        self, type_ref: type, raw: Any, path: list[str], name_transform: Callable[[str], str]
     ) -> tuple[bool, str | None]:
         if dataclasses.is_dataclass(type_ref):
             if not isinstance(raw, dict):
@@ -413,16 +417,17 @@ class MockInstallState(InstallState):
 
         pytest.register_assert_rewrite('databricks.labs.blueprint.installer')
     """
+
     def __init__(self):
         self._overwrites: dict[str, Json] = {}
 
     def install_folder(self) -> str:
-        return '~/mock/'
+        return "~/mock/"
 
     def _overwrite_content(self, filename: str, as_dict: Json):
         self._overwrites[filename] = as_dict
 
     def assert_file_written(self, filename: str, expected: Json):
-        assert filename in self._overwrites, f'{filename} had no writes'
+        assert filename in self._overwrites, f"{filename} had no writes"
         actual = self._overwrites[filename]
-        assert expected == actual, f'{filename} content missmatch'
+        assert expected == actual, f"{filename} content missmatch"
