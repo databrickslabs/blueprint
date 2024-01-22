@@ -69,7 +69,7 @@ class Installation:
                 actual_version = as_dict.pop("$version", 1)
             if actual_version != expected_version:
                 raise IllegalState(f"expected state $version={expected_version}, got={actual_version}")
-        raise NotImplementedError
+        return self._unmarshal(as_dict, [], type_ref)
 
     @deprecated("use load(, filename='x.csv')")
     def load_csv(self, type_ref: typing.Type[T]) -> list[T]:
@@ -210,6 +210,51 @@ class Installation:
         if type_ref in (int, bool, float, str):
             return inst, True
         raise TypeError(f'{".".join(path)}: unknown: {inst}')
+
+    def _unmarshal(self, inst: Any, path: list[str], type_ref: typing.Type[T]) -> T:
+        if dataclasses.is_dataclass(type_ref):
+            if inst is None:
+                return None
+            if not isinstance(inst, dict):
+                raise TypeError(self._explain_why(dict, path, inst))
+            as_dict = {}
+            fields = getattr(type_ref, '__dataclass_fields__')
+            for field_name, hint in typing.get_type_hints(type_ref).items():
+                raw = inst.get(field_name)
+                value = self._unmarshal(raw, [*path, field_name], hint)
+                if value is None:
+                    field = fields.get(field_name)
+                    if field.default == dataclasses.MISSING:
+                        raise TypeError(self._explain_why(hint, [*path, field_name], value))
+                    value = field.default
+                as_dict[field_name] = value
+            return type_ref(**as_dict)
+        if isinstance(type_ref, types.UnionType):
+            for variant in typing.get_args(type_ref):
+                value = self._unmarshal(inst, path, variant)
+                if value:
+                    return value
+            return None
+        if isinstance(type_ref, types.GenericAlias):
+            type_args = typing.get_args(type_ref)
+            if not type_args:
+                raise TypeError(f"Missing type arguments: {type_args}")
+            values = []
+            hint = type_args[0]
+            if not inst:
+                return None
+            for i, v in enumerate(inst):
+                values.append(self._unmarshal(v, [*path, f"{i}"], hint))
+            return values
+        if type_ref in (int, bool, float, str):
+            return inst
+        if type_ref == databricks.sdk.core.Config:
+            if not inst:
+                inst = {}
+            return databricks.sdk.core.Config(**inst)
+        if type_ref == types.NoneType:
+            return None
+        raise TypeError(f'{".".join(path)}: unknown: {type_ref}: {inst}')
 
     @staticmethod
     def _explain_why(type_ref: type, path: list[str], raw: Any) -> str:

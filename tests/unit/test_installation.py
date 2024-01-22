@@ -58,6 +58,10 @@ def test_load_typed_file():
                 "$version": 2,
                 "num_threads": 20,
                 "inventory_database": "some_blueprint",
+                "connect": {
+                    "host": "https://foo",
+                    "token": "bar"
+                }
             }
         )
     )
@@ -66,6 +70,7 @@ def test_load_typed_file():
     cfg = state.load(WorkspaceConfig)
 
     assert 20 == cfg.num_threads
+    assert '/' == cfg.workspace_start_path
 
 
 def test_save_typed_file_array():
