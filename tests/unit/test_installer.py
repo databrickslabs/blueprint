@@ -1,3 +1,4 @@
+import io
 import json
 from unittest.mock import create_autospec
 
@@ -6,10 +7,8 @@ from databricks.sdk import WorkspaceClient
 from databricks.sdk.errors import NotFound
 from databricks.sdk.service.workspace import ImportFormat
 
-from databricks.labs.blueprint.installer import (
-    IllegalState,
-    InstallState,
-)
+from databricks.labs.blueprint.installation import IllegalState
+from databricks.labs.blueprint.installer import InstallState
 
 
 def test_install_folder():
@@ -22,7 +21,7 @@ def test_install_folder():
 def test_jobs_state():
     ws = create_autospec(WorkspaceClient)
     ws.current_user.me().user_name = "foo"
-    ws.workspace.download.return_value.read.return_value = '{"$version":1, "resources": {"jobs": [1,2,3]}}'
+    ws.workspace.download.return_value = io.StringIO('{"$version":1, "resources": {"jobs": [1,2,3]}}')
 
     state = InstallState(ws, "blueprint")
 
@@ -33,7 +32,7 @@ def test_jobs_state():
 def test_invalid_config_version():
     ws = create_autospec(WorkspaceClient)
     ws.current_user.me().user_name = "foo"
-    ws.workspace.download.return_value.read.return_value = '{"$version":9, "resources": {"jobs": [1,2,3]}}'
+    ws.workspace.download.return_value = io.StringIO('{"$version":9, "resources": {"jobs": [1,2,3]}}')
 
     state = InstallState(ws, "blueprint")
 

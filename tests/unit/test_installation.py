@@ -65,12 +65,7 @@ def test_save_typed_file_array_csv():
 
     ws.workspace.upload.assert_called_with(
         "/Users/foo/.blueprint/workspaces.csv",
-        "\r\n".join([
-            "workspace_id,workspace_name",
-            "1234,first",
-            "1235,second",
-            ""
-        ]).encode("utf8"),
+        "\r\n".join(["workspace_id,workspace_name", "1234,first", "1235,second", ""]).encode("utf8"),
         format=ImportFormat.AUTO,
         overwrite=True,
     )
@@ -85,10 +80,7 @@ def test_load_typed_file():
                 "$version": 2,
                 "num_threads": 20,
                 "inventory_database": "some_blueprint",
-                "connect": {
-                    "host": "https://foo",
-                    "token": "bar"
-                }
+                "connect": {"host": "https://foo", "token": "bar"},
             }
         )
     )
@@ -97,41 +89,39 @@ def test_load_typed_file():
     cfg = state.load(WorkspaceConfig)
 
     assert 20 == cfg.num_threads
-    assert '/' == cfg.workspace_start_path
+    assert "/" == cfg.workspace_start_path
 
 
 def test_load_csv_file():
     ws = create_autospec(WorkspaceClient)
     ws.current_user.me().user_name = "foo"
     ws.workspace.download.return_value = io.StringIO(
-        "\n".join([
-            "workspace_id,workspace_name",
-            "1234,first",
-            "1235,second"
-        ])
+        "\n".join(["workspace_id,workspace_name", "1234,first", "1235,second"])
     )
     state = Installation(ws, "blueprint")
 
-    workspaces = state.load(list[Workspace], filename='workspaces.csv')
+    workspaces = state.load(list[Workspace], filename="workspaces.csv")
 
     assert 2 == len(workspaces)
-    assert 'first' == workspaces[0].workspace_name
+    assert "first" == workspaces[0].workspace_name
     assert 1235 == workspaces[1].workspace_id
 
 
-@pytest.mark.parametrize('ext', ['json', 'csv'])
+@pytest.mark.parametrize("ext", ["json", "csv"])
 def test_load_typed_list_file(ext):
-    state = MockInstallation({
-        f'workspaces.{ext}': [
-            {"workspace_id": 1234, "workspace_name": "first"},
-            {"workspace_id": 1235, "workspace_name": "second"}
-        ]
-    })
+    state = MockInstallation(
+        {
+            f"workspaces.{ext}": [
+                {"workspace_id": 1234, "workspace_name": "first"},
+                {"workspace_id": 1235, "workspace_name": "second"},
+            ]
+        }
+    )
 
-    workspaces = state.load(list[Workspace], filename=f'workspaces.{ext}')
+    workspaces = state.load(list[Workspace], filename=f"workspaces.{ext}")
 
     assert 2 == len(workspaces)
-    assert 'first' == workspaces[0].workspace_name
+    assert "first" == workspaces[0].workspace_name
     assert 1235 == workspaces[1].workspace_id
 
 
