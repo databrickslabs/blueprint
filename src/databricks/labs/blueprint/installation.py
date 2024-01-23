@@ -212,6 +212,8 @@ class Installation:
         raise TypeError(f'{".".join(path)}: unknown: {inst}')
 
     def _unmarshal(self, inst: Any, path: list[str], type_ref: typing.Type[T]) -> T:
+        if hasattr(type_ref, 'from_dict'):
+            return getattr(type_ref, 'from_dict')(inst)
         if dataclasses.is_dataclass(type_ref):
             if inst is None:
                 return None
@@ -288,7 +290,7 @@ class MockInstallation(Installation):
         pytest.register_assert_rewrite('databricks.labs.blueprint.installer')
     """
 
-    def __init__(self, overwrites: dict[str, Json] = None):
+    def __init__(self, overwrites: Any = None):
         if not overwrites:
             overwrites = {}
         self._overwrites = overwrites

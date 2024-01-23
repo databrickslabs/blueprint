@@ -73,6 +73,40 @@ def test_load_typed_file():
     assert '/' == cfg.workspace_start_path
 
 
+def test_load_csv_file():
+    ws = create_autospec(WorkspaceClient)
+    ws.current_user.me().user_name = "foo"
+    ws.workspace.download.return_value = io.StringIO(
+        "\n".join([
+            "workspace_id,workspace_name",
+            "1234,first",
+            "1235,second"
+        ])
+    )
+    state = Installation(ws, "blueprint")
+
+    workspaces = state.load(list[Workspace], filename='workspaces.csv')
+
+    assert 2 == len(workspaces)
+    assert 'first' == workspaces[0].workspace_name
+    assert 1235 == workspaces[1].workspace_id
+
+
+def test_load_typed_file_other():
+    state = MockInstallation({
+        'workspaces.json': [
+            {"workspace_id": 1234, "workspace_name": "first"},
+            {"workspace_id": 1235, "workspace_name": "second"}
+        ]
+    })
+
+    workspaces = state.load(list[Workspace], filename='workspaces.json')
+
+    assert 2 == len(workspaces)
+    assert 'first' == workspaces[0].workspace_name
+    assert 1235 == workspaces[1].workspace_id
+
+
 def test_save_typed_file_array():
     state = MockInstallation()
 
