@@ -2,6 +2,7 @@ import io
 from dataclasses import dataclass
 from unittest.mock import create_autospec
 
+import pytest
 import yaml
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.core import Config
@@ -44,6 +45,32 @@ def test_save_typed_file():
                 "log_level": "INFO",
             }
         ).encode("utf8"),
+        format=ImportFormat.AUTO,
+        overwrite=True,
+    )
+
+
+def test_save_typed_file_array_csv():
+    ws = create_autospec(WorkspaceClient)
+    ws.current_user.me().user_name = "foo"
+    state = Installation(ws, "blueprint")
+
+    state.save(
+        [
+            Workspace(workspace_id=1234, workspace_name="first"),
+            Workspace(workspace_id=1235, workspace_name="second"),
+        ],
+        filename="workspaces.csv",
+    )
+
+    ws.workspace.upload.assert_called_with(
+        "/Users/foo/.blueprint/workspaces.csv",
+        "\r\n".join([
+            "workspace_id,workspace_name",
+            "1234,first",
+            "1235,second",
+            ""
+        ]).encode("utf8"),
         format=ImportFormat.AUTO,
         overwrite=True,
     )
@@ -92,22 +119,23 @@ def test_load_csv_file():
     assert 1235 == workspaces[1].workspace_id
 
 
-def test_load_typed_file_other():
+@pytest.mark.parametrize('ext', ['json', 'csv'])
+def test_load_typed_list_file(ext):
     state = MockInstallation({
-        'workspaces.json': [
+        f'workspaces.{ext}': [
             {"workspace_id": 1234, "workspace_name": "first"},
             {"workspace_id": 1235, "workspace_name": "second"}
         ]
     })
 
-    workspaces = state.load(list[Workspace], filename='workspaces.json')
+    workspaces = state.load(list[Workspace], filename=f'workspaces.{ext}')
 
     assert 2 == len(workspaces)
     assert 'first' == workspaces[0].workspace_name
     assert 1235 == workspaces[1].workspace_id
 
 
-def test_save_typed_file_array():
+def test_save_typed_file_array_json():
     state = MockInstallation()
 
     state.save(

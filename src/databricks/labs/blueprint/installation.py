@@ -1,6 +1,8 @@
 import dataclasses
 import enum
+import io
 import json
+import csv
 import logging
 import threading
 import types
@@ -15,7 +17,6 @@ from databricks.sdk import WorkspaceClient
 from databricks.sdk.errors import NotFound
 from databricks.sdk.mixins import workspace
 from databricks.sdk.service.workspace import ImportFormat
-from typing_extensions import deprecated
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +29,8 @@ class IllegalState(ValueError):
 
 class Installation:
     """Manages ~/.{product} folder on WorkspaceFS to track typed files"""
+
+    _PRIMITIVES = (int, bool, float, str)
 
     def __init__(self, ws: WorkspaceClient, product: str, *, install_folder: str | None = None):
         self._ws = ws
@@ -71,17 +74,14 @@ class Installation:
                 raise IllegalState(f"expected state $version={expected_version}, got={actual_version}")
         return self._unmarshal(as_dict, [], type_ref)
 
-    @deprecated("use load(, filename='x.csv')")
-    def load_csv(self, type_ref: typing.Type[T]) -> list[T]:
-        # TODO: load/save arrays in CSV format
-        # TODO: MockInstallState to get CSV file created/loaded as slice-of-dataclasses
-        raise NotImplementedError
-
     def save(self, inst: T, *, filename: str = None):
-        # TODO: consider: save_configuration([Foo(1,2),Foo(3,4)], filename='tables.csv')
         if not inst:
             raise TypeError("missing value")
         type_ref = type(inst)
+        if type_ref == list:
+            if len(inst) == 0:
+                raise ValueError('List cannot be empty')
+            type_ref = list[type(inst[0])]
         if not filename and hasattr(inst, "__file__"):
             filename = getattr(inst, "__file__")
         elif not filename:
@@ -92,13 +92,8 @@ class Installation:
         as_dict, _ = self._marshal(type_ref, [], inst)
         if version:
             as_dict["$version"] = version
-        self._overwrite_content(filename, as_dict)
+        self._overwrite_content(filename, as_dict, type_ref)
         return f"{self.install_folder()}/{filename}"
-
-    @deprecated("use save(, filename='x.csv')")
-    def save_csv(self, records: list[T], *, filename: str | None = None) -> list[T]:
-        # TODO: load/save arrays in CSV format - perhaps do the
-        raise NotImplementedError
 
     def upload(self, filename: str, raw: bytes):
         with self._lock:
@@ -127,18 +122,17 @@ class Installation:
         # TODO: list files under install folder
         raise NotImplementedError
 
-    # TODO: add from_dict to databricks config (or make it temporary hack in unmarshaller)
-
-    def _overwrite_content(self, filename: str, as_dict: Json):
-        converters = {"json": partial(json.dumps, indent=2), "yml": self._dump_yaml}
+    def _overwrite_content(self, filename: str, as_dict: Json, type_ref: typing.Type):
+        converters = {"json": self._dump_json, "yml": self._dump_yaml, 'csv': self._dump_csv}
         extension = filename.split(".")[-1]
         if extension not in converters:
             raise KeyError(f"Unknown extension: {extension}")
-        self.upload(filename, converters[extension](as_dict))
+        raw = converters[extension](as_dict, type_ref)
+        self.upload(filename, raw)
 
     def _load_content(self, filename: str) -> Json:
         with self._lock:
-            converters = {"json": json.load, "yml": self._load_yaml}
+            converters = {"json": json.load, "yml": self._load_yaml, "csv": self._load_csv}
             extension = filename.split(".")[-1]
             if extension not in converters:
                 raise KeyError(f"Unknown extension: {extension}")
@@ -207,13 +201,15 @@ class Installation:
             return inst.value, True
         if type_ref == types.NoneType:
             return inst, inst is None
-        if type_ref in (int, bool, float, str):
+        if type_ref == databricks.sdk.core.Config:
+            if not inst:
+                return None, False
+            return inst.as_dict(), True
+        if type_ref in self._PRIMITIVES:
             return inst, True
         raise TypeError(f'{".".join(path)}: unknown: {inst}')
 
     def _unmarshal(self, inst: Any, path: list[str], type_ref: typing.Type[T]) -> T:
-        if hasattr(type_ref, 'from_dict'):
-            return getattr(type_ref, 'from_dict')(inst)
         if dataclasses.is_dataclass(type_ref):
             if inst is None:
                 return None
@@ -231,7 +227,7 @@ class Installation:
                     value = field.default
                 as_dict[field_name] = value
             return type_ref(**as_dict)
-        if isinstance(type_ref, types.UnionType):
+        if isinstance(type_ref, (types.UnionType, typing._UnionGenericAlias)):
             for variant in typing.get_args(type_ref):
                 value = self._unmarshal(inst, path, variant)
                 if value:
@@ -248,8 +244,19 @@ class Installation:
             for i, v in enumerate(inst):
                 values.append(self._unmarshal(v, [*path, f"{i}"], hint))
             return values
-        if type_ref in (int, bool, float, str):
-            return inst
+        if isinstance(type_ref, typing._GenericAlias):
+            if not inst:
+                return None
+            return self._unmarshal(inst, path, type_ref.__origin__)
+        if isinstance(type_ref, enum.EnumMeta):
+            if not inst:
+                return None
+            return type_ref(inst)
+        if type_ref in self._PRIMITIVES:
+            if not inst:
+                return inst
+            # convert from str to int if necessary
+            return type_ref(inst)
         if type_ref == databricks.sdk.core.Config:
             if not inst:
                 inst = {}
@@ -265,7 +272,11 @@ class Installation:
         return f'{".".join(path)}: not a {type_ref.__name__}: {raw}'
 
     @staticmethod
-    def _dump_yaml(raw: Json) -> bytes:
+    def _dump_json(as_dict: Json, _: typing.Type) -> bytes:
+        return json.dumps(as_dict, indent=2).encode('utf8')
+
+    @staticmethod
+    def _dump_yaml(raw: Json, _: typing.Type) -> bytes:
         try:
             return yaml.dump(raw).encode("utf8")
         except ImportError:
@@ -280,6 +291,39 @@ class Installation:
                 raise JSONDecodeError(str(err), "<yaml>", 0)
         except ImportError:
             raise SyntaxError("PyYAML is not installed. Fix: pip install databricks-labs-blueprint[yaml]")
+
+    @staticmethod
+    def _dump_csv(raw: list[Json], type_ref: types.GenericAlias) -> bytes:
+        type_args = typing.get_args(type_ref)
+        if not type_args:
+            raise TypeError(f'Writing CSV is only supported for lists. Got {type_ref}')
+        dataclass_ref = type_args[0]
+        if not dataclasses.is_dataclass(dataclass_ref):
+            raise TypeError(f'Only lists of dataclasses allowed. Got {dataclass_ref}')
+        non_empty_keys = set()
+        for as_dict in raw:
+            if not isinstance(as_dict, dict):
+                raise TypeError(f'Expecting a list of dictionaries. Got {as_dict}')
+            for k, v in as_dict.items():
+                if not v:
+                    continue
+                non_empty_keys.add(k)
+        buffer = io.StringIO()
+        # get ordered field names the way they appear in dataclass
+        field_names = [_.name for _ in dataclasses.fields(dataclass_ref) if _.name in non_empty_keys]
+        writer = csv.DictWriter(buffer, field_names, dialect="excel")
+        writer.writeheader()
+        for as_dict in raw:
+            writer.writerow(as_dict)
+        buffer.seek(0)
+        return buffer.read().encode('utf8')
+
+    @staticmethod
+    def _load_csv(raw: typing.BinaryIO) -> list[Json]:
+        out = []
+        for row in csv.DictReader(raw):  # type: ignore[arg-type]
+            out.append(row)
+        return out
 
 
 class MockInstallation(Installation):
@@ -298,7 +342,7 @@ class MockInstallation(Installation):
     def install_folder(self) -> str:
         return "~/mock/"
 
-    def _overwrite_content(self, filename: str, as_dict: Json):
+    def _overwrite_content(self, filename: str, as_dict: Json, type_ref: typing.Type):
         self._overwrites[filename] = as_dict
 
     def _load_content(self, filename: str) -> Json:
