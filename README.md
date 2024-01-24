@@ -528,6 +528,18 @@ def workspaces(a: AccountClient):
         logger.info(f"Workspace: {ws.workspace_name} ({ws.workspace_id})")
 ```
 
+Invoking Sparksession using Databricks Connect
+```python
+from databricks.sdk import WorkspaceClient
+from databricks.connect import DatabricksSession
+
+@app.command
+def example(w: WorkspaceClient):
+    """Building Spark Session using Databricks Connect"""
+    spark = DatabricksSession.builder().sdk_config(w.config).getOrCreate()
+    spark.sql("SHOW TABLES")
+```
+
 [[back to top](#databricks-labs-blueprint)]
 
 ### Starting New Projects
