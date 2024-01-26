@@ -37,7 +37,11 @@ def test_save_typed_file():
     ws.current_user.me().user_name = "foo"
     state = Installation(ws, "blueprint")
 
-    state.save(WorkspaceConfig(inventory_database="some_blueprint"))
+    target = state.save(WorkspaceConfig(
+        inventory_database="some_blueprint",
+        include_group_names=["foo", "bar"],
+    ))
+    assert "/Users/foo/.blueprint/config.yml" == target
 
     ws.workspace.upload.assert_called_with(
         "/Users/foo/.blueprint/config.yml",
@@ -46,6 +50,7 @@ def test_save_typed_file():
                 "$version": 2,
                 "num_threads": 10,
                 "inventory_database": "some_blueprint",
+                "include_group_names": ["foo", "bar"],
                 "workspace_start_path": "/",
                 "log_level": "INFO",
             }
@@ -53,6 +58,7 @@ def test_save_typed_file():
         format=ImportFormat.AUTO,
         overwrite=True,
     )
+
 
 def test_creates_missing_folders():
     ws = create_autospec(WorkspaceClient)
@@ -63,6 +69,27 @@ def test_creates_missing_folders():
     state.save(WorkspaceConfig(inventory_database="some_blueprint"))
 
     ws.workspace.mkdirs.assert_called_with("/Users/foo/.blueprint")
+
+
+def test_upload_dbfs():
+    ws = create_autospec(WorkspaceClient)
+    ws.current_user.me().user_name = "foo"
+    state = Installation(ws, "blueprint")
+
+    target = state.upload_dbfs("wheels/foo.whl", b"abc")
+    assert "/Users/foo/.blueprint/wheels/foo.whl" == target
+
+
+def test_upload_dbfs_mkdirs():
+    ws = create_autospec(WorkspaceClient)
+    ws.current_user.me().user_name = "foo"
+    ws.dbfs.upload.side_effect = [NotFound(...), None]
+    state = Installation(ws, "blueprint")
+
+    target = state.upload_dbfs("wheels/foo.whl", b"abc")
+    assert "/Users/foo/.blueprint/wheels/foo.whl" == target
+
+    ws.dbfs.mkdirs.assert_called_with("/Users/foo/.blueprint/wheels")
 
 
 def test_save_typed_file_array_csv():

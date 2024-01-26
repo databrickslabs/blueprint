@@ -4,6 +4,7 @@ import enum
 import io
 import json
 import logging
+import os.path
 import threading
 import types
 import typing
@@ -194,7 +195,8 @@ class Installation:
             try:
                 attempt()
             except NotFound:
-                self._ws.workspace.mkdirs(self.install_folder())
+                parent_folder = os.path.dirname(dst)
+                self._ws.workspace.mkdirs(parent_folder)
                 attempt()
             return dst
 
@@ -209,7 +211,8 @@ class Installation:
             try:
                 attempt()
             except NotFound:
-                self._ws.dbfs.mkdirs(self.install_folder())
+                parent_folder = os.path.dirname(dst)
+                self._ws.dbfs.mkdirs(parent_folder)
                 attempt()
             return dst
 
