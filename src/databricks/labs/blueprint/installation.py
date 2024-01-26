@@ -486,7 +486,6 @@ class Installation:
         return out
 
 
-
 class MockInstallation(Installation):
     """Install state testing toolbelt
 
