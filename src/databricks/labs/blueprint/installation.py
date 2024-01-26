@@ -258,14 +258,7 @@ class Installation:
         if isinstance(inst, databricks.sdk.core.Config):
             return inst.as_dict(), True
         if type_ref == list:
-            as_list = []
-            for i, v in enumerate(inst):
-                hint = type(v)
-                value, ok = cls._marshal(hint, [*path, f"{i}"], v)
-                if not ok:
-                    raise TypeError(cls._explain_why(hint, [*path, f"{i}"], v))
-                as_list.append(value)
-            return as_list, True
+            return cls._marshal_list(type_ref, path, inst)
         if isinstance(type_ref, enum.EnumMeta):
             if not inst:
                 return None, False
