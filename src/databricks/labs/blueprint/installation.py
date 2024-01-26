@@ -204,7 +204,6 @@ class Installation:
         """The `upload_dbfs` method uploads raw bytes to a file on DBFS (Databricks File System) with the given
         `filename`. This method is used to upload files to DBFS, which is a distributed file system that is integrated
         with Databricks."""
-        # TODO: use this in Wheels to upload/download random files into correct prefix in WSFS/DBFS
         with self._lock:
             dst = f"{self.install_folder()}/{filename}"
             attempt = partial(self._ws.dbfs.upload, dst, raw, overwrite=True)

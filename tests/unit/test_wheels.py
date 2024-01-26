@@ -22,7 +22,6 @@ def test_build_and_upload_wheel():
         assert os.path.exists(wheels._local_wheel)
 
         remote_on_wsfs = wheels.upload_to_wsfs()
-        ws.workspace.mkdirs.assert_called_once_with("~/.blueprint/wheels")
         ws.workspace.upload.assert_called_once()
 
         call = ws.workspace.upload.mock_calls[0]
@@ -33,7 +32,6 @@ def test_build_and_upload_wheel():
         assert call.kwargs["overwrite"]
 
         wheels.upload_to_dbfs()
-        ws.dbfs.mkdirs.assert_called_once_with("~/.blueprint/wheels")
         ws.dbfs.upload.assert_called_once()
     assert not os.path.exists(wheels._local_wheel)
 
