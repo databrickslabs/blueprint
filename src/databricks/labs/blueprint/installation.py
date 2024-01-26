@@ -262,7 +262,17 @@ class Installation:
             type_args = typing.get_args(type_ref)
             if not type_args:
                 raise TypeError(f"Missing type arguments: {type_args}")
-            values = []
+            if len(type_args) == 2:
+                if not isinstance(inst, dict):
+                    raise TypeError(cls._explain_why(type_ref, path, inst))
+                as_dict = {}
+                hint = type_args[1]
+                for k, v in inst.items():
+                    as_dict[k], ok = cls._marshal(hint, [*path, k], v)
+                    if not ok:
+                        raise TypeError(cls._explain_why(hint, [*path, k], v))
+                return as_dict, True
+            as_list = []
             hint = type_args[0]
             if not inst:
                 return None, False
@@ -270,8 +280,8 @@ class Installation:
                 value, ok = cls._marshal(hint, [*path, f"{i}"], v)
                 if not ok:
                     raise TypeError(cls._explain_why(hint, [*path, f"{i}"], v))
-                values.append(value)
-            return values, True
+                as_list.append(value)
+            return as_list, True
         if isinstance(type_ref, (types.UnionType, typing._UnionGenericAlias)):
             combo = []
             for variant in typing.get_args(type_ref):
@@ -287,14 +297,14 @@ class Installation:
         if isinstance(inst, databricks.sdk.core.Config):
             return inst.as_dict(), True
         if type_ref == list:
-            values = []
+            as_list = []
             for i, v in enumerate(inst):
                 hint = type(v)
                 value, ok = cls._marshal(hint, [*path, f"{i}"], v)
                 if not ok:
                     raise TypeError(cls._explain_why(hint, [*path, f"{i}"], v))
-                values.append(value)
-            return values, True
+                as_list.append(value)
+            return as_list, True
         if isinstance(type_ref, enum.EnumMeta):
             if not inst:
                 return None, False
@@ -316,7 +326,7 @@ class Installation:
                 return None
             if not isinstance(inst, dict):
                 raise TypeError(cls._explain_why(dict, path, inst))
-            as_dict = {}
+            from_dict = {}
             fields = getattr(type_ref, "__dataclass_fields__")
             for field_name, hint in typing.get_type_hints(type_ref).items():
                 raw = inst.get(field_name)
@@ -331,8 +341,8 @@ class Installation:
                         value = default_value
                     else:
                         value = default_factory()
-                as_dict[field_name] = value
-            return type_ref(**as_dict)
+                from_dict[field_name] = value
+            return type_ref(**from_dict)
         if isinstance(type_ref, (types.UnionType, typing._UnionGenericAlias)):
             for variant in typing.get_args(type_ref):
                 value = cls._unmarshal(inst, path, variant)
@@ -348,10 +358,10 @@ class Installation:
                     return None
                 if not isinstance(inst, dict):
                     raise TypeError(cls._explain_why(type_ref, path, inst))
-                as_dict = {}
+                from_dict = {}
                 for k, v in inst.items():
-                    as_dict[k] = cls._unmarshal(v, [*path, k], type_args[1])
-                return as_dict
+                    from_dict[k] = cls._unmarshal(v, [*path, k], type_args[1])
+                return from_dict
             hint = type_args[0]
             if not inst:
                 return None
