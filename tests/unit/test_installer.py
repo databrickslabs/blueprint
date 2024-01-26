@@ -53,7 +53,7 @@ def test_state_not_found():
 def test_state_corrupt():
     ws = create_autospec(WorkspaceClient)
     ws.current_user.me().user_name = "foo"
-    ws.workspace.download.return_value.read.return_value = '{"$versio...'
+    ws.workspace.download.return_value = io.StringIO('{"$versio...')
 
     state = InstallState(ws, "blueprint")
 
@@ -63,7 +63,7 @@ def test_state_corrupt():
 def test_state_overwrite_existing():
     ws = create_autospec(WorkspaceClient)
     ws.current_user.me().user_name = "foo"
-    ws.workspace.download.return_value.read.return_value = '{"$version":1, "resources": {"sql": {"a": "b"}}}'
+    ws.workspace.download.return_value = io.StringIO('{"$version":1, "resources": {"sql": {"a": "b"}}}')
 
     state = InstallState(ws, "blueprint")
     state.jobs["foo"] = "bar"
