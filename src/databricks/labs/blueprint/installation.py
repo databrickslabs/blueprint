@@ -246,50 +246,11 @@ class Installation:
     @classmethod
     def _marshal(cls, type_ref: type, path: list[str], inst: Any) -> tuple[Any, bool]:
         if dataclasses.is_dataclass(type_ref):
-            if inst is None:
-                return None, False
-            as_dict = {}
-            for field, hint in typing.get_type_hints(type_ref).items():
-                raw = getattr(inst, field)
-                value, ok = cls._marshal(hint, [*path, field], raw)
-                if not ok:
-                    raise TypeError(cls._explain_why(hint, [*path, field], raw))
-                if not value:
-                    continue
-                as_dict[field] = value
-            return as_dict, True
+            return cls._marshal_dataclass(type_ref, path, inst)
         if isinstance(type_ref, types.GenericAlias):
-            type_args = typing.get_args(type_ref)
-            if not type_args:
-                raise TypeError(f"Missing type arguments: {type_args}")
-            if len(type_args) == 2:
-                if not isinstance(inst, dict):
-                    return None, False
-                as_dict = {}
-                hint = type_args[1]
-                for k, v in inst.items():
-                    as_dict[k], ok = cls._marshal(hint, [*path, k], v)
-                    if not ok:
-                        raise TypeError(cls._explain_why(hint, [*path, k], v))
-                return as_dict, True
-            as_list = []
-            hint = type_args[0]
-            if not inst:
-                return None, False
-            for i, v in enumerate(inst):
-                value, ok = cls._marshal(hint, [*path, f"{i}"], v)
-                if not ok:
-                    raise TypeError(cls._explain_why(hint, [*path, f"{i}"], v))
-                as_list.append(value)
-            return as_list, True
+            return cls._marshal_generic(type_ref, path, inst)
         if isinstance(type_ref, (types.UnionType, typing._UnionGenericAlias)):
-            combo = []
-            for variant in typing.get_args(type_ref):
-                value, ok = cls._marshal(variant, [*path, f"(as {variant})"], inst)
-                if ok:
-                    return value, True
-                combo.append(cls._explain_why(variant, [*path, f"(as {variant})"], inst))
-            raise TypeError(f'{".".join(path)}: union: {" or ".join(combo)}')
+            return cls._marshal_union(type_ref, path, inst)
         if isinstance(type_ref, typing._GenericAlias):
             if not inst:
                 return None, False
@@ -320,55 +281,70 @@ class Installation:
         raise TypeError(f'{".".join(path)}: unknown: {inst}')
 
     @classmethod
+    def _marshal_union(cls, type_ref: type, path: list[str], inst: Any) -> tuple[Any, bool]:
+        combo = []
+        for variant in typing.get_args(type_ref):
+            value, ok = cls._marshal(variant, [*path, f"(as {variant})"], inst)
+            if ok:
+                return value, True
+            combo.append(cls._explain_why(variant, [*path, f"(as {variant})"], inst))
+        raise TypeError(f'{".".join(path)}: union: {" or ".join(combo)}')
+
+    @classmethod
+    def _marshal_generic(cls, type_ref: type, path: list[str], inst: Any) -> tuple[Any, bool]:
+        type_args = typing.get_args(type_ref)
+        if not type_args:
+            raise TypeError(f"Missing type arguments: {type_args}")
+        if len(type_args) == 2:
+            return cls._marshal_dict(type_args[1], path, inst)
+        return cls._marshal_list(type_args[0], path, inst)
+
+    @classmethod
+    def _marshal_list(cls, type_ref: type, path: list[str], inst: Any) -> tuple[Any, bool]:
+        as_list = []
+        if not inst:
+            return None, False
+        for i, v in enumerate(inst):
+            value, ok = cls._marshal(type_ref, [*path, f"{i}"], v)
+            if not ok:
+                raise TypeError(cls._explain_why(type_ref, [*path, f"{i}"], v))
+            as_list.append(value)
+        return as_list, True
+
+    @classmethod
+    def _marshal_dict(cls, type_ref: type, path: list[str], inst: Any) -> tuple[Any, bool]:
+        if not isinstance(inst, dict):
+            return None, False
+        as_dict = {}
+        for k, v in inst.items():
+            as_dict[k], ok = cls._marshal(type_ref, [*path, k], v)
+            if not ok:
+                raise TypeError(cls._explain_why(type_ref, [*path, k], v))
+        return as_dict, True
+
+    @classmethod
+    def _marshal_dataclass(cls, type_ref: type, path: list[str], inst: Any) -> tuple[Any, bool]:
+        if inst is None:
+            return None, False
+        as_dict = {}
+        for field, hint in typing.get_type_hints(type_ref).items():
+            raw = getattr(inst, field)
+            value, ok = cls._marshal(hint, [*path, field], raw)
+            if not ok:
+                raise TypeError(cls._explain_why(hint, [*path, field], raw))
+            if not value:
+                continue
+            as_dict[field] = value
+        return as_dict, True
+
+    @classmethod
     def _unmarshal(cls, inst: Any, path: list[str], type_ref: typing.Type[T]) -> T | None:
         if dataclasses.is_dataclass(type_ref):
-            if inst is None:
-                return None
-            if not isinstance(inst, dict):
-                raise TypeError(cls._explain_why(dict, path, inst))
-            from_dict = {}
-            fields = getattr(type_ref, "__dataclass_fields__")
-            for field_name, hint in typing.get_type_hints(type_ref).items():
-                raw = inst.get(field_name)
-                value = cls._unmarshal(raw, [*path, field_name], hint)
-                if value is None:
-                    field = fields.get(field_name)
-                    default_value = field.default
-                    default_factory = field.default_factory
-                    if default_factory == dataclasses.MISSING and default_value == dataclasses.MISSING:
-                        raise TypeError(cls._explain_why(hint, [*path, field_name], value))
-                    elif default_value != dataclasses.MISSING:
-                        value = default_value
-                    else:
-                        value = default_factory()
-                from_dict[field_name] = value
-            return type_ref(**from_dict)
+            return cls._unmarshal_dataclass(inst, path, type_ref)
         if isinstance(type_ref, (types.UnionType, typing._UnionGenericAlias)):
-            for variant in typing.get_args(type_ref):
-                value = cls._unmarshal(inst, path, variant)
-                if value:
-                    return value
-            return None
+            return cls._unmarshal_union(inst, path, type_ref)
         if isinstance(type_ref, types.GenericAlias):
-            type_args = typing.get_args(type_ref)
-            if not type_args:
-                raise TypeError(f"Missing type arguments: {type_args}")
-            if len(type_args) == 2:
-                if not inst:
-                    return None
-                if not isinstance(inst, dict):
-                    raise TypeError(cls._explain_why(type_ref, path, inst))
-                from_dict = {}
-                for k, v in inst.items():
-                    from_dict[k] = cls._unmarshal(v, [*path, k], type_args[1])
-                return from_dict
-            hint = type_args[0]
-            if not inst:
-                return None
-            as_list = []
-            for i, v in enumerate(inst):
-                as_list.append(cls._unmarshal(v, [*path, f"{i}"], hint))
-            return as_list
+            return cls._unmarshal_generic(inst, path, type_ref)
         if isinstance(type_ref, typing._GenericAlias):
             if not inst:
                 return None
@@ -378,11 +354,7 @@ class Installation:
                 return None
             return type_ref(inst)
         if type_ref in cls._PRIMITIVES:
-            if not inst:
-                return inst
-            # convert from str to int if necessary
-            converted = type_ref(inst)  # typing: ignore[call-arg]
-            return converted
+            return cls._unmarshal_primitive(inst, type_ref)
         if type_ref == databricks.sdk.core.Config:
             if not inst:
                 inst = {}
@@ -390,6 +362,75 @@ class Installation:
         if type_ref == types.NoneType:
             return None
         raise TypeError(f'{".".join(path)}: unknown: {type_ref}: {inst}')
+
+    @classmethod
+    def _unmarshal_dataclass(cls, inst, path, type_ref):
+        if inst is None:
+            return None
+        if not isinstance(inst, dict):
+            raise TypeError(cls._explain_why(dict, path, inst))
+        from_dict = {}
+        fields = getattr(type_ref, "__dataclass_fields__")
+        for field_name, hint in typing.get_type_hints(type_ref).items():
+            raw = inst.get(field_name)
+            value = cls._unmarshal(raw, [*path, field_name], hint)
+            if value is None:
+                field = fields.get(field_name)
+                default_value = field.default
+                default_factory = field.default_factory
+                if default_factory == dataclasses.MISSING and default_value == dataclasses.MISSING:
+                    raise TypeError(cls._explain_why(hint, [*path, field_name], value))
+                elif default_value != dataclasses.MISSING:
+                    value = default_value
+                else:
+                    value = default_factory()
+            from_dict[field_name] = value
+        return type_ref(**from_dict)
+
+    @classmethod
+    def _unmarshal_union(cls, inst, path, type_ref):
+        for variant in typing.get_args(type_ref):
+            value = cls._unmarshal(inst, path, variant)
+            if value:
+                return value
+        return None
+
+    @classmethod
+    def _unmarshal_generic(cls, inst, path, type_ref):
+        type_args = typing.get_args(type_ref)
+        if not type_args:
+            raise TypeError(f"Missing type arguments: {type_args}")
+        if len(type_args) == 2:
+            return cls._unmarshal_dict(inst, path, type_args[1])
+        return cls._unmarshal_list(inst, path, type_args[0])
+
+    @classmethod
+    def _unmarshal_list(cls, inst, path, hint):
+        if not inst:
+            return None
+        as_list = []
+        for i, v in enumerate(inst):
+            as_list.append(cls._unmarshal(v, [*path, f"{i}"], hint))
+        return as_list
+
+    @classmethod
+    def _unmarshal_dict(cls, inst, path, type_ref):
+        if not inst:
+            return None
+        if not isinstance(inst, dict):
+            raise TypeError(cls._explain_why(type_ref, path, inst))
+        from_dict = {}
+        for k, v in inst.items():
+            from_dict[k] = cls._unmarshal(v, [*path, k], type_ref)
+        return from_dict
+
+    @classmethod
+    def _unmarshal_primitive(cls, inst, type_ref):
+        if not inst:
+            return inst
+        # convert from str to int if necessary
+        converted = type_ref(inst)  # typing: ignore[call-arg]
+        return converted
 
     @staticmethod
     def _explain_why(type_ref: type, path: list[str], raw: Any) -> str:
@@ -450,6 +491,7 @@ class Installation:
         for row in csv.DictReader(raw):  # type: ignore[arg-type]
             out.append(row)
         return out
+
 
 
 class MockInstallation(Installation):
