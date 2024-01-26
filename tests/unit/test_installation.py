@@ -6,6 +6,7 @@ import pytest
 import yaml
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.core import Config
+from databricks.sdk.errors import NotFound
 from databricks.sdk.service.provisioning import Workspace
 from databricks.sdk.service.workspace import ImportFormat
 
@@ -52,6 +53,16 @@ def test_save_typed_file():
         format=ImportFormat.AUTO,
         overwrite=True,
     )
+
+def test_creates_missing_folders():
+    ws = create_autospec(WorkspaceClient)
+    ws.current_user.me().user_name = "foo"
+    ws.workspace.upload.side_effect = [NotFound(...), None]
+    state = Installation(ws, "blueprint")
+
+    state.save(WorkspaceConfig(inventory_database="some_blueprint"))
+
+    ws.workspace.mkdirs.assert_called_with("/Users/foo/.blueprint")
 
 
 def test_save_typed_file_array_csv():
