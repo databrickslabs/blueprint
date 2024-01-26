@@ -323,9 +323,14 @@ class Installation:
                 value = cls._unmarshal(raw, [*path, field_name], hint)
                 if value is None:
                     field = fields.get(field_name)
-                    if field.default == dataclasses.MISSING:
+                    default_value = field.default
+                    default_factory = field.default_factory
+                    if default_factory == dataclasses.MISSING and default_value == dataclasses.MISSING:
                         raise TypeError(cls._explain_why(hint, [*path, field_name], value))
-                    value = field.default
+                    elif default_value != dataclasses.MISSING:
+                        value = default_value
+                    else:
+                        value = default_factory()
                 as_dict[field_name] = value
             return type_ref(**as_dict)
         if isinstance(type_ref, (types.UnionType, typing._UnionGenericAlias)):
@@ -338,14 +343,22 @@ class Installation:
             type_args = typing.get_args(type_ref)
             if not type_args:
                 raise TypeError(f"Missing type arguments: {type_args}")
-            values = []
+            if len(type_args) == 2:
+                if not inst:
+                    return None
+                if not isinstance(inst, dict):
+                    raise TypeError(cls._explain_why(type_ref, path, inst))
+                as_dict = {}
+                for k, v in inst.items():
+                    as_dict[k] = cls._unmarshal(v, [*path, k], type_args[1])
+                return as_dict
             hint = type_args[0]
             if not inst:
                 return None
-            # bug with dict[str, dict[str, str]]
+            as_list = []
             for i, v in enumerate(inst):
-                values.append(cls._unmarshal(v, [*path, f"{i}"], hint))
-            return values
+                as_list.append(cls._unmarshal(v, [*path, f"{i}"], hint))
+            return as_list
         if isinstance(type_ref, typing._GenericAlias):
             if not inst:
                 return None

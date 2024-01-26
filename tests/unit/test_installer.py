@@ -21,11 +21,11 @@ def test_install_folder():
 def test_jobs_state():
     ws = create_autospec(WorkspaceClient)
     ws.current_user.me().user_name = "foo"
-    ws.workspace.download.return_value = io.StringIO('{"$version":1, "resources": {"jobs": [1,2,3]}}')
+    ws.workspace.download.return_value = io.StringIO('{"$version":1, "resources": {"jobs": {"foo": 123}}}')
 
     state = InstallState(ws, "blueprint")
 
-    assert [1, 2, 3] == state.jobs
+    assert {"foo": '123'} == state.jobs
     ws.workspace.download.assert_called_with("/Users/foo/.blueprint/state.json")
 
 

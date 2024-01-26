@@ -1,6 +1,6 @@
 import logging
 import threading
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from databricks.sdk import WorkspaceClient
@@ -17,7 +17,7 @@ class RawState:
     __file__ = "state.json"
     __version__ = 1
 
-    resources: dict[str, dict[str, str]]
+    resources: dict[str, dict[str, str]] | None = field(default_factory=dict)
 
 
 class InstallState:
