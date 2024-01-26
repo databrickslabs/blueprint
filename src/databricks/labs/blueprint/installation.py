@@ -112,16 +112,24 @@ class Installation:
         filename = self._get_filename(filename, type_ref)
         as_dict = self._load_content(filename)
         if expected_version:
-            actual_version = as_dict.pop("$version", 1)
-            while actual_version < expected_version:
-                migrate = getattr(type_ref, f"v{actual_version}_migrate", None)
-                if not migrate:
-                    break
-                as_dict = migrate(as_dict)
-                actual_version = as_dict.pop("$version", 1)
-            if actual_version != expected_version:
-                raise IllegalState(f"expected state $version={expected_version}, got={actual_version}")
+            as_dict = self._migrate_file_format(type_ref, expected_version, as_dict, filename)
         return self._unmarshal(as_dict, [], type_ref)
+
+    @staticmethod
+    def _migrate_file_format(type_ref, expected_version, as_dict, filename):
+        actual_version = as_dict.pop("$version", 1)
+        while actual_version < expected_version:
+            migrate = getattr(type_ref, f"v{actual_version}_migrate", None)
+            if not migrate:
+                break
+            as_dict = migrate(as_dict)
+            prev_version = actual_version
+            actual_version = as_dict.pop("$version", 1)
+            if actual_version == prev_version:
+                raise IllegalState(f"cannot migrate {filename} from v{prev_version}")
+        if actual_version != expected_version:
+            raise IllegalState(f"expected state $version={expected_version}, got={actual_version}")
+        return as_dict
 
     @staticmethod
     def _get_filename(filename: str | None, type_ref: typing.Type) -> str:

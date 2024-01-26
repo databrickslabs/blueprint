@@ -25,7 +25,7 @@ def test_jobs_state():
 
     state = InstallState(ws, "blueprint")
 
-    assert {"foo": '123'} == state.jobs
+    assert {"foo": "123"} == state.jobs
     ws.workspace.download.assert_called_with("/Users/foo/.blueprint/state.json")
 
 

@@ -9,7 +9,11 @@ from databricks.sdk.core import Config
 from databricks.sdk.service.provisioning import Workspace
 from databricks.sdk.service.workspace import ImportFormat
 
-from databricks.labs.blueprint.installation import Installation, MockInstallation
+from databricks.labs.blueprint.installation import (
+    IllegalState,
+    Installation,
+    MockInstallation,
+)
 
 
 @dataclass
@@ -157,3 +161,56 @@ def test_mock_save_typed_file():
             "workspace_start_path": "/",
         },
     )
+
+
+def test_migrations_on_load():
+    @dataclass
+    class EvolvedConfig:
+        __file__ = "config.yml"
+        __version__ = 3
+
+        initial: int
+        added_in_v1: int
+        added_in_v2: int
+
+        @staticmethod
+        def v1_migrate(raw: dict) -> dict:
+            raw["added_in_v1"] = 111
+            raw["$version"] = 2
+            return raw
+
+        @staticmethod
+        def v2_migrate(raw: dict) -> dict:
+            raw["added_in_v2"] = 222
+            raw["$version"] = 3
+            return raw
+
+    state = MockInstallation({"config.yml": {"initial": 999}})
+
+    cfg = state.load(EvolvedConfig)
+
+    assert 999 == cfg.initial
+    assert 111 == cfg.added_in_v1
+    assert 222 == cfg.added_in_v2
+
+
+def test_migrations_broken():
+    @dataclass
+    class BrokenConfig:
+        __file__ = "config.yml"
+        __version__ = 3
+
+        initial: int
+        added_in_v1: int
+        added_in_v2: int
+
+        @staticmethod
+        def v1_migrate(raw: dict) -> dict:
+            raw["added_in_v1"] = 111
+            raw["$version"] = 2
+            return {}
+
+    state = MockInstallation({"config.yml": {"initial": 999}})
+
+    with pytest.raises(IllegalState):
+        state.load(BrokenConfig)
