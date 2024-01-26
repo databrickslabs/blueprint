@@ -264,7 +264,7 @@ class Installation:
                 raise TypeError(f"Missing type arguments: {type_args}")
             if len(type_args) == 2:
                 if not isinstance(inst, dict):
-                    raise TypeError(cls._explain_why(type_ref, path, inst))
+                    return None, False
                 as_dict = {}
                 hint = type_args[1]
                 for k, v in inst.items():

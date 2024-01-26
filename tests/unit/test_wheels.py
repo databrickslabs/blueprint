@@ -14,7 +14,6 @@ from databricks.labs.blueprint.wheels import ProductInfo, Wheels
 def test_build_and_upload_wheel():
     ws = create_autospec(WorkspaceClient)
     state = create_autospec(InstallState)
-    state.product.return_value = "blueprint"
     state.install_folder.return_value = "~/.blueprint"
     product_info = ProductInfo(__file__)
 
