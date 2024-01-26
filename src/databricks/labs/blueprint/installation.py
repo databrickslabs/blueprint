@@ -1,6 +1,7 @@
 import csv
 import dataclasses
 import enum
+import functools
 import io
 import json
 import logging
@@ -17,7 +18,10 @@ import yaml
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.errors import NotFound
 from databricks.sdk.mixins import workspace
+from databricks.sdk.service import iam
 from databricks.sdk.service.workspace import ImportFormat
+
+from databricks.labs.blueprint.parallel import Threads
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +30,33 @@ Json = dict[str, Any]
 
 class IllegalState(ValueError):
     pass
+
+
+def installations(ws: WorkspaceClient, product: str) -> list['Installation']:
+    def check(user: iam.User):
+        try:
+            user_folder = f'/Users/{user.user_name}/.{product}'
+            ws.workspace.get_status(user_folder)
+            return Installation(ws, product, install_folder=user_folder)
+        except NotFound:
+            return None
+    tasks = [functools.partial(check, _) for _ in ws.users.list(attributes='user_name')]
+    return Threads.strict(f'finding {product} installations', tasks)
+
+def current_installation(ws: WorkspaceClient, product: str, *, assume_user: bool = False) -> 'Installation':
+    me = ws.current_user.me()
+    user_folder = f"/Users/{me.user_name}/.{product}"
+    applications_folder = f"/Applications/{product}"
+    folders = [user_folder, applications_folder]
+    for candidate in folders:
+        try:
+            ws.workspace.get_status(candidate)
+            return Installation(ws, product, install_folder=candidate)
+        except NotFound:
+            continue
+    if assume_user:
+        return Installation(ws, product, install_folder=user_folder)
+    raise NotFound(f'Application {product} not found on current workspace')
 
 
 class Installation:
@@ -217,7 +248,7 @@ class Installation:
 
     def files(self) -> list[workspace.ObjectInfo]:
         # TODO: list files under install folder
-        raise NotImplementedError
+        raise self._ws.workspace.list(self.install_folder(), recursive=True)
 
     def _overwrite_content(self, filename: str, as_dict: Json, type_ref: typing.Type):
         """The `_overwrite_content` method is a private method that is used to serialize an object of type `type_ref`
