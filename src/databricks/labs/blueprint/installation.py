@@ -53,6 +53,11 @@ class Installation:
 
     @classmethod
     def current(cls, ws: WorkspaceClient, product: str, *, assume_user: bool = False) -> "Installation":
+        """Returns the Installation object for the given product in the current workspace.
+
+        If the installation is not found, a `NotFound` error is raised. If `assume_user` argument is True, the method
+        will assume that the installation is in the user's home directory and return it if found. If False, the method
+        will only return an installation that is in the `/Applications` directory."""
         user_folder = cls._user_home_installation(ws, product)
         applications_folder = f"/Applications/{product}"
         folders = [user_folder, applications_folder]
@@ -68,6 +73,11 @@ class Installation:
 
     @classmethod
     def existing(cls, ws: WorkspaceClient, product: str) -> typing.Collection["Installation"]:
+        """Returns a collection of all existing installations for the given product in the current workspace.
+
+        This method searches for installations in the root /Applications directory and home directories of all users
+        in the workspace."""
+
         def check_folder(install_folder: str) -> Installation | None:
             try:
                 ws.workspace.get_status(install_folder)
