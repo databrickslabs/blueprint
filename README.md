@@ -43,6 +43,8 @@ Baseline for Databricks Labs projects written in Python. Sources are validated w
     - [Application Name Detection](#application-name-detection)
     - [Publishing Wheels to Databricks Workspace](#publishing-wheels-to-databricks-workspace)
   - [Databricks CLI's `databricks labs ...` Router](#databricks-clis-databricks-labs--router)
+    - [Account-level Commands](#account-level-commands)
+    - [Integration with Databricks Connect](#integration-with-databricks-connect)
     - [Starting New Projects](#starting-new-projects)
 - [Notable Downstream Projects](#notable-downstream-projects)
 - [Project Support](#project-support)
@@ -846,6 +848,10 @@ if "__main__" == __name__:
     app()
 ```
 
+[[back to top](#databricks-labs-blueprint)]
+
+### Account-level Commands
+
 As you may have noticed, there were only workspace-level commands, but you can also nave native account-level command support. You need to specify the `is_account` property when declaring it in `labs.yml` file:
 
 ```yaml
@@ -868,7 +874,12 @@ def workspaces(a: AccountClient):
         logger.info(f"Workspace: {ws.workspace_name} ({ws.workspace_id})")
 ```
 
+[[back to top](#databricks-labs-blueprint)]
+
+### Integration with Databricks Connect
+
 Invoking Sparksession using Databricks Connect
+
 ```python
 from databricks.sdk import WorkspaceClient
 from databricks.connect import DatabricksSession
