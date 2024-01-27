@@ -25,11 +25,21 @@ Baseline for Databricks Labs projects written in Python. Sources are validated w
     - [Collecting Results](#collecting-results)
     - [Collecting Errors from Background Tasks](#collecting-errors-from-background-tasks)
     - [Strict Failures from Background Tasks](#strict-failures-from-background-tasks)
+  - [Application and Installation State](#application-and-installation-state)
+    - [Install Folder](#install-folder)
+    - [Detecting Current Installation](#detecting-current-installation)
+    - [Detecting Installations From All Users](#detecting-installations-from-all-users)
+    - [Saving `@dataclass` configuration](#saving-dataclass-configuration)
+    - [Saving CSV files](#saving-csv-files)
+    - [Loading `@dataclass` configuration](#loading-dataclass-configuration)
+    - [Configuration Format Evolution](#configuration-format-evolution)
+    - [Uploading Untyped Files](#uploading-untyped-files)
+    - [Listing All Files in the Install Folder](#listing-all-files-in-the-install-folder)
+    - [Unit Testing Installation State](#unit-testing-installation-state)
   - [Building Wheels](#building-wheels)
     - [Released Version Detection](#released-version-detection)
     - [Unreleased Version Detection](#unreleased-version-detection)
     - [Application Name Detection](#application-name-detection)
-    - [Install State](#install-state)
     - [Publishing Wheels to Databricks Workspace](#publishing-wheels-to-databricks-workspace)
   - [Databricks CLI's `databricks labs ...` Router](#databricks-clis-databricks-labs--router)
     - [Starting New Projects](#starting-new-projects)
@@ -367,6 +377,321 @@ databricks.labs.blueprint.parallel.ManyError: Detected 4 failures: NotFound: som
 
 [[back to top](#databricks-labs-blueprint)]
 
+## Application and Installation State
+
+There always needs to be a location, where you put application code, artifacts, and configuration. 
+The `Installation` class is used to manage the `~/.{product}` folder on WorkspaceFS to track typed files.
+It provides methods for serializing and deserializing objects of a specific type, as well as managing the storage
+location for those objects. The class includes methods for loading and saving objects, uploading and downloading
+files, and managing the installation folder.
+
+The `Installation` class can be helpful for unit testing by allowing you to mock the file system and control
+the behavior of the `load` and `save` methods. See [unit testing](#unit-testing-installation-state) for more details.
+
+[[back to top](#databricks-labs-blueprint)]
+
+### Install Folder
+
+The `install_folder` method returns the path to the installation folder on WorkspaceFS.
+The installation folder is used to store typed files that are managed by the `Installation` class.
+
+If an `install_folder` argument is provided to the constructor of the `Installation` class, it will be used
+as the installation folder. Otherwise, the installation folder will be determined based on the current user's
+username. Specifically, the installation folder will be `/Users/{user_name}/.{product}`, where `{user_name}`
+is the username of the current user and `{product}` is the [name of the product](#application-name-detection)
+ associated with the installation. Here is an example of how you can use the `install_folder` method:
+
+```python
+from databricks.sdk import WorkspaceClient
+from databricks.labs.blueprint.installation import Installation
+
+# Create an Installation object for the "blueprint" product
+install = Installation(WorkspaceClient(), "blueprint")
+
+# Print the path to the installation folder
+print(install.install_folder())
+# Output: /Users/{user_name}/.blueprint
+```
+
+In this example, the `Installation` object is created for the "blueprint" product. The `install_folder` method
+is then called to print the path to the installation folder. The output will be `/Users/{user_name}/.blueprint`,
+where `{user_name}` is the username of the current user.
+
+You can also provide an `install_folder` argument to the constructor to specify a custom installation folder.
+Here is an example of how you can do this:
+
+```python
+from databricks.sdk import WorkspaceClient
+from databricks.labs.blueprint.installation import Installation
+
+# Create an Installation object for the "blueprint" product with a custom installation folder
+install = Installation(WorkspaceClient(), "blueprint", install_folder="/my/custom/folder")
+
+# Print the path to the installation folder
+print(install.install_folder())
+# Output: /my/custom/folder
+```
+
+In this example, the `Installation` object is created for the "blueprint" product with a custom installation
+folder of `/my/custom/folder`. The `install_folder` method is then called to print the path to the installation
+folder. The output will be `/my/custom/folder`.
+
+[[back to top](#databricks-labs-blueprint)]
+
+### Detecting Current Installation
+
+`Installation.current(ws, product)` returns the `Installation` object for the given product in the current workspace.
+
+If the installation is not found, a `NotFound` error is raised. If `assume_user` argument is True, the method
+will assume that the installation is in the user's home directory and return it if found. If False, the method
+will only return an installation that is in the `/Applications` directory.
+
+```python
+from databricks.sdk import WorkspaceClient
+from databricks.labs.blueprint.installation import Installation
+
+ws = WorkspaceClient()
+
+# current user installation
+installation = Installation.current(ws, "blueprint", assume_user=True)
+assert "/Users/foo/.blueprint" == installation.install_folder()
+
+# workspace global installation
+installation = Installation.current(ws, "blueprint")
+assert "/Applications/blueprint" == installation.install_folder()
+```
+
+[[back to top](#databricks-labs-blueprint)]
+
+### Detecting Installations From All Users
+
+`Installation.existing(ws, product)` Returns a collection of all existing installations for the given product in the current workspace.
+
+This method searches for installations in the root /Applications directory and home directories of all users in the workspace. 
+Let's say, users `foo@example.com` and `bar@example.com` installed `blueprint` product in their home folders. The following
+code will print `/Workspace/bar@example.com/.blueprint` and `/Workspace/foo@example.com/.blueprint`:
+
+```python
+for blueprint in Installation.existing(ws, "blueprint"):
+  print(blueprint.install_folder())
+```
+
+[[back to top](#databricks-labs-blueprint)]
+
+### Saving `@dataclass` configuration
+
+The `save(obj)` method saves a dataclass instance of type `T` to a file on WorkspaceFS. If no `filename` is provided, 
+the name of the `type_ref` class will be used as the filename. Any missing parent directories are created automatically.
+If the object has a `__version__` attribute, the method will add a `$version` field to the serialized object
+with the value of the `__version__` attribute. See [configuration format evolution](#configuration-format-evolution) 
+for more details. `save(obj)` works with JSON and YAML configurations without the need to supply `filename` keyword 
+attribute. When you need to save [CSV files](#saving-csv-files), the `filename` attribute is required. If you need to 
+upload arbitrary and untyped files, use the [`upload()` method](#uploading-untyped-files).
+
+Here is an example of how you can use the `save` method:
+
+```python
+from databricks.sdk import WorkspaceClient
+from databricks.labs.blueprint.installation import Installation
+
+install = Installation(WorkspaceClient(), "blueprint")
+
+@dataclass
+class MyClass:
+    field1: str
+    field2: str
+
+obj = MyClass('value1', 'value2')
+install.save(obj)
+
+# Verify that the object was saved correctly
+loaded_obj = install.load(MyClass)
+assert loaded_obj == obj
+```
+
+In this example, the `Installation` object is created for the "blueprint" product. A dataclass object of type
+`MyClass` is then created and saved to a file using the `save` method. The object is then loaded from the file
+using the [`load` method](#loading-dataclass-configuration) and compared to the original object to verify that 
+it was saved correctly.
+
+[[back to top](#databricks-labs-blueprint)]
+
+### Saving CSV files
+
+You may need to upload a CSV file to Databricks Workspace, so that it's easier editable from a Databricks Workspace UI 
+or tools like Google Sheets or Microsoft Excel. If non-technical humands don't need to edit application state,
+use [dataclasses](#saving-dataclass-configuration) for configuration.
+
+The following example will save `workspaces.csv` file with two records and a header:
+
+```python
+from databricks.sdk import WorkspaceClient
+from databricks.labs.blueprint.installation import Installation
+
+installation = Installation(WorkspaceClient(), "blueprint")
+
+installation.save([
+  Workspace(workspace_id=1234, workspace_name="first"),
+  Workspace(workspace_id=1235, workspace_name="second"),
+], filename="workspaces.csv")
+
+# ~ $ databricks workspace export /Users/foo@example.com/.blueprint/workspaces.csv
+# ... workspace_id,workspace_name
+# ... 1234,first
+# ... 1235,second
+```
+
+[[back to top](#databricks-labs-blueprint)]
+
+### Loading `@dataclass` configuration
+
+The `load(type_ref[, filename])` method loads an object of type `type_ref` from a file on WorkspaceFS. If no `filename` is
+provided, the `__file__` attribute of `type_ref` will be used as the filename, otherwise the library will figure out the name
+based on a class name.
+
+```python
+from databricks.sdk import WorkspaceClient
+from databricks.labs.blueprint.installation import Installation
+
+@dataclass
+class SomeConfig:  # <-- auto-detected filename is `some-config.json`
+    version: str
+
+ws = WorkspaceClient()
+installation = Installation.current(ws, "blueprint")
+cfg = installation.load(EvolvedConfig)
+
+installation.save(SomeConfig("0.1.2"))
+installation.assert_file_written("some-config.json", {"version": "0.1.2"})
+```
+
+[[back to top](#databricks-labs-blueprint)]
+
+### Configuration Format Evolution
+
+As time progresses, your application evolves. So does the configuration file format with it. This library provides
+a common utility to seamlessly evolve configuration file format across versions, providing callbacks to convert
+from older versions to newer.
+
+If the type has a `__version__` attribute, the method will check that the version of the object in the file
+matches the expected version. If the versions do not match, the method will attempt to migrate the object to
+the expected version using a method named `v{actual_version}_migrate` on the `type_ref` class. If the migration
+is successful, the method will return the migrated object. If the migration is not successful, the method will
+raise an `IllegalState` exception. Let's say, we have `/Users/foo@example.com/.blueprint/config.yml` file with
+only the `initial: 999` as content, which is from older installations of the `blueprint` product:
+
+```python
+from databricks.sdk import WorkspaceClient
+from databricks.labs.blueprint.installation import Installation
+
+@dataclass
+class EvolvedConfig:
+    __file__ = "config.yml"
+    __version__ = 3
+
+    initial: int
+    added_in_v1: int
+    added_in_v2: int
+
+    @staticmethod
+    def v1_migrate(raw: dict) -> dict:
+        raw["added_in_v1"] = 111
+        raw["$version"] = 2
+        return raw
+
+    @staticmethod
+    def v2_migrate(raw: dict) -> dict:
+        raw["added_in_v2"] = 222
+        raw["$version"] = 3
+        return raw
+
+installation = Installation.current(WorkspaceClient(), "blueprint")
+cfg = installation.load(EvolvedConfig)
+
+assert 999 == cfg.initial
+assert 111 == cfg.added_in_v1  # <-- added by v1_migrate()
+assert 222 == cfg.added_in_v2  # <-- added by v2_migrate()
+```
+
+[[back to top](#databricks-labs-blueprint)]
+
+### Uploading Untyped Files
+
+The `upload(filename, raw_bytes)` and `upload_dbfs(filename, raw_bytes)` methods upload raw bytes to a file on 
+WorkspaceFS (or DBFS) with the given `filename`, creating any missing directories where required. This method 
+is used to upload files that are not typed, i.e., they do not have a corresponding `type_ref` object. 
+Use the [`@dataclass` configuration](#saving-dataclass-configuration) whenever possible.
+
+```python
+installation = Installation(ws, "blueprint")
+
+target = installation.upload("wheels/foo.whl", b"abc")
+assert "/Users/foo/.blueprint/wheels/foo.whl" == target
+```
+
+The most common example is a [wheel](#building-wheels), which we already integrate with `Installation` framework.
+
+[[back to top](#databricks-labs-blueprint)]
+
+### Listing All Files in the Install Folder
+
+You can use `files()` method to recursively list all files in the [install folder](#install-folder).
+
+### Unit Testing Installation State
+
+You can create a `MockInstallation` object and use it to override the default installation folder and the contents 
+of the files in that folder. This allows you to test the of your code in different scenarios, such as when a file 
+is not found or when the contents of a file do not match the expected format. 
+
+
+```python
+@dataclass
+class WorkspaceConfig:
+    __file__ = "config.yml"
+    __version__ = 2
+
+    inventory_database: str
+    connect: Config | None = None
+    workspace_group_regex: str | None = None
+    include_group_names: list[str] | None = None
+    num_threads: int | None = 10
+    database_to_catalog_mapping: dict[str, str] | None = None
+    log_level: str | None = "INFO"
+    workspace_start_path: str = "/"
+
+
+def test_save_typed_file():
+    ws = create_autospec(WorkspaceClient)
+    ws.current_user.me().user_name = "foo"
+    installation = Installation(ws, "blueprint")
+
+    target = installation.save(
+        WorkspaceConfig(
+            inventory_database="some_blueprint",
+            include_group_names=["foo", "bar"],
+        )
+    )
+    assert "/Users/foo/.blueprint/config.yml" == target
+
+    ws.workspace.upload.assert_called_with(
+        "/Users/foo/.blueprint/config.yml",
+        yaml.dump(
+            {
+                "$version": 2,
+                "num_threads": 10,
+                "inventory_database": "some_blueprint",
+                "include_group_names": ["foo", "bar"],
+                "workspace_start_path": "/",
+                "log_level": "INFO",
+            }
+        ).encode("utf8"),
+        format=ImportFormat.AUTO,
+        overwrite=True,
+    )
+```
+
+[[back to top](#databricks-labs-blueprint)]
+
 ## Building Wheels
 
 We recommend deploying applications as wheels. But versioning, testing, and deploying those is often a tedious process.
@@ -410,28 +735,8 @@ Library can infer the name of application by taking the directory name when `__a
 ```python
 from databricks.labs.blueprint.wheels import ProductInfo
 
-w = WorkspaceClient()
 product_info = ProductInfo(__file__)
 logger.info(f'Product name is: {product_info.product_name()}')
-```
-
-[[back to top](#databricks-labs-blueprint)]
-
-### Install State
-
-There always needs to be a location, where you put application code, artifacts, and configuration. This library provides a way to construct this location, which is equal to _/Users/{current.user@example.com}/.{[application_name](#application-name-detection)}/_ on the Databricks Workspace.
-
-```python
-from databricks.sdk import WorkspaceClient
-from databricks.labs.blueprint.installer import InstallState
-from databricks.labs.blueprint.wheels import ProductInfo
-
-w = WorkspaceClient()
-product_info = ProductInfo(__file__)
-state = InstallState(w, product_info.product_name())
-install_folder = state.install_folder()
-
-logger.info(f'Install folder is: {install_folder}')
 ```
 
 [[back to top](#databricks-labs-blueprint)]
@@ -442,14 +747,14 @@ Before you execute a wheel on Databricks, you have to build it and upload it. Th
 
 ```python
 from databricks.sdk import WorkspaceClient
-from databricks.labs.blueprint.installer import InstallState
-from databricks.labs.blueprint.wheels import ProductInfo, Wheels
+from databricks.labs.blueprint.installation import Installation
+from databricks.labs.blueprint.wheels import ProductInfo, WheelsV2
 
 w = WorkspaceClient()
 product_info = ProductInfo(__file__)
-install_state = InstallState(w, product_info.product_name())
+installation = Installation(w, product_info.product_name())
 
-with Wheels(w, install_state, product_info) as wheels:
+with WheelsV2(installation, product_info) as wheels:
     remote_wheel = wheels.upload_to_wsfs()
     logger.info(f'Uploaded to {remote_wheel}')
 ```

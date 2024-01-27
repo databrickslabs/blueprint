@@ -93,9 +93,9 @@ class WorkspaceConfig:
 def test_save_typed_file():
     ws = create_autospec(WorkspaceClient)
     ws.current_user.me().user_name = "foo"
-    state = Installation(ws, "blueprint")
+    installation = Installation(ws, "blueprint")
 
-    target = state.save(
+    target = installation.save(
         WorkspaceConfig(
             inventory_database="some_blueprint",
             include_group_names=["foo", "bar"],
@@ -124,9 +124,9 @@ def test_creates_missing_folders():
     ws = create_autospec(WorkspaceClient)
     ws.current_user.me().user_name = "foo"
     ws.workspace.upload.side_effect = [NotFound(...), None]
-    state = Installation(ws, "blueprint")
+    installation = Installation(ws, "blueprint")
 
-    state.save(WorkspaceConfig(inventory_database="some_blueprint"))
+    installation.save(WorkspaceConfig(inventory_database="some_blueprint"))
 
     ws.workspace.mkdirs.assert_called_with("/Users/foo/.blueprint")
 
@@ -134,9 +134,9 @@ def test_creates_missing_folders():
 def test_upload_dbfs():
     ws = create_autospec(WorkspaceClient)
     ws.current_user.me().user_name = "foo"
-    state = Installation(ws, "blueprint")
+    installation = Installation(ws, "blueprint")
 
-    target = state.upload_dbfs("wheels/foo.whl", b"abc")
+    target = installation.upload_dbfs("wheels/foo.whl", b"abc")
     assert "/Users/foo/.blueprint/wheels/foo.whl" == target
 
 
@@ -144,9 +144,9 @@ def test_upload_dbfs_mkdirs():
     ws = create_autospec(WorkspaceClient)
     ws.current_user.me().user_name = "foo"
     ws.dbfs.upload.side_effect = [NotFound(...), None]
-    state = Installation(ws, "blueprint")
+    installation = Installation(ws, "blueprint")
 
-    target = state.upload_dbfs("wheels/foo.whl", b"abc")
+    target = installation.upload_dbfs("wheels/foo.whl", b"abc")
     assert "/Users/foo/.blueprint/wheels/foo.whl" == target
 
     ws.dbfs.mkdirs.assert_called_with("/Users/foo/.blueprint/wheels")
@@ -155,9 +155,9 @@ def test_upload_dbfs_mkdirs():
 def test_save_typed_file_array_csv():
     ws = create_autospec(WorkspaceClient)
     ws.current_user.me().user_name = "foo"
-    state = Installation(ws, "blueprint")
+    installation = Installation(ws, "blueprint")
 
-    state.save(
+    installation.save(
         [
             Workspace(workspace_id=1234, workspace_name="first"),
             Workspace(workspace_id=1235, workspace_name="second"),
@@ -186,9 +186,9 @@ def test_load_typed_file():
             }
         )
     )
-    state = Installation(ws, "blueprint")
+    installation = Installation(ws, "blueprint")
 
-    cfg = state.load(WorkspaceConfig)
+    cfg = installation.load(WorkspaceConfig)
 
     assert 20 == cfg.num_threads
     assert "/" == cfg.workspace_start_path
@@ -200,9 +200,9 @@ def test_load_csv_file():
     ws.workspace.download.return_value = io.StringIO(
         "\n".join(["workspace_id,workspace_name", "1234,first", "1235,second"])
     )
-    state = Installation(ws, "blueprint")
+    installation = Installation(ws, "blueprint")
 
-    workspaces = state.load(list[Workspace], filename="workspaces.csv")
+    workspaces = installation.load(list[Workspace], filename="workspaces.csv")
 
     assert 2 == len(workspaces)
     assert "first" == workspaces[0].workspace_name
@@ -211,7 +211,7 @@ def test_load_csv_file():
 
 @pytest.mark.parametrize("ext", ["json", "csv"])
 def test_load_typed_list_file(ext):
-    state = MockInstallation(
+    installation = MockInstallation(
         {
             f"workspaces.{ext}": [
                 {"workspace_id": 1234, "workspace_name": "first"},
@@ -220,7 +220,7 @@ def test_load_typed_list_file(ext):
         }
     )
 
-    workspaces = state.load(list[Workspace], filename=f"workspaces.{ext}")
+    workspaces = installation.load(list[Workspace], filename=f"workspaces.{ext}")
 
     assert 2 == len(workspaces)
     assert "first" == workspaces[0].workspace_name
@@ -228,9 +228,9 @@ def test_load_typed_list_file(ext):
 
 
 def test_save_typed_file_array_json():
-    state = MockInstallation()
+    installation = MockInstallation()
 
-    state.save(
+    installation.save(
         [
             Workspace(workspace_id=1234, workspace_name="first"),
             Workspace(workspace_id=1235, workspace_name="second"),
@@ -238,18 +238,18 @@ def test_save_typed_file_array_json():
         filename="workspaces.json",
     )
 
-    state.assert_file_written(
+    installation.assert_file_written(
         "workspaces.json",
         [{"workspace_id": 1234, "workspace_name": "first"}, {"workspace_id": 1235, "workspace_name": "second"}],
     )
 
 
 def test_mock_save_typed_file():
-    state = MockInstallation()
+    installation = MockInstallation()
 
-    state.save(WorkspaceConfig(inventory_database="some_blueprint"))
+    installation.save(WorkspaceConfig(inventory_database="some_blueprint"))
 
-    state.assert_file_written(
+    installation.assert_file_written(
         "config.yml",
         {
             "$version": 2,
@@ -267,11 +267,11 @@ class SomeConfig:
 
 
 def test_filename_inference():
-    state = MockInstallation()
+    installation = MockInstallation()
 
-    state.save(SomeConfig("0.1.2"))
+    installation.save(SomeConfig("0.1.2"))
 
-    state.assert_file_written("some-config.json", {"version": "0.1.2"})
+    installation.assert_file_written("some-config.json", {"version": "0.1.2"})
 
 
 @dataclass
@@ -297,9 +297,9 @@ class EvolvedConfig:
 
 
 def test_migrations_on_load():
-    state = MockInstallation({"config.yml": {"initial": 999}})
+    installation = MockInstallation({"config.yml": {"initial": 999}})
 
-    cfg = state.load(EvolvedConfig)
+    cfg = installation.load(EvolvedConfig)
 
     assert 999 == cfg.initial
     assert 111 == cfg.added_in_v1
@@ -323,7 +323,7 @@ class BrokenConfig:
 
 
 def test_migrations_broken():
-    state = MockInstallation({"config.yml": {"initial": 999}})
+    installation = MockInstallation({"config.yml": {"initial": 999}})
 
     with pytest.raises(IllegalState):
-        state.load(BrokenConfig)
+        installation.load(BrokenConfig)

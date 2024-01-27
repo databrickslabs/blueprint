@@ -117,31 +117,31 @@ class Installation:
         Here is an example of how you can use the `install_folder` method:
 
         ```
-        # Create an Installation object for the "myproduct" product
-        install = Installation(WorkspaceClient(), "myproduct")
+        # Create an Installation object for the "blueprint" product
+        install = Installation(WorkspaceClient(), "blueprint")
 
         # Print the path to the installation folder
         print(install.install_folder())
-        # Output: /Users/{user_name}/.myproduct
+        # Output: /Users/{user_name}/.blueprint
         ```
 
-        In this example, the `Installation` object is created for the "myproduct" product. The `install_folder` method
-        is then called to print the path to the installation folder. The output will be `/Users/{user_name}/.myproduct`,
+        In this example, the `Installation` object is created for the "blueprint" product. The `install_folder` method
+        is then called to print the path to the installation folder. The output will be `/Users/{user_name}/.blueprint`,
         where `{user_name}` is the username of the current user.
 
         You can also provide an `install_folder` argument to the constructor to specify a custom installation folder.
         Here is an example of how you can do this:
 
         ```
-        # Create an Installation object for the "myproduct" product with a custom installation folder
-        install = Installation(WorkspaceClient(), "myproduct", install_folder="/my/custom/folder")
+        # Create an Installation object for the "blueprint" product with a custom installation folder
+        install = Installation(WorkspaceClient(), "blueprint", install_folder="/my/custom/folder")
 
         # Print the path to the installation folder
         print(install.install_folder())
         # Output: /my/custom/folder
         ```
 
-        In this example, the `Installation` object is created for the "myproduct" product with a custom installation
+        In this example, the `Installation` object is created for the "blueprint" product with a custom installation
         folder of `/my/custom/folder`. The `install_folder` method is then called to print the path to the installation
         folder. The output will be `/my/custom/folder`."""
         if self._install_folder is not None:
@@ -178,8 +178,8 @@ class Installation:
         Here is an example of how you can use the `save` method:
 
         ```
-        # Create an Installation object for the "myproduct" product
-        install = Installation(WorkspaceClient(), "myproduct")
+        # Create an Installation object for the "blueprint" product
+        install = Installation(WorkspaceClient(), "blueprint")
 
         # Save a dataclass object of type MyClass to a file
         @dataclasses.dataclass
@@ -195,7 +195,7 @@ class Installation:
         assert loaded_obj == obj
         ```
 
-        In this example, the `Installation` object is created for the "myproduct" product. A dataclass object of type
+        In this example, the `Installation` object is created for the "blueprint" product. A dataclass object of type
         `MyClass` is then created and saved to a file using the `save` method. The object is then loaded from the file
         using the `load` method and compared to the original object to verify that it was saved correctly."""
         if not inst:
