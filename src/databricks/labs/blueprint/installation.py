@@ -81,11 +81,6 @@ class Installation:
             tasks.append(functools.partial(check_folder, user_folder))
         return Threads.strict(f"finding {product} installations", tasks)
 
-    @staticmethod
-    def _user_home_installation(ws: WorkspaceClient, product: str):
-        me = ws.current_user.me()
-        return f"/Users/{me.user_name}/.{product}"
-
     def product(self) -> str:
         return self._product
 
@@ -153,30 +148,6 @@ class Installation:
             as_dict = self._migrate_file_format(type_ref, expected_version, as_dict, filename)
         return self._unmarshal(as_dict, [], type_ref)
 
-    @staticmethod
-    def _migrate_file_format(type_ref, expected_version, as_dict, filename):
-        actual_version = as_dict.pop("$version", 1)
-        while actual_version < expected_version:
-            migrate = getattr(type_ref, f"v{actual_version}_migrate", None)
-            if not migrate:
-                break
-            as_dict = migrate(as_dict)
-            prev_version = actual_version
-            actual_version = as_dict.pop("$version", 1)
-            if actual_version == prev_version:
-                raise IllegalState(f"cannot migrate {filename} from v{prev_version}")
-        if actual_version != expected_version:
-            raise IllegalState(f"expected state $version={expected_version}, got={actual_version}")
-        return as_dict
-
-    @staticmethod
-    def _get_filename(filename: str | None, type_ref: typing.Type) -> str:
-        if not filename and hasattr(type_ref, "__file__"):
-            return getattr(type_ref, "__file__")
-        if not filename:
-            filename = f"{type_ref.__name__}.json"
-        return filename
-
     def save(self, inst: T, *, filename: str | None = None):
         """The `save` method saves a dataclass object of type `T` to a file on WorkspaceFS.
         If no `filename` is provided, the name of the `type_ref` class will be used as the filename.
@@ -218,21 +189,6 @@ class Installation:
             as_dict["$version"] = version
         self._overwrite_content(filename, as_dict, type_ref)
         return f"{self.install_folder()}/{filename}"
-
-    @classmethod
-    def _get_type_ref(cls, inst) -> typing.Type:
-        type_ref = type(inst)
-        if type_ref == list:
-            return cls._get_list_type_ref(inst)
-        return type_ref
-
-    @staticmethod
-    def _get_list_type_ref(inst: T) -> typing.Type[list[T]]:
-        from_list: list = inst  # type: ignore[assignment]
-        if len(from_list) == 0:
-            raise ValueError("List cannot be empty")
-        item_type = type(from_list[0])  # type: ignore[misc]
-        return list[item_type]  # type: ignore[valid-type]
 
     def upload(self, filename: str, raw: bytes):
         """The `upload` method uploads raw bytes to a file on WorkspaceFS with the given `filename`. This method is
@@ -303,6 +259,50 @@ class Installation:
 
     def __repr__(self):
         return self.install_folder()
+
+    @staticmethod
+    def _user_home_installation(ws: WorkspaceClient, product: str):
+        me = ws.current_user.me()
+        return f"/Users/{me.user_name}/.{product}"
+
+    @staticmethod
+    def _migrate_file_format(type_ref, expected_version, as_dict, filename):
+        actual_version = as_dict.pop("$version", 1)
+        while actual_version < expected_version:
+            migrate = getattr(type_ref, f"v{actual_version}_migrate", None)
+            if not migrate:
+                break
+            as_dict = migrate(as_dict)
+            prev_version = actual_version
+            actual_version = as_dict.pop("$version", 1)
+            if actual_version == prev_version:
+                raise IllegalState(f"cannot migrate {filename} from v{prev_version}")
+        if actual_version != expected_version:
+            raise IllegalState(f"expected state $version={expected_version}, got={actual_version}")
+        return as_dict
+
+    @staticmethod
+    def _get_filename(filename: str | None, type_ref: typing.Type) -> str:
+        if not filename and hasattr(type_ref, "__file__"):
+            return getattr(type_ref, "__file__")
+        if not filename:
+            filename = f"{type_ref.__name__}.json"
+        return filename
+
+    @classmethod
+    def _get_type_ref(cls, inst) -> typing.Type:
+        type_ref = type(inst)
+        if type_ref == list:
+            return cls._get_list_type_ref(inst)
+        return type_ref
+
+    @staticmethod
+    def _get_list_type_ref(inst: T) -> typing.Type[list[T]]:
+        from_list: list = inst  # type: ignore[assignment]
+        if len(from_list) == 0:
+            raise ValueError("List cannot be empty")
+        item_type = type(from_list[0])  # type: ignore[misc]
+        return list[item_type]  # type: ignore[valid-type]
 
     @classmethod
     def _marshal(cls, type_ref: type, path: list[str], inst: Any) -> tuple[Any, bool]:
