@@ -9,10 +9,18 @@ import os.path
 import re
 import threading
 import types
-import typing
 from functools import partial
 from json import JSONDecodeError
-from typing import Any
+from typing import (
+    Any,
+    BinaryIO,
+    Callable,
+    Collection,
+    Type,
+    TypeVar,
+    get_args,
+    get_type_hints,
+)
 
 import databricks.sdk.core
 import yaml
@@ -26,6 +34,8 @@ from databricks.labs.blueprint.parallel import Threads
 logger = logging.getLogger(__name__)
 
 Json = dict[str, Any]
+
+__all__ = ["Installation", "IllegalState"]
 
 
 class IllegalState(ValueError):
@@ -73,7 +83,7 @@ class Installation:
         raise NotFound(f"Application not installed: {product}")
 
     @classmethod
-    def existing(cls, ws: WorkspaceClient, product: str) -> typing.Collection["Installation"]:
+    def existing(cls, ws: WorkspaceClient, product: str) -> Collection["Installation"]:
         """Returns a collection of all existing installations for the given product in the current workspace.
 
         This method searches for installations in the root /Applications directory and home directories of all users
@@ -139,9 +149,9 @@ class Installation:
         self._install_folder = self._user_home_installation(self._ws, self.product())
         return self._install_folder
 
-    T = typing.TypeVar("T")
+    T = TypeVar("T")
 
-    def load(self, type_ref: typing.Type[T], *, filename: str | None = None) -> T | None:
+    def load(self, type_ref: Type[T], *, filename: str | None = None) -> T | None:
         """The `load` method loads an object of type `type_ref` from a file on WorkspaceFS. If no `filename` is
         provided, the `__file__` attribute of `type_ref` will be used as the filename.
 
@@ -233,13 +243,13 @@ class Installation:
     def files(self) -> list[workspace.ObjectInfo]:
         return list(self._ws.workspace.list(self.install_folder(), recursive=True))
 
-    def _overwrite_content(self, filename: str, as_dict: Json, type_ref: typing.Type):
+    def _overwrite_content(self, filename: str, as_dict: Json, type_ref: Type):
         """The `_overwrite_content` method is a private method that is used to serialize an object of type `type_ref`
         to a dictionary and write it to a file on WorkspaceFS. This method is called by the `save` and `upload` methods.
 
         The `as_dict` argument is the dictionary representation of the object that is to be written to the file.
         The `type_ref` argument is the type of the object that is being saved."""
-        converters: dict[str, typing.Callable[[Any, typing.Type], bytes]] = {
+        converters: dict[str, Callable[[Any, Type], bytes]] = {
             "json": self._dump_json,
             "yml": self._dump_yaml,
             "csv": self._dump_csv,
@@ -252,7 +262,7 @@ class Installation:
 
     def _load_content(self, filename: str) -> Json:
         with self._lock:
-            converters: dict[str, typing.Callable[[typing.BinaryIO], Any]] = {
+            converters: dict[str, Callable[[BinaryIO], Any]] = {
                 "json": json.load,
                 "yml": self._load_yaml,
                 "csv": self._load_csv,
@@ -293,7 +303,7 @@ class Installation:
         return as_dict
 
     @staticmethod
-    def _get_filename(filename: str | None, type_ref: typing.Type) -> str:
+    def _get_filename(filename: str | None, type_ref: Type) -> str:
         if not filename and hasattr(type_ref, "__file__"):
             return getattr(type_ref, "__file__")
         if not filename:
@@ -302,14 +312,14 @@ class Installation:
         return filename
 
     @classmethod
-    def _get_type_ref(cls, inst) -> typing.Type:
+    def _get_type_ref(cls, inst) -> Type:
         type_ref = type(inst)
         if type_ref == list:
             return cls._get_list_type_ref(inst)
         return type_ref
 
     @staticmethod
-    def _get_list_type_ref(inst: T) -> typing.Type[list[T]]:
+    def _get_list_type_ref(inst: T) -> Type[list[T]]:
         from_list: list = inst  # type: ignore[assignment]
         if len(from_list) == 0:
             raise ValueError("List cannot be empty")
@@ -318,13 +328,18 @@ class Installation:
 
     @classmethod
     def _marshal(cls, type_ref: type, path: list[str], inst: Any) -> tuple[Any, bool]:
+        from typing import (  # type: ignore[attr-defined]
+            _GenericAlias,
+            _UnionGenericAlias,
+        )
+
         if dataclasses.is_dataclass(type_ref):
             return cls._marshal_dataclass(type_ref, path, inst)
         if isinstance(type_ref, types.GenericAlias):
             return cls._marshal_generic(type_ref, path, inst)
-        if isinstance(type_ref, (types.UnionType, typing._UnionGenericAlias)):  # type: ignore[attr-defined]
+        if isinstance(type_ref, (types.UnionType, _UnionGenericAlias)):  # type: ignore[attr-defined]
             return cls._marshal_union(type_ref, path, inst)
-        if isinstance(type_ref, typing._GenericAlias):  # type: ignore[attr-defined]
+        if isinstance(type_ref, _GenericAlias):  # type: ignore[attr-defined]
             if not inst:
                 return None, False
             return inst, isinstance(inst, type_ref.__origin__)  # type: ignore[attr-defined]
@@ -349,7 +364,7 @@ class Installation:
     @classmethod
     def _marshal_union(cls, type_ref: type, path: list[str], inst: Any) -> tuple[Any, bool]:
         combo = []
-        for variant in typing.get_args(type_ref):
+        for variant in get_args(type_ref):
             value, ok = cls._marshal(variant, [*path, f"(as {variant})"], inst)
             if ok:
                 return value, True
@@ -358,7 +373,7 @@ class Installation:
 
     @classmethod
     def _marshal_generic(cls, type_ref: type, path: list[str], inst: Any) -> tuple[Any, bool]:
-        type_args = typing.get_args(type_ref)
+        type_args = get_args(type_ref)
         if not type_args:
             raise TypeError(f"Missing type arguments: {type_args}")
         if len(type_args) == 2:
@@ -393,7 +408,7 @@ class Installation:
         if inst is None:
             return None, False
         as_dict = {}
-        for field, hint in typing.get_type_hints(type_ref).items():
+        for field, hint in get_type_hints(type_ref).items():
             raw = getattr(inst, field)
             value, ok = cls._marshal(hint, [*path, field], raw)
             if not ok:
@@ -404,14 +419,19 @@ class Installation:
         return as_dict, True
 
     @classmethod
-    def _unmarshal(cls, inst: Any, path: list[str], type_ref: typing.Type[T]) -> T | None:
+    def _unmarshal(cls, inst: Any, path: list[str], type_ref: Type[T]) -> T | None:
+        from typing import (  # type: ignore[attr-defined]
+            _GenericAlias,
+            _UnionGenericAlias,
+        )
+
         if dataclasses.is_dataclass(type_ref):
             return cls._unmarshal_dataclass(inst, path, type_ref)
-        if isinstance(type_ref, (types.UnionType, typing._UnionGenericAlias)):  # type: ignore[attr-defined]
+        if isinstance(type_ref, (types.UnionType, _UnionGenericAlias)):
             return cls._unmarshal_union(inst, path, type_ref)
         if isinstance(type_ref, types.GenericAlias):
             return cls._unmarshal_generic(inst, path, type_ref)
-        if isinstance(type_ref, typing._GenericAlias):  # type: ignore[attr-defined]
+        if isinstance(type_ref, _GenericAlias):
             if not inst:
                 return None
             return cls._unmarshal(inst, path, type_ref.__origin__)
@@ -437,7 +457,7 @@ class Installation:
             raise TypeError(cls._explain_why(dict, path, inst))
         from_dict = {}
         fields = getattr(type_ref, "__dataclass_fields__")
-        for field_name, hint in typing.get_type_hints(type_ref).items():
+        for field_name, hint in get_type_hints(type_ref).items():
             raw = inst.get(field_name)
             value = cls._unmarshal(raw, [*path, field_name], hint)
             if value is None:
@@ -455,7 +475,7 @@ class Installation:
 
     @classmethod
     def _unmarshal_union(cls, inst, path, type_ref):
-        for variant in typing.get_args(type_ref):
+        for variant in get_args(type_ref):
             value = cls._unmarshal(inst, path, variant)
             if value:
                 return value
@@ -463,7 +483,7 @@ class Installation:
 
     @classmethod
     def _unmarshal_generic(cls, inst, path, type_ref):
-        type_args = typing.get_args(type_ref)
+        type_args = get_args(type_ref)
         if not type_args:
             raise TypeError(f"Missing type arguments: {type_args}")
         if len(type_args) == 2:
@@ -505,18 +525,18 @@ class Installation:
         return f'{".".join(path)}: not a {type_ref.__name__}: {raw}'
 
     @staticmethod
-    def _dump_json(as_dict: Json, _: typing.Type) -> bytes:
+    def _dump_json(as_dict: Json, _: Type) -> bytes:
         return json.dumps(as_dict, indent=2).encode("utf8")
 
     @staticmethod
-    def _dump_yaml(raw: Json, _: typing.Type) -> bytes:
+    def _dump_yaml(raw: Json, _: Type) -> bytes:
         try:
             return yaml.dump(raw).encode("utf8")
         except ImportError:
             raise SyntaxError("PyYAML is not installed. Fix: pip install databricks-labs-blueprint[yaml]")
 
     @staticmethod
-    def _load_yaml(raw: typing.BinaryIO) -> Json:
+    def _load_yaml(raw: BinaryIO) -> Json:
         try:
             try:
                 return yaml.safe_load(raw)
@@ -526,8 +546,8 @@ class Installation:
             raise SyntaxError("PyYAML is not installed. Fix: pip install databricks-labs-blueprint[yaml]")
 
     @staticmethod
-    def _dump_csv(raw: list[Json], type_ref: typing.Type) -> bytes:
-        type_args = typing.get_args(type_ref)
+    def _dump_csv(raw: list[Json], type_ref: Type) -> bytes:
+        type_args = get_args(type_ref)
         if not type_args:
             raise TypeError(f"Writing CSV is only supported for lists. Got {type_ref}")
         dataclass_ref = type_args[0]
@@ -552,7 +572,7 @@ class Installation:
         return buffer.read().encode("utf8")
 
     @staticmethod
-    def _load_csv(raw: typing.BinaryIO) -> list[Json]:
+    def _load_csv(raw: BinaryIO) -> list[Json]:
         out = []
         for row in csv.DictReader(raw):  # type: ignore[arg-type]
             out.append(row)
@@ -585,7 +605,7 @@ class MockInstallation(Installation):
         self._dbfs[filename] = raw
         return f"{self.install_folder()}/{filename}"
 
-    def _overwrite_content(self, filename: str, as_dict: Json, type_ref: typing.Type):
+    def _overwrite_content(self, filename: str, as_dict: Json, type_ref: Type):
         self._overwrites[filename] = as_dict
 
     def _load_content(self, filename: str) -> Json:
