@@ -261,28 +261,29 @@ def test_mock_save_typed_file():
     )
 
 
+@dataclass
+class EvolvedConfig:
+    __file__ = "config.yml"
+    __version__ = 3
+
+    initial: int
+    added_in_v1: int
+    added_in_v2: int
+
+    @staticmethod
+    def v1_migrate(raw: dict) -> dict:
+        raw["added_in_v1"] = 111
+        raw["$version"] = 2
+        return raw
+
+    @staticmethod
+    def v2_migrate(raw: dict) -> dict:
+        raw["added_in_v2"] = 222
+        raw["$version"] = 3
+        return raw
+
+
 def test_migrations_on_load():
-    @dataclass
-    class EvolvedConfig:
-        __file__ = "config.yml"
-        __version__ = 3
-
-        initial: int
-        added_in_v1: int
-        added_in_v2: int
-
-        @staticmethod
-        def v1_migrate(raw: dict) -> dict:
-            raw["added_in_v1"] = 111
-            raw["$version"] = 2
-            return raw
-
-        @staticmethod
-        def v2_migrate(raw: dict) -> dict:
-            raw["added_in_v2"] = 222
-            raw["$version"] = 3
-            return raw
-
     state = MockInstallation({"config.yml": {"initial": 999}})
 
     cfg = state.load(EvolvedConfig)
@@ -292,22 +293,23 @@ def test_migrations_on_load():
     assert 222 == cfg.added_in_v2
 
 
+@dataclass
+class BrokenConfig:
+    __file__ = "config.yml"
+    __version__ = 3
+
+    initial: int
+    added_in_v1: int
+    added_in_v2: int
+
+    @staticmethod
+    def v1_migrate(raw: dict) -> dict:
+        raw["added_in_v1"] = 111
+        raw["$version"] = 2
+        return {}
+
+
 def test_migrations_broken():
-    @dataclass
-    class BrokenConfig:
-        __file__ = "config.yml"
-        __version__ = 3
-
-        initial: int
-        added_in_v1: int
-        added_in_v2: int
-
-        @staticmethod
-        def v1_migrate(raw: dict) -> dict:
-            raw["added_in_v1"] = 111
-            raw["$version"] = 2
-            return {}
-
     state = MockInstallation({"config.yml": {"initial": 999}})
 
     with pytest.raises(IllegalState):
