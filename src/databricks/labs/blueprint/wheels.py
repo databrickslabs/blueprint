@@ -5,6 +5,7 @@ import subprocess
 import sys
 import tempfile
 from contextlib import AbstractContextManager
+from dataclasses import dataclass
 from pathlib import Path
 
 from databricks.sdk import WorkspaceClient
@@ -122,6 +123,12 @@ class ProductInfo:
         return version_data["__version__"]
 
 
+@dataclass
+class Version:
+    version: str
+    wheel: str
+
+
 class WheelsV2(AbstractContextManager):
     """Wheel builder"""
 
@@ -138,7 +145,9 @@ class WheelsV2(AbstractContextManager):
 
     def upload_to_wsfs(self) -> str:
         with self._local_wheel.open("rb") as f:
-            return self._installation.upload(f"wheels/{self._local_wheel.name}", f.read())
+            remote_wheel = self._installation.upload(f"wheels/{self._local_wheel.name}", f.read())
+            self._installation.save(Version(version=self._product_info.version(), wheel=remote_wheel))
+            return remote_wheel
 
     def __enter__(self) -> "WheelsV2":
         self._tmp_dir = tempfile.TemporaryDirectory()

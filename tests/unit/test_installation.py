@@ -262,6 +262,19 @@ def test_mock_save_typed_file():
 
 
 @dataclass
+class SomeConfig:
+    version: str
+
+
+def test_filename_inference():
+    state = MockInstallation()
+
+    state.save(SomeConfig("0.1.2"))
+
+    state.assert_file_written("some-config.json", {"version": "0.1.2"})
+
+
+@dataclass
 class EvolvedConfig:
     __file__ = "config.yml"
     __version__ = 3

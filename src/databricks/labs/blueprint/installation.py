@@ -6,6 +6,7 @@ import io
 import json
 import logging
 import os.path
+import re
 import threading
 import types
 import typing
@@ -296,7 +297,8 @@ class Installation:
         if not filename and hasattr(type_ref, "__file__"):
             return getattr(type_ref, "__file__")
         if not filename:
-            filename = f"{type_ref.__name__}.json"
+            kebab_name = re.sub(r"(?<!^)(?=[A-Z])", "-", type_ref.__name__).lower()
+            filename = f"{kebab_name}.json"
         return filename
 
     @classmethod
@@ -562,16 +564,26 @@ class MockInstallation(Installation):
 
     register with PyTest:
 
-        pytest.register_assert_rewrite('databricks.labs.blueprint.installer')
+        pytest.register_assert_rewrite('databricks.labs.blueprint.installation')
     """
 
     def __init__(self, overwrites: Any = None):
         if not overwrites:
             overwrites = {}
         self._overwrites = overwrites
+        self._uploads: dict[str, bytes] = {}
+        self._dbfs: dict[str, bytes] = {}
 
     def install_folder(self) -> str:
         return "~/mock/"
+
+    def upload(self, filename: str, raw: bytes):
+        self._uploads[filename] = raw
+        return f"{self.install_folder()}/{filename}"
+
+    def upload_dbfs(self, filename: str, raw: bytes) -> str:
+        self._dbfs[filename] = raw
+        return f"{self.install_folder()}/{filename}"
 
     def _overwrite_content(self, filename: str, as_dict: Json, type_ref: typing.Type):
         self._overwrites[filename] = as_dict
@@ -583,3 +595,18 @@ class MockInstallation(Installation):
         assert filename in self._overwrites, f"{filename} had no writes"
         actual = self._overwrites[filename]
         assert expected == actual, f"{filename} content missmatch"
+
+    def assert_file_uploaded(self, filename):
+        self._assert_upload(filename, self._uploads)
+
+    def assert_file_dbfs_uploaded(self, filename):
+        self._assert_upload(filename, self._dbfs)
+
+    @staticmethod
+    def _assert_upload(filename: Any, loc: dict[str, bytes]):
+        if isinstance(filename, re.Pattern):
+            for name in loc.keys():
+                if filename.match(name):
+                    return
+            raise AssertionError(f'Cannot find {filename.pattern} among {", ".join(loc.keys())}')
+        assert filename in loc, f"{filename} had no writes"

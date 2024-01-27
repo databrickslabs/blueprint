@@ -1,38 +1,28 @@
 import os
-from unittest.mock import create_autospec
+import re
 
 import pytest
-from databricks.sdk import WorkspaceClient
-from databricks.sdk.service.workspace import ImportFormat
 
 from databricks.labs.blueprint.__about__ import __version__
 from databricks.labs.blueprint.entrypoint import is_in_debug
-from databricks.labs.blueprint.installer import InstallState
-from databricks.labs.blueprint.wheels import ProductInfo, Wheels
+from databricks.labs.blueprint.installation import MockInstallation
+from databricks.labs.blueprint.wheels import ProductInfo, WheelsV2
 
 
 def test_build_and_upload_wheel():
-    ws = create_autospec(WorkspaceClient)
-    state = create_autospec(InstallState)
-    state.install_folder.return_value = "~/.blueprint"
+    installation = MockInstallation()
     product_info = ProductInfo(__file__)
 
-    wheels = Wheels(ws, state, product_info)
+    wheels = WheelsV2(installation, product_info)
     with wheels:
         assert os.path.exists(wheels._local_wheel)
 
         remote_on_wsfs = wheels.upload_to_wsfs()
-        ws.workspace.upload.assert_called_once()
-
-        call = ws.workspace.upload.mock_calls[0]
-        path = call.args[0]
-        assert remote_on_wsfs == path
-        assert path.startswith("~/.blueprint/wheels/databricks_labs_blueprint-")
-        assert ImportFormat.AUTO == call.kwargs["format"]
-        assert call.kwargs["overwrite"]
+        installation.assert_file_uploaded(re.compile("wheels/databricks_labs_blueprint-*"))
+        installation.assert_file_written("version.json", {"version": product_info.version(), "wheel": remote_on_wsfs})
 
         wheels.upload_to_dbfs()
-        ws.dbfs.upload.assert_called_once()
+        installation.assert_file_dbfs_uploaded(re.compile("wheels/databricks_labs_blueprint-*"))
     assert not os.path.exists(wheels._local_wheel)
 
 
@@ -47,10 +37,8 @@ def test_unreleased_version(tmp_path):
 
 
 def test_released_version(tmp_path):
-    ws = create_autospec(WorkspaceClient)
-    state = create_autospec(InstallState)
-
-    working_copy = Wheels(ws, state, ProductInfo(__file__))._copy_root_to(tmp_path)
+    installation = MockInstallation()
+    working_copy = WheelsV2(installation, ProductInfo(__file__))._copy_root_to(tmp_path)
     product_info = ProductInfo(working_copy)
 
     assert __version__ == product_info.version()
