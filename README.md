@@ -36,6 +36,7 @@ Baseline for Databricks Labs projects written in Python. Sources are validated w
     - [Uploading Untyped Files](#uploading-untyped-files)
     - [Listing All Files in the Install Folder](#listing-all-files-in-the-install-folder)
     - [Unit Testing Installation State](#unit-testing-installation-state)
+    - [Assert Rewriting with PyTest](#assert-rewriting-with-pytest)
   - [Building Wheels](#building-wheels)
     - [Released Version Detection](#released-version-detection)
     - [Unreleased Version Detection](#unreleased-version-detection)
@@ -380,20 +381,22 @@ databricks.labs.blueprint.parallel.ManyError: Detected 4 failures: NotFound: som
 ## Application and Installation State
 
 There always needs to be a location, where you put application code, artifacts, and configuration. 
-The `Installation` class is used to manage the `~/.{product}` folder on WorkspaceFS to track typed files.
-It provides methods for serializing and deserializing objects of a specific type, as well as managing the storage
-location for those objects. The class includes methods for loading and saving objects, uploading and downloading
+The `Installation` class is used to manage the `~/.{product}` folder on WorkspaceFS to track [typed files](#saving-dataclass-configuration).
+It provides methods for serializing and deserializing objects of a specific type, as well as managing the [storage location](#install-folder) 
+for those objects. The class includes methods for loading and saving objects, uploading and downloading
 files, and managing the installation folder.
 
 The `Installation` class can be helpful for unit testing by allowing you to mock the file system and control
-the behavior of the `load` and `save` methods. See [unit testing](#unit-testing-installation-state) for more details.
+the behavior of the [`load`](#loading-dataclass-configuration) and [`save`](#saving-dataclass-configuration) methods. 
+See [unit testing](#unit-testing-installation-state) for more details.
 
 [[back to top](#databricks-labs-blueprint)]
 
 ### Install Folder
 
-The `install_folder` method returns the path to the installation folder on WorkspaceFS.
-The installation folder is used to store typed files that are managed by the `Installation` class.
+The `install_folder` method returns the path to the installation folder on WorkspaceFS. The installation folder 
+is used to store typed files that are managed by the `Installation` class. [Publishing wheels](#publishing-wheels-to-databricks-workspace) 
+update the `version.json` file in the install folder.
 
 If an `install_folder` argument is provided to the constructor of the `Installation` class, it will be used
 as the installation folder. Otherwise, the installation folder will be determined based on the current user's
@@ -520,12 +523,14 @@ it was saved correctly.
 
 You may need to upload a CSV file to Databricks Workspace, so that it's easier editable from a Databricks Workspace UI 
 or tools like Google Sheets or Microsoft Excel. If non-technical humands don't need to edit application state,
-use [dataclasses](#saving-dataclass-configuration) for configuration.
+use [dataclasses](#saving-dataclass-configuration) for configuration. CSV files currently don't support 
+[format evolution](#configuration-format-evolution).
 
 The following example will save `workspaces.csv` file with two records and a header:
 
 ```python
 from databricks.sdk import WorkspaceClient
+from databricks.sdk.service.provisioning import Workspace
 from databricks.labs.blueprint.installation import Installation
 
 installation = Installation(WorkspaceClient(), "blueprint")
@@ -619,8 +624,7 @@ assert 222 == cfg.added_in_v2  # <-- added by v2_migrate()
 
 The `upload(filename, raw_bytes)` and `upload_dbfs(filename, raw_bytes)` methods upload raw bytes to a file on 
 WorkspaceFS (or DBFS) with the given `filename`, creating any missing directories where required. This method 
-is used to upload files that are not typed, i.e., they do not have a corresponding `type_ref` object. 
-Use the [`@dataclass` configuration](#saving-dataclass-configuration) whenever possible.
+is used to upload files that are not typed, i.e., they do not use the [`@dataclass` decorator](#saving-dataclass-configuration).
 
 ```python
 installation = Installation(ws, "blueprint")
@@ -637,6 +641,8 @@ The most common example is a [wheel](#building-wheels), which we already integra
 
 You can use `files()` method to recursively list all files in the [install folder](#install-folder).
 
+[[back to top](#databricks-labs-blueprint)]
+
 ### Unit Testing Installation State
 
 You can create a `MockInstallation` object and use it to override the default installation folder and the contents 
@@ -644,61 +650,88 @@ of the files in that folder. This allows you to test the of your code in differe
 is not found or when the contents of a file do not match the expected format. 
 
 
+For example, you have the following `WorkspaceConfig` class that is serialized into `config.yml` on your workspace:
+
 ```python
 @dataclass
 class WorkspaceConfig:
-    __file__ = "config.yml"
-    __version__ = 2
+  __file__ = "config.yml"
+  __version__ = 2
 
-    inventory_database: str
-    connect: Config | None = None
-    workspace_group_regex: str | None = None
-    include_group_names: list[str] | None = None
-    num_threads: int | None = 10
-    database_to_catalog_mapping: dict[str, str] | None = None
-    log_level: str | None = "INFO"
-    workspace_start_path: str = "/"
-
-
-def test_save_typed_file():
-    ws = create_autospec(WorkspaceClient)
-    ws.current_user.me().user_name = "foo"
-    installation = Installation(ws, "blueprint")
-
-    target = installation.save(
-        WorkspaceConfig(
-            inventory_database="some_blueprint",
-            include_group_names=["foo", "bar"],
-        )
-    )
-    assert "/Users/foo/.blueprint/config.yml" == target
-
-    ws.workspace.upload.assert_called_with(
-        "/Users/foo/.blueprint/config.yml",
-        yaml.dump(
-            {
-                "$version": 2,
-                "num_threads": 10,
-                "inventory_database": "some_blueprint",
-                "include_group_names": ["foo", "bar"],
-                "workspace_start_path": "/",
-                "log_level": "INFO",
-            }
-        ).encode("utf8"),
-        format=ImportFormat.AUTO,
-        overwrite=True,
-    )
+  inventory_database: str
+  connect: Config | None = None
+  workspace_group_regex: str | None = None
+  include_group_names: list[str] | None = None
+  num_threads: int | None = 10
+  database_to_catalog_mapping: dict[str, str] | None = None
+  log_level: str | None = "INFO"
+  workspace_start_path: str = "/"
 ```
+
+Here's the only code necessary to verify that specific content got written:
+
+```python
+from databricks.labs.blueprint.installation import MockInstallation
+
+installation = MockInstallation()
+
+installation.save(WorkspaceConfig(inventory_database="some_blueprint"))
+
+installation.assert_file_written("config.yml", {
+  "$version": 2,
+  "inventory_database": "some_blueprint",
+  "log_level": "INFO",
+  "num_threads": 10,
+  "workspace_start_path": "/",
+})
+```
+
+This method is far superior than directly comparing raw bytes content via mock:
+
+```python
+ws.workspace.upload.assert_called_with(
+  "/Users/foo/.blueprint/config.yml",
+  yaml.dump(
+    {
+      "$version": 2,
+      "num_threads": 10,
+      "inventory_database": "some_blueprint",
+      "include_group_names": ["foo", "bar"],
+      "workspace_start_path": "/",
+      "log_level": "INFO",
+    }
+  ).encode("utf8"),
+  format=ImportFormat.AUTO,
+  overwrite=True,
+)
+```
+
+And it's even better if you use PyTest, where we have even [deeper integration](#assert-rewriting-with-pytest).
+
+[[back to top](#databricks-labs-blueprint)]
+
+### Assert Rewriting with PyTest
+
+If you are using [PyTest](https://docs.pytest.org/), then add this to your `conftest.py`, so that
+the assertions are more readable:
+
+```python
+import pytest
+
+pytest.register_assert_rewrite('databricks.labs.blueprint.installation')
+```
+
+![pytest asserts](docs/pytest-installation-asserts.png)
 
 [[back to top](#databricks-labs-blueprint)]
 
 ## Building Wheels
 
-We recommend deploying applications as wheels. But versioning, testing, and deploying those is often a tedious process.
+We recommend deploying applications as wheels, which are part of the [application installation](#application-and-installation-state). But versioning, testing, and deploying those is often a tedious process.
 
 ### Released Version Detection
 
-When you deploy your Python app as a wheel, every time it has to have a different version. This library detects `__about__.py` file automatically anywhere in the project root and reads `__version__` variable from it. We support [SemVer](https://semver.org/) versioning scheme.
+When you deploy your Python app as a wheel, every time it has to have a different version. This library detects `__about__.py` file automatically anywhere in the project root and reads `__version__` variable from it. We support [SemVer](https://semver.org/) versioning scheme. [Publishing wheels](#publishing-wheels-to-databricks-workspace) update `version.json` file in the [install folder](#install-folder).
 
 ```python
 from databricks.labs.blueprint.wheels import ProductInfo
@@ -712,7 +745,7 @@ logger.info(f'Version is: {version}')
 
 ### Unreleased Version Detection
 
-When you develop your wheel and iterate on testing it, it's often required to upload a file with different name each time you build it. We use `git describe --tags` command to fetch the latest SemVer-compatible tag (e.g. `v0.0.2`) and append the number of commits with timestamp to it. For example, if the released version is `v0.0.1`, then the unreleased version would be something like `0.0.2+120240105144650`. We verify that this version is compatible with both SemVer and [PEP 440](https://peps.python.org/pep-0440/).
+When you develop your wheel and iterate on testing it, it's often required to upload a file with different name each time you build it. We use `git describe --tags` command to fetch the latest SemVer-compatible tag (e.g. `v0.0.2`) and append the number of commits with timestamp to it. For example, if the released version is `v0.0.1`, then the unreleased version would be something like `0.0.2+120240105144650`. We verify that this version is compatible with both SemVer and [PEP 440](https://peps.python.org/pep-0440/). [Publishing wheels](#publishing-wheels-to-databricks-workspace) update `version.json` file in the [install folder](#install-folder).
 
 ```python
 product_info = ProductInfo(__file__)
@@ -744,6 +777,8 @@ logger.info(f'Product name is: {product_info.product_name()}')
 ### Publishing Wheels to Databricks Workspace
 
 Before you execute a wheel on Databricks, you have to build it and upload it. This library provides detects [released](#released-version-detection) or [unreleased](#unreleased-version-detection) version of the wheel, copies it over to a temporary folder, changes the `__about__.py` file with the right version, and builds the wheel in the temporary location, so that it's not polluted with build artifacts. `Wheels` is a context manager, so it removes all temporary files and folders ather `with` block finishes. This library is successfully used to concurrently test wheels on Shared Databricks Clusters through notebook-scoped libraries.
+
+Every call `wheels.upload_to_wsfs()` updates `version.json` file in the [install folder](#install-folder), which holds `version` field with the current wheel version. There's also `wheel` field, that contains the path to the current wheel file on WorkspaceFS.
 
 ```python
 from databricks.sdk import WorkspaceClient
