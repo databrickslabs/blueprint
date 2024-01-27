@@ -1,3 +1,4 @@
+<!-- FOR CONTRIBUTORS: Edit this file in Visual Studio Code with the recommended extensions, so that we update the table of contents automatically -->
 Databricks Labs Blueprint
 ---
 
