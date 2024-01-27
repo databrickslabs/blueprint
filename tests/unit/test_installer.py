@@ -1,3 +1,4 @@
+import io
 import json
 from unittest.mock import create_autospec
 
@@ -6,7 +7,8 @@ from databricks.sdk import WorkspaceClient
 from databricks.sdk.errors import NotFound
 from databricks.sdk.service.workspace import ImportFormat
 
-from databricks.labs.blueprint.installer import IllegalState, InstallState
+from databricks.labs.blueprint.installation import IllegalState
+from databricks.labs.blueprint.installer import InstallState
 
 
 def test_install_folder():
@@ -19,18 +21,19 @@ def test_install_folder():
 def test_jobs_state():
     ws = create_autospec(WorkspaceClient)
     ws.current_user.me().user_name = "foo"
-    ws.workspace.download.return_value.read.return_value = '{"$version":1, "resources": {"jobs": [1,2,3]}}'
+    ws.workspace.download.return_value = io.StringIO('{"$version":1, "resources": {"jobs": {"foo": 123}}}')
 
     state = InstallState(ws, "blueprint")
 
-    assert [1, 2, 3] == state.jobs
+    assert {"foo": "123"} == state.jobs
+    assert {} == state.dashboards
     ws.workspace.download.assert_called_with("/Users/foo/.blueprint/state.json")
 
 
 def test_invalid_config_version():
     ws = create_autospec(WorkspaceClient)
     ws.current_user.me().user_name = "foo"
-    ws.workspace.download.return_value.read.return_value = '{"$version":9, "resources": {"jobs": [1,2,3]}}'
+    ws.workspace.download.return_value = io.StringIO('{"$version":9, "resources": {"jobs": [1,2,3]}}')
 
     state = InstallState(ws, "blueprint")
 
@@ -51,7 +54,7 @@ def test_state_not_found():
 def test_state_corrupt():
     ws = create_autospec(WorkspaceClient)
     ws.current_user.me().user_name = "foo"
-    ws.workspace.download.return_value.read.return_value = '{"$versio...'
+    ws.workspace.download.return_value = io.StringIO('{"$versio...')
 
     state = InstallState(ws, "blueprint")
 
@@ -61,7 +64,7 @@ def test_state_corrupt():
 def test_state_overwrite_existing():
     ws = create_autospec(WorkspaceClient)
     ws.current_user.me().user_name = "foo"
-    ws.workspace.download.return_value.read.return_value = '{"$version":1, "resources": {"sql": {"a": "b"}}}'
+    ws.workspace.download.return_value = io.StringIO('{"$version":1, "resources": {"sql": {"a": "b"}}}')
 
     state = InstallState(ws, "blueprint")
     state.jobs["foo"] = "bar"

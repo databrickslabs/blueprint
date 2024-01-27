@@ -1,18 +1,18 @@
 import datetime
 import logging
-import os
 import shutil
 import subprocess
 import sys
 import tempfile
 from contextlib import AbstractContextManager
+from dataclasses import dataclass
 from pathlib import Path
 
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.mixins.compute import SemVer
-from databricks.sdk.service.workspace import ImportFormat
 
 from databricks.labs.blueprint.entrypoint import find_project_root
+from databricks.labs.blueprint.installation import Installation
 from databricks.labs.blueprint.installer import InstallState
 
 logger = logging.getLogger(__name__)
@@ -123,38 +123,35 @@ class ProductInfo:
         return version_data["__version__"]
 
 
-class Wheels(AbstractContextManager):
+@dataclass
+class Version:
+    version: str
+    wheel: str
+
+
+class WheelsV2(AbstractContextManager):
     """Wheel builder"""
 
     __version: str | None = None
 
-    def __init__(
-        self, ws: WorkspaceClient, install_state: InstallState, product_info: ProductInfo, *, verbose: bool = False
-    ):
-        self._ws = ws
-        self._install_state = install_state
+    def __init__(self, installation: Installation, product_info: ProductInfo, *, verbose: bool = False):
+        self._installation = installation
         self._product_info = product_info
         self._verbose = verbose
 
     def upload_to_dbfs(self) -> str:
         with self._local_wheel.open("rb") as f:
-            self._ws.dbfs.mkdirs(self._remote_dir_name)
-            logger.info(f"Uploading wheel to dbfs:{self._remote_wheel}")
-            self._ws.dbfs.upload(self._remote_wheel, f, overwrite=True)
-        return self._remote_wheel
+            return self._installation.upload_dbfs(f"wheels/{self._local_wheel.name}", f.read())
 
     def upload_to_wsfs(self) -> str:
         with self._local_wheel.open("rb") as f:
-            self._ws.workspace.mkdirs(self._remote_dir_name)
-            logger.info(f"Uploading wheel to /Workspace{self._remote_wheel}")
-            self._ws.workspace.upload(self._remote_wheel, f, overwrite=True, format=ImportFormat.AUTO)
-        return self._remote_wheel
+            remote_wheel = self._installation.upload(f"wheels/{self._local_wheel.name}", f.read())
+            self._installation.save(Version(version=self._product_info.version(), wheel=remote_wheel))
+            return remote_wheel
 
-    def __enter__(self) -> "Wheels":
+    def __enter__(self) -> "WheelsV2":
         self._tmp_dir = tempfile.TemporaryDirectory()
         self._local_wheel = self._build_wheel(self._tmp_dir.name, verbose=self._verbose)
-        self._remote_wheel = f"{self._install_state.install_folder()}/wheels/{self._local_wheel.name}"
-        self._remote_dir_name = os.path.dirname(self._remote_wheel)
         return self
 
     def __exit__(self, __exc_type, __exc_value, __traceback):
@@ -210,3 +207,13 @@ class Wheels(AbstractContextManager):
 
         shutil.copytree(project_root, tmp_dir_path, ignore=copy_ignore)
         return tmp_dir_path
+
+
+class Wheels(WheelsV2):
+    """Wheel builder"""
+
+    def __init__(
+        self, ws: WorkspaceClient, install_state: InstallState, product_info: ProductInfo, *, verbose: bool = False
+    ):
+        installation = Installation(ws, product_info.product_name(), install_folder=install_state.install_folder())
+        super().__init__(installation, product_info, verbose=verbose)

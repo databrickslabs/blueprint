@@ -16,6 +16,9 @@ classifiers = [
 ]
 dependencies = ["databricks-sdk>=0.16.0"]
 
+[project.optional-dependencies]
+yaml = ["PyYAML>=6.0.0,<7.0.0"]
+
 [project.urls]
 Issues = "https://github.com/databrickslabs/blueprint/issues"
 Source = "https://github.com/databrickslabs/blueprint"
@@ -33,6 +36,7 @@ path = "src/databricks/labs/blueprint/__about__.py"
 
 [tool.hatch.envs.default]
 dependencies = [
+    "databricks-labs-blueprint[yaml]",
     "coverage[toml]>=6.5",
     "pytest",
     "pytest-xdist",
@@ -52,8 +56,8 @@ python="3.10"
 path = ".venv"
 
 [tool.hatch.envs.default.scripts]
-test        = "pytest -n auto --cov src --cov-report=xml --timeout 30 tests/unit --durations 20"
-coverage    = "pytest -n auto --cov src tests/unit --timeout 30 --cov-report=html --durations 20"
+test        = "pytest -n 2 --cov src --cov-report=xml --timeout 30 tests/unit --durations 20"
+coverage    = "pytest -n 2 --cov src tests/unit --timeout 30 --cov-report=html --durations 20"
 integration = "pytest -n 10 --cov src tests/integration --durations 20"
 fmt         = ["isort .",
                "ruff format",
@@ -68,7 +72,7 @@ verify      = ["black --check .",
 profile = "black"
 
 [tool.pytest.ini_options]
-addopts = "-s -p no:warnings -vv --cache-clear"
+addopts = "--no-header"
 cache_dir = ".venv/pytest-cache"
 
 [tool.black]
