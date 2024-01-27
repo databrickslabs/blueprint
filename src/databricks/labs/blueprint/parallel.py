@@ -5,9 +5,9 @@ import logging
 import os
 import re
 import threading
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Collection, Sequence
 from concurrent.futures import ThreadPoolExecutor
-from typing import Collection, Generic, TypeVar
+from typing import Generic, TypeVar
 
 MIN_THREADS = 8
 
@@ -44,9 +44,7 @@ class Threads(Generic[Result]):
             num_cpus = os.cpu_count()
             if num_cpus is None:
                 num_cpus = 1
-            num_threads = num_cpus * 2
-            if num_threads < MIN_THREADS:
-                num_threads = MIN_THREADS
+            num_threads = max(num_cpus * 2, MIN_THREADS)
         return cls(name, tasks, num_threads=num_threads)._run()
 
     @classmethod
@@ -132,7 +130,7 @@ class Threads(Generic[Result]):
         def inner(*args, **kwargs):
             try:
                 return func(*args, **kwargs), None
-            except Exception as err:
+            except Exception as err:  # pylint: disable=broad-exception-caught
                 logger.error(f"{name} task failed: {err!s}", exc_info=err)
                 return None, err
 

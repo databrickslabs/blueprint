@@ -109,7 +109,7 @@ class Prompts:
         attempt = 0
         while attempt < max_attempts:
             attempt += 1
-            res = input(prompt)
+            res = input(prompt)  # pylint: disable=bad-builtin
             if res and validate:
                 if not validate(res):
                     continue

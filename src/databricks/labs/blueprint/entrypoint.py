@@ -50,7 +50,7 @@ def find_project_root(__file: str) -> Path:
     """
     this_path = Path(__file)
     # TODO: detect when in wheel seems to be more challenging and pkgutil.get_data() might be necessary
-    for leaf in ["pyproject.toml", "setup.py"]:
+    for leaf in {"pyproject.toml", "setup.py"}:
         root = find_dir_with_leaf(this_path, leaf)
         if root is not None:
             return root
@@ -77,7 +77,7 @@ def is_in_debug() -> bool:
     """Returns true if run from VSCode or IntelliJ"""
     if "IDE_PROJECT_ROOTS" in os.environ:
         return True
-    return os.path.basename(sys.argv[0]) in ["_jb_pytest_runner.py", "testlauncher.py"]
+    return os.path.basename(sys.argv[0]) in {"_jb_pytest_runner.py", "testlauncher.py"}
 
 
 def relative_paths(*maybe_paths) -> list[Path]:

@@ -6,7 +6,8 @@ import platform
 import re
 import sys
 import threading
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from databricks.sdk.core import DatabricksError
 from databricks.sdk.mixins.compute import ClustersExt
@@ -38,7 +39,7 @@ class _ReturnToPrintJson(ast.NodeTransformer):
 
         if unsupported_version and has_return_in_last_line:
             raise ValueError(
-                "dynamic conversion of return .. to print(json.dumps(..)) " "is only possible starting from Python 3.8"
+                "dynamic conversion of return .. to print(json.dumps(..)) is only possible starting from Python 3.8"
             )
 
         # perform AST transformations for very repetitive tasks, like JSON serialization
@@ -60,7 +61,7 @@ class _ReturnToPrintJson(ast.NodeTransformer):
 
     def visit_Import(self, node: ast.Import) -> ast.Import:  # noqa: N802
         for name in node.names:
-            if "json" != ast.unparse(name):
+            if ast.unparse(name) != "json":
                 continue
             self._has_json_import = True
             break
@@ -124,10 +125,9 @@ class CommandExecutor:
                     _LOG.warning("cannot parse converted return statement. Just returning text", exc_info=e)
                     return results.data
             return results.data
-        else:
-            # there might be an opportunity to convert builtin exceptions
-            assert results.summary is not None
-            raise DatabricksError(results.summary)
+        # there might be an opportunity to convert builtin exceptions
+        assert results.summary is not None
+        raise DatabricksError(results.summary)
 
     def install_notebook_library(self, library: str):
         return self.run(
@@ -170,7 +170,7 @@ class CommandExecutor:
 
         """
         if not self._is_failed(results):
-            return
+            return None
         results_cause = results.cause
         if results_cause:
             sys.stderr.write(_ascii_escape_re.sub("", results_cause))
@@ -210,7 +210,7 @@ class CommandExecutor:
         for line in lines:
             pos = 0
             for char in line:
-                if char in (" ", "\t"):
+                if char in {" ", "\t"}:
                     pos += 1
                 else:
                     break
