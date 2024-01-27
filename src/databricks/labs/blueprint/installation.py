@@ -18,7 +18,6 @@ import yaml
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.errors import NotFound
 from databricks.sdk.mixins import workspace
-from databricks.sdk.service import iam
 from databricks.sdk.service.workspace import ImportFormat
 
 from databricks.labs.blueprint.parallel import Threads
@@ -30,33 +29,6 @@ Json = dict[str, Any]
 
 class IllegalState(ValueError):
     pass
-
-
-def installations(ws: WorkspaceClient, product: str) -> list['Installation']:
-    def check(user: iam.User):
-        try:
-            user_folder = f'/Users/{user.user_name}/.{product}'
-            ws.workspace.get_status(user_folder)
-            return Installation(ws, product, install_folder=user_folder)
-        except NotFound:
-            return None
-    tasks = [functools.partial(check, _) for _ in ws.users.list(attributes='user_name')]
-    return Threads.strict(f'finding {product} installations', tasks)
-
-def current_installation(ws: WorkspaceClient, product: str, *, assume_user: bool = False) -> 'Installation':
-    me = ws.current_user.me()
-    user_folder = f"/Users/{me.user_name}/.{product}"
-    applications_folder = f"/Applications/{product}"
-    folders = [user_folder, applications_folder]
-    for candidate in folders:
-        try:
-            ws.workspace.get_status(candidate)
-            return Installation(ws, product, install_folder=candidate)
-        except NotFound:
-            continue
-    if assume_user:
-        return Installation(ws, product, install_folder=user_folder)
-    raise NotFound(f'Application {product} not found on current workspace')
 
 
 class Installation:
@@ -78,6 +50,41 @@ class Installation:
         self._product = product
         self._install_folder = install_folder
         self._lock = threading.Lock()
+
+    @classmethod
+    def current(cls, ws: WorkspaceClient, product: str, *, assume_user: bool = False) -> "Installation":
+        user_folder = cls._user_home_installation(ws, product)
+        applications_folder = f"/Applications/{product}"
+        folders = [user_folder, applications_folder]
+        for candidate in folders:
+            try:
+                ws.workspace.get_status(candidate)
+                return cls(ws, product, install_folder=candidate)
+            except NotFound:
+                continue
+        if assume_user:
+            return cls(ws, product, install_folder=user_folder)
+        raise NotFound(f"Application not installed: {product}")
+
+    @classmethod
+    def existing(cls, ws: WorkspaceClient, product: str) -> list["Installation"]:
+        def check_folder(install_folder: str) -> Installation | None:
+            try:
+                ws.workspace.get_status(install_folder)
+                return cls(ws, product, install_folder=install_folder)
+            except NotFound:
+                return None
+
+        tasks = [functools.partial(check_folder, f"/Applications/{product}")]
+        for user in ws.users.list(attributes="user_name"):
+            user_folder = f"/Users/{user.user_name}/.{product}"
+            tasks.append(functools.partial(check_folder, user_folder))
+        return Threads.strict(f"finding {product} installations", tasks)
+
+    @staticmethod
+    def _user_home_installation(ws: WorkspaceClient, product: str):
+        me = ws.current_user.me()
+        return f"/Users/{me.user_name}/.{product}"
 
     def product(self) -> str:
         return self._product
@@ -121,10 +128,9 @@ class Installation:
         In this example, the `Installation` object is created for the "myproduct" product with a custom installation
         folder of `/my/custom/folder`. The `install_folder` method is then called to print the path to the installation
         folder. The output will be `/my/custom/folder`."""
-        if self._install_folder:
+        if self._install_folder is not None:
             return self._install_folder
-        me = self._ws.current_user.me()
-        self._install_folder = f"/Users/{me.user_name}/.{self._product}"
+        self._install_folder = self._user_home_installation(self._ws, self._product)
         return self._install_folder
 
     T = typing.TypeVar("T")
@@ -204,9 +210,11 @@ class Installation:
             raise TypeError("missing value")
         type_ref = type(inst)
         if type_ref == list:
-            if len(inst) == 0:
+            from_list: list = inst  # type: ignore[assignment]
+            if len(from_list) == 0:
                 raise ValueError("List cannot be empty")
-            type_ref = list[type(inst[0])]  # typing: ignore[misc,index]
+            item_type: typing.Type = type(from_list[0])  # typing: ignore[misc]
+            type_ref = list[item_type]  # type: ignore[assignment]
         filename = self._get_filename(filename, type_ref)
         version = None
         if hasattr(inst, "__version__"):

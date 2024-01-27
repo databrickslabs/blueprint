@@ -1,6 +1,5 @@
 import datetime
 import logging
-import os
 import shutil
 import subprocess
 import sys
@@ -10,7 +9,6 @@ from pathlib import Path
 
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.mixins.compute import SemVer
-from databricks.sdk.service.workspace import ImportFormat
 
 from databricks.labs.blueprint.entrypoint import find_project_root
 from databricks.labs.blueprint.installation import Installation
@@ -136,11 +134,11 @@ class WheelsV2(AbstractContextManager):
 
     def upload_to_dbfs(self) -> str:
         with self._local_wheel.open("rb") as f:
-            return self._installation.upload_dbfs(f'wheels/{self._local_wheel.name}', f.read())
+            return self._installation.upload_dbfs(f"wheels/{self._local_wheel.name}", f.read())
 
     def upload_to_wsfs(self) -> str:
         with self._local_wheel.open("rb") as f:
-            return self._installation.upload(f'wheels/{self._local_wheel.name}', f.read())
+            return self._installation.upload(f"wheels/{self._local_wheel.name}", f.read())
 
     def __enter__(self) -> "WheelsV2":
         self._tmp_dir = tempfile.TemporaryDirectory()
@@ -210,5 +208,3 @@ class Wheels(WheelsV2):
     ):
         installation = Installation(ws, product_info.product_name(), install_folder=install_state.install_folder())
         super().__init__(installation, product_info, verbose=verbose)
-
-

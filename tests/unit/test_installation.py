@@ -7,6 +7,7 @@ import yaml
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.core import Config
 from databricks.sdk.errors import NotFound
+from databricks.sdk.service import iam
 from databricks.sdk.service.provisioning import Workspace
 from databricks.sdk.service.workspace import ImportFormat
 
@@ -15,6 +16,63 @@ from databricks.labs.blueprint.installation import (
     Installation,
     MockInstallation,
 )
+
+
+def test_current_not_found():
+    ws = create_autospec(WorkspaceClient)
+    ws.current_user.me().user_name = "foo"
+    ws.workspace.get_status.side_effect = NotFound(...)
+
+    with pytest.raises(NotFound, match="Application not installed: blueprint"):
+        Installation.current(ws, "blueprint")
+
+
+def test_current_not_found_assume_user():
+    ws = create_autospec(WorkspaceClient)
+    ws.current_user.me().user_name = "foo"
+    ws.workspace.get_status.side_effect = NotFound(...)
+
+    installation = Installation.current(ws, "blueprint", assume_user=True)
+    assert "/Users/foo/.blueprint" == installation.install_folder()
+
+
+def test_current_found_user():
+    ws = create_autospec(WorkspaceClient)
+    ws.current_user.me().user_name = "foo"
+    ws.workspace.get_status.side_effect = None
+
+    installation = Installation.current(ws, "blueprint")
+    assert "/Users/foo/.blueprint" == installation.install_folder()
+
+
+def test_current_found_root():
+    ws = create_autospec(WorkspaceClient)
+    ws.current_user.me().user_name = "foo"
+    ws.workspace.get_status.side_effect = [NotFound(...), None]
+
+    installation = Installation.current(ws, "blueprint")
+    assert "/Applications/blueprint" == installation.install_folder()
+
+
+def test_existing_not_found():
+    ws = create_autospec(WorkspaceClient)
+    ws.users.list.return_value = [iam.User(user_name="foo")]
+    ws.workspace.get_status.side_effect = NotFound(...)
+
+    existing = Installation.existing(ws, "blueprint")
+    assert [] == existing
+
+    ws.workspace.get_status.assert_any_call("/Applications/blueprint")
+    ws.workspace.get_status.assert_any_call("/Users/foo/.blueprint")
+    assert 2 == ws.workspace.get_status.call_count
+
+
+def test_existing_found_root():
+    ws = create_autospec(WorkspaceClient)
+    ws.workspace.get_status.side_effect = None
+
+    existing = Installation.existing(ws, "blueprint")
+    assert "/Applications/blueprint" == existing[0].install_folder()
 
 
 @dataclass
@@ -37,10 +95,12 @@ def test_save_typed_file():
     ws.current_user.me().user_name = "foo"
     state = Installation(ws, "blueprint")
 
-    target = state.save(WorkspaceConfig(
-        inventory_database="some_blueprint",
-        include_group_names=["foo", "bar"],
-    ))
+    target = state.save(
+        WorkspaceConfig(
+            inventory_database="some_blueprint",
+            include_group_names=["foo", "bar"],
+        )
+    )
     assert "/Users/foo/.blueprint/config.yml" == target
 
     ws.workspace.upload.assert_called_with(
