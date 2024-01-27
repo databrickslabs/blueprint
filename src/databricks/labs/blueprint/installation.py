@@ -67,7 +67,7 @@ class Installation:
         raise NotFound(f"Application not installed: {product}")
 
     @classmethod
-    def existing(cls, ws: WorkspaceClient, product: str) -> list["Installation"]:
+    def existing(cls, ws: WorkspaceClient, product: str) -> typing.Collection["Installation"]:
         def check_folder(install_folder: str) -> Installation | None:
             try:
                 ws.workspace.get_status(install_folder)
@@ -130,7 +130,7 @@ class Installation:
         folder. The output will be `/my/custom/folder`."""
         if self._install_folder is not None:
             return self._install_folder
-        self._install_folder = self._user_home_installation(self._ws, self._product)
+        self._install_folder = self._user_home_installation(self._ws, self.product())
         return self._install_folder
 
     T = typing.TypeVar("T")
@@ -208,13 +208,7 @@ class Installation:
         using the `load` method and compared to the original object to verify that it was saved correctly."""
         if not inst:
             raise TypeError("missing value")
-        type_ref = type(inst)
-        if type_ref == list:
-            from_list: list = inst  # type: ignore[assignment]
-            if len(from_list) == 0:
-                raise ValueError("List cannot be empty")
-            item_type: typing.Type = type(from_list[0])  # typing: ignore[misc]
-            type_ref = list[item_type]  # type: ignore[assignment]
+        type_ref = self._get_type_ref(inst)
         filename = self._get_filename(filename, type_ref)
         version = None
         if hasattr(inst, "__version__"):
@@ -224,6 +218,21 @@ class Installation:
             as_dict["$version"] = version
         self._overwrite_content(filename, as_dict, type_ref)
         return f"{self.install_folder()}/{filename}"
+
+    @classmethod
+    def _get_type_ref(cls, inst) -> typing.Type:
+        type_ref = type(inst)
+        if type_ref == list:
+            return cls._get_list_type_ref(inst)
+        return type_ref
+
+    @staticmethod
+    def _get_list_type_ref(inst: T) -> typing.Type[list[T]]:
+        from_list: list = inst  # type: ignore[assignment]
+        if len(from_list) == 0:
+            raise ValueError("List cannot be empty")
+        item_type = type(from_list[0])  # type: ignore[misc]
+        return list[item_type]  # type: ignore[valid-type]
 
     def upload(self, filename: str, raw: bytes):
         """The `upload` method uploads raw bytes to a file on WorkspaceFS with the given `filename`. This method is
@@ -255,8 +264,7 @@ class Installation:
             return dst
 
     def files(self) -> list[workspace.ObjectInfo]:
-        # TODO: list files under install folder
-        raise self._ws.workspace.list(self.install_folder(), recursive=True)
+        return list(self._ws.workspace.list(self.install_folder(), recursive=True))
 
     def _overwrite_content(self, filename: str, as_dict: Json, type_ref: typing.Type):
         """The `_overwrite_content` method is a private method that is used to serialize an object of type `type_ref`
@@ -277,7 +285,11 @@ class Installation:
 
     def _load_content(self, filename: str) -> Json:
         with self._lock:
-            converters = {"json": json.load, "yml": self._load_yaml, "csv": self._load_csv}
+            converters: dict[str, typing.Callable[[typing.BinaryIO], Any]] = {
+                "json": json.load,
+                "yml": self._load_yaml,
+                "csv": self._load_csv,
+            }
             extension = filename.split(".")[-1]
             if extension not in converters:
                 raise KeyError(f"Unknown extension: {extension}")
@@ -298,12 +310,12 @@ class Installation:
             return cls._marshal_dataclass(type_ref, path, inst)
         if isinstance(type_ref, types.GenericAlias):
             return cls._marshal_generic(type_ref, path, inst)
-        if isinstance(type_ref, (types.UnionType, typing._UnionGenericAlias)):
+        if isinstance(type_ref, (types.UnionType, typing._UnionGenericAlias)):  # type: ignore[attr-defined]
             return cls._marshal_union(type_ref, path, inst)
-        if isinstance(type_ref, typing._GenericAlias):
+        if isinstance(type_ref, typing._GenericAlias):  # type: ignore[attr-defined]
             if not inst:
                 return None, False
-            return inst, isinstance(inst, type_ref.__origin__)
+            return inst, isinstance(inst, type_ref.__origin__)  # type: ignore[attr-defined]
         if isinstance(inst, databricks.sdk.core.Config):
             return inst.as_dict(), True
         if type_ref == list:
@@ -383,11 +395,11 @@ class Installation:
     def _unmarshal(cls, inst: Any, path: list[str], type_ref: typing.Type[T]) -> T | None:
         if dataclasses.is_dataclass(type_ref):
             return cls._unmarshal_dataclass(inst, path, type_ref)
-        if isinstance(type_ref, (types.UnionType, typing._UnionGenericAlias)):
+        if isinstance(type_ref, (types.UnionType, typing._UnionGenericAlias)):  # type: ignore[attr-defined]
             return cls._unmarshal_union(inst, path, type_ref)
         if isinstance(type_ref, types.GenericAlias):
             return cls._unmarshal_generic(inst, path, type_ref)
-        if isinstance(type_ref, typing._GenericAlias):
+        if isinstance(type_ref, typing._GenericAlias):  # type: ignore[attr-defined]
             if not inst:
                 return None
             return cls._unmarshal(inst, path, type_ref.__origin__)
@@ -400,7 +412,7 @@ class Installation:
         if type_ref == databricks.sdk.core.Config:
             if not inst:
                 inst = {}
-            return databricks.sdk.core.Config(**inst)  # typing: ignore[return-value]
+            return databricks.sdk.core.Config(**inst)  # type: ignore[return-value]
         if type_ref == types.NoneType:
             return None
         raise TypeError(f'{".".join(path)}: unknown: {type_ref}: {inst}')
@@ -471,7 +483,7 @@ class Installation:
         if not inst:
             return inst
         # convert from str to int if necessary
-        converted = type_ref(inst)  # typing: ignore[call-arg]
+        converted = type_ref(inst)  # type: ignore[call-arg]
         return converted
 
     @staticmethod
