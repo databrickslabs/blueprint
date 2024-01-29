@@ -333,23 +333,17 @@ class Installation:
         if isinstance(type_ref, (types.UnionType, _UnionGenericAlias)):  # type: ignore[attr-defined]
             return cls._marshal_union(type_ref, path, inst)
         if isinstance(type_ref, _GenericAlias):  # type: ignore[attr-defined]
-            if not inst:
-                return None, False
-            return inst, isinstance(inst, type_ref.__origin__)  # type: ignore[attr-defined]
+            return cls._marshal_generic_alias(type_ref, inst)
         if isinstance(inst, databricks.sdk.core.Config):
             return inst.as_dict(), True
         if type_ref == list:
             return cls._marshal_list(type_ref, path, inst)
         if isinstance(type_ref, enum.EnumMeta):
-            if not inst:
-                return None, False
-            return inst.value, True
+            return cls._marshal_enum(inst)
         if type_ref == types.NoneType:
             return inst, inst is None
         if type_ref == databricks.sdk.core.Config:
-            if not inst:
-                return None, False
-            return inst.as_dict(), True
+            return cls._marshal_databricks_config(inst)
         if type_ref in cls._PRIMITIVES:
             return inst, True
         raise TypeError(f'{".".join(path)}: unknown: {inst}')
@@ -372,6 +366,12 @@ class Installation:
         if len(type_args) == 2:
             return cls._marshal_dict(type_args[1], path, inst)
         return cls._marshal_list(type_args[0], path, inst)
+
+    @staticmethod
+    def _marshal_generic_alias(type_ref, inst):
+        if not inst:
+            return None, False
+        return inst, isinstance(inst, type_ref.__origin__)  # type: ignore[attr-defined]
 
     @classmethod
     def _marshal_list(cls, type_ref: type, path: list[str], inst: Any) -> tuple[Any, bool]:
@@ -410,6 +410,18 @@ class Installation:
                 continue
             as_dict[field] = value
         return as_dict, True
+
+    @staticmethod
+    def _marshal_databricks_config(inst):
+        if not inst:
+            return None, False
+        return inst.as_dict(), True
+
+    @staticmethod
+    def _marshal_enum(inst):
+        if not inst:
+            return None, False
+        return inst.value, True
 
     @classmethod
     def _unmarshal(cls, inst: Any, path: list[str], type_ref: type[T]) -> T | None:
