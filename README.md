@@ -5,7 +5,7 @@ Databricks Labs Blueprint
 [![codecov](https://codecov.io/github/databrickslabs/blueprint/graph/badge.svg?token=x1JSVddfZa)](https://codecov.io/github/databrickslabs/blueprint)
 
 
-Baseline for Databricks Labs projects written in Python. Sources are validated with `mypy`. See [Contributing instructions](CONTRIBUTING.md) if you would like to improve this project.
+Baseline for Databricks Labs projects written in Python. Sources are validated with `mypy` and `pylint`. See [Contributing instructions](CONTRIBUTING.md) if you would like to improve this project.
 
 - [Installation](#installation)
 - [Batteries Included](#batteries-included)

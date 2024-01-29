@@ -12,7 +12,6 @@ class Prompts:
     def multiple_choice_from_dict(self, item_prompt: str, choices: dict[str, Any]) -> list[Any]:
         """Use to select multiple items from dictionary
 
-        :param all_prompt: str:
         :param item_prompt: str:
         :param choices: dict[str, Any]:
 
@@ -134,12 +133,6 @@ class MockPrompts(Prompts):
         self._questions_to_answers = sorted(patterns, key=lambda _: len(_[0].pattern), reverse=True)
 
     def question(self, text: str, default: str | None = None, **_) -> str:
-        """
-
-        :param text: str:
-        :param default: str | None:  (Default value = None)
-
-        """
         logger.info(f"Asking prompt: {text}")
         for question, answer in self._questions_to_answers:
             if not question.search(text):
