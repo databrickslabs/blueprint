@@ -1,5 +1,13 @@
 # Version changelog
 
+## 0.2.0
+
+* Added common install state primitives with strong typing ([#27](https://github.com/databrickslabs/blueprint/pull/27)).
+* Added documentation for Invoking Databricks Connect ([#28](https://github.com/databrickslabs/blueprint/pull/28)).
+* Added more documentation for Databricks CLI command router ([#30](https://github.com/databrickslabs/blueprint/pull/30)).
+* Enforced `pylint` standards ([#29](https://github.com/databrickslabs/blueprint/pull/29)).
+
+
 ## 0.1.0
 
 * Changed python requirement from 3.10.6 to 3.10 ([#25](https://github.com/databrickslabs/blueprint/pull/25)).
