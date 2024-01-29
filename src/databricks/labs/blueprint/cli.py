@@ -1,8 +1,8 @@
 import functools
 import json
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable
 
 from databricks.sdk import AccountClient, WorkspaceClient
 
@@ -72,9 +72,9 @@ class App:
             elif self._mapping[command].is_account:
                 kwargs["a"] = AccountClient(product=product_name, product_version=product_version)
             self._mapping[command].fn(**kwargs)
-        except Exception as err:
+        except Exception as err:  # pylint: disable=broad-exception-caught
             logger = self._logger.getChild(command)
-            if log_level.lower() in ("debug", "trace"):
+            if log_level.lower() in {"debug", "trace"}:
                 logger.error(f"Failed to call {command}", exc_info=err)
             else:
                 logger.error(f"{err.__class__.__name__}: {err}")

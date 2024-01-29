@@ -7,11 +7,7 @@ from databricks.labs.blueprint.logger import install_logger
 
 
 def get_logger(__file: str):
-    """Used as `get_logger(__file__)` to return a relevant logger for a file
-
-    :param file_name: str: use __file__ special constant
-
-    """
+    """Used as `get_logger(__file__)` to return a relevant logger for a file"""
     project_root = find_project_root(__file).absolute()
     entrypoint = Path(__file).absolute()
 
@@ -34,11 +30,7 @@ def get_logger(__file: str):
 
 
 def run_main(main):
-    """Runs main function with a logger
-
-    :param main: function that takes command-line arguments
-
-    """
+    """Runs main function with a logger"""
     install_logger()
     main(*sys.argv[1:])
 
@@ -50,7 +42,7 @@ def find_project_root(__file: str) -> Path:
     """
     this_path = Path(__file)
     # TODO: detect when in wheel seems to be more challenging and pkgutil.get_data() might be necessary
-    for leaf in ["pyproject.toml", "setup.py"]:
+    for leaf in ("pyproject.toml", "setup.py"):
         root = find_dir_with_leaf(this_path, leaf)
         if root is not None:
             return root
@@ -77,7 +69,7 @@ def is_in_debug() -> bool:
     """Returns true if run from VSCode or IntelliJ"""
     if "IDE_PROJECT_ROOTS" in os.environ:
         return True
-    return os.path.basename(sys.argv[0]) in ["_jb_pytest_runner.py", "testlauncher.py"]
+    return os.path.basename(sys.argv[0]) in {"_jb_pytest_runner.py", "testlauncher.py"}
 
 
 def relative_paths(*maybe_paths) -> list[Path]:

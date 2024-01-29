@@ -9,21 +9,13 @@ import os.path
 import re
 import threading
 import types
+from collections.abc import Callable, Collection
 from functools import partial
 from json import JSONDecodeError
-from typing import (
-    Any,
-    BinaryIO,
-    Callable,
-    Collection,
-    Type,
-    TypeVar,
-    get_args,
-    get_type_hints,
-)
+from typing import Any, BinaryIO, TypeVar, get_args, get_type_hints
 
 import databricks.sdk.core
-import yaml
+import yaml  # pylint: disable=wrong-import-order
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.errors import NotFound
 from databricks.sdk.mixins import workspace
@@ -151,7 +143,7 @@ class Installation:
 
     T = TypeVar("T")
 
-    def load(self, type_ref: Type[T], *, filename: str | None = None) -> T | None:
+    def load(self, type_ref: type[T], *, filename: str | None = None) -> T | None:
         """The `load` method loads an object of type `type_ref` from a file on WorkspaceFS. If no `filename` is
         provided, the `__file__` attribute of `type_ref` will be used as the filename.
 
@@ -243,13 +235,13 @@ class Installation:
     def files(self) -> list[workspace.ObjectInfo]:
         return list(self._ws.workspace.list(self.install_folder(), recursive=True))
 
-    def _overwrite_content(self, filename: str, as_dict: Json, type_ref: Type):
+    def _overwrite_content(self, filename: str, as_dict: Json, type_ref: type):
         """The `_overwrite_content` method is a private method that is used to serialize an object of type `type_ref`
         to a dictionary and write it to a file on WorkspaceFS. This method is called by the `save` and `upload` methods.
 
         The `as_dict` argument is the dictionary representation of the object that is to be written to the file.
         The `type_ref` argument is the type of the object that is being saved."""
-        converters: dict[str, Callable[[Any, Type], bytes]] = {
+        converters: dict[str, Callable[[Any, type], bytes]] = {
             "json": self._dump_json,
             "yml": self._dump_yaml,
             "csv": self._dump_csv,
@@ -303,7 +295,7 @@ class Installation:
         return as_dict
 
     @staticmethod
-    def _get_filename(filename: str | None, type_ref: Type) -> str:
+    def _get_filename(filename: str | None, type_ref: type) -> str:
         if not filename and hasattr(type_ref, "__file__"):
             return getattr(type_ref, "__file__")
         if not filename:
@@ -312,14 +304,14 @@ class Installation:
         return filename
 
     @classmethod
-    def _get_type_ref(cls, inst) -> Type:
+    def _get_type_ref(cls, inst) -> type:
         type_ref = type(inst)
         if type_ref == list:
             return cls._get_list_type_ref(inst)
         return type_ref
 
     @staticmethod
-    def _get_list_type_ref(inst: T) -> Type[list[T]]:
+    def _get_list_type_ref(inst: T) -> type[list[T]]:
         from_list: list = inst  # type: ignore[assignment]
         if len(from_list) == 0:
             raise ValueError("List cannot be empty")
@@ -328,6 +320,7 @@ class Installation:
 
     @classmethod
     def _marshal(cls, type_ref: type, path: list[str], inst: Any) -> tuple[Any, bool]:
+        # pylint: disable-next=import-outside-toplevel
         from typing import (  # type: ignore[attr-defined]
             _GenericAlias,
             _UnionGenericAlias,
@@ -340,23 +333,17 @@ class Installation:
         if isinstance(type_ref, (types.UnionType, _UnionGenericAlias)):  # type: ignore[attr-defined]
             return cls._marshal_union(type_ref, path, inst)
         if isinstance(type_ref, _GenericAlias):  # type: ignore[attr-defined]
-            if not inst:
-                return None, False
-            return inst, isinstance(inst, type_ref.__origin__)  # type: ignore[attr-defined]
+            return cls._marshal_generic_alias(type_ref, inst)
         if isinstance(inst, databricks.sdk.core.Config):
             return inst.as_dict(), True
         if type_ref == list:
             return cls._marshal_list(type_ref, path, inst)
         if isinstance(type_ref, enum.EnumMeta):
-            if not inst:
-                return None, False
-            return inst.value, True
+            return cls._marshal_enum(inst)
         if type_ref == types.NoneType:
             return inst, inst is None
         if type_ref == databricks.sdk.core.Config:
-            if not inst:
-                return None, False
-            return inst.as_dict(), True
+            return cls._marshal_databricks_config(inst)
         if type_ref in cls._PRIMITIVES:
             return inst, True
         raise TypeError(f'{".".join(path)}: unknown: {inst}')
@@ -379,6 +366,12 @@ class Installation:
         if len(type_args) == 2:
             return cls._marshal_dict(type_args[1], path, inst)
         return cls._marshal_list(type_args[0], path, inst)
+
+    @staticmethod
+    def _marshal_generic_alias(type_ref, inst):
+        if not inst:
+            return None, False
+        return inst, isinstance(inst, type_ref.__origin__)  # type: ignore[attr-defined]
 
     @classmethod
     def _marshal_list(cls, type_ref: type, path: list[str], inst: Any) -> tuple[Any, bool]:
@@ -418,8 +411,21 @@ class Installation:
             as_dict[field] = value
         return as_dict, True
 
+    @staticmethod
+    def _marshal_databricks_config(inst):
+        if not inst:
+            return None, False
+        return inst.as_dict(), True
+
+    @staticmethod
+    def _marshal_enum(inst):
+        if not inst:
+            return None, False
+        return inst.value, True
+
     @classmethod
-    def _unmarshal(cls, inst: Any, path: list[str], type_ref: Type[T]) -> T | None:
+    def _unmarshal(cls, inst: Any, path: list[str], type_ref: type[T]) -> T | None:
+        # pylint: disable-next=import-outside-toplevel
         from typing import (  # type: ignore[attr-defined]
             _GenericAlias,
             _UnionGenericAlias,
@@ -466,7 +472,7 @@ class Installation:
                 default_factory = field.default_factory
                 if default_factory == dataclasses.MISSING and default_value == dataclasses.MISSING:
                     raise TypeError(cls._explain_why(hint, [*path, field_name], value))
-                elif default_value != dataclasses.MISSING:
+                if default_value != dataclasses.MISSING:
                     value = default_value
                 else:
                     value = default_factory()
@@ -525,15 +531,15 @@ class Installation:
         return f'{".".join(path)}: not a {type_ref.__name__}: {raw}'
 
     @staticmethod
-    def _dump_json(as_dict: Json, _: Type) -> bytes:
+    def _dump_json(as_dict: Json, _: type) -> bytes:
         return json.dumps(as_dict, indent=2).encode("utf8")
 
     @staticmethod
-    def _dump_yaml(raw: Json, _: Type) -> bytes:
+    def _dump_yaml(raw: Json, _: type) -> bytes:
         try:
             return yaml.dump(raw).encode("utf8")
-        except ImportError:
-            raise SyntaxError("PyYAML is not installed. Fix: pip install databricks-labs-blueprint[yaml]")
+        except ImportError as err:
+            raise SyntaxError("PyYAML is not installed. Fix: pip install databricks-labs-blueprint[yaml]") from err
 
     @staticmethod
     def _load_yaml(raw: BinaryIO) -> Json:
@@ -541,12 +547,12 @@ class Installation:
             try:
                 return yaml.safe_load(raw)
             except yaml.YAMLError as err:
-                raise JSONDecodeError(str(err), "<yaml>", 0)
-        except ImportError:
-            raise SyntaxError("PyYAML is not installed. Fix: pip install databricks-labs-blueprint[yaml]")
+                raise JSONDecodeError(str(err), "<yaml>", 0) from err
+        except ImportError as err:
+            raise SyntaxError("PyYAML is not installed. Fix: pip install databricks-labs-blueprint[yaml]") from err
 
     @staticmethod
-    def _dump_csv(raw: list[Json], type_ref: Type) -> bytes:
+    def _dump_csv(raw: list[Json], type_ref: type) -> bytes:
         type_args = get_args(type_ref)
         if not type_args:
             raise TypeError(f"Writing CSV is only supported for lists. Got {type_ref}")
@@ -587,7 +593,7 @@ class MockInstallation(Installation):
         pytest.register_assert_rewrite('databricks.labs.blueprint.installation')
     """
 
-    def __init__(self, overwrites: Any = None):
+    def __init__(self, overwrites: Any = None):  # pylint: disable=super-init-not-called
         if not overwrites:
             overwrites = {}
         self._overwrites = overwrites
@@ -605,7 +611,7 @@ class MockInstallation(Installation):
         self._dbfs[filename] = raw
         return f"{self.install_folder()}/{filename}"
 
-    def _overwrite_content(self, filename: str, as_dict: Json, type_ref: Type):
+    def _overwrite_content(self, filename: str, as_dict: Json, type_ref: type):
         self._overwrites[filename] = as_dict
 
     def _load_content(self, filename: str) -> Json:

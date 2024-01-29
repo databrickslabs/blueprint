@@ -50,7 +50,7 @@ class ProductInfo:
     def version(self):
         """Returns current version of the project"""
         if hasattr(self, "__version"):
-            return self.__version
+            return self.__version  # pylint: disable=access-member-before-definition
         if not self.is_git_checkout():
             # normal install, downloaded releases won't have the .git folder
             self.__version = self.released_version()
@@ -78,17 +78,7 @@ class ProductInfo:
         try:
             out = subprocess.run(["git", "describe", "--tags"], stdout=subprocess.PIPE, check=True)  # noqa S607
             git_detached_version = out.stdout.decode("utf8")
-            dv = SemVer.parse(git_detached_version)
-            datestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
-            # new commits on main branch since the last tag
-            new_commits = dv.pre_release.split("-")[0] if dv.pre_release else None
-            # show that it's a version different from the released one in stats
-            bump_patch = dv.patch + 1
-            # create something that is both https://semver.org and https://peps.python.org/pep-0440/
-            semver_and_pep0440 = f"{dv.major}.{dv.minor}.{bump_patch}+{new_commits}{datestamp}"
-            # validate the semver
-            SemVer.parse(semver_and_pep0440)
-            return semver_and_pep0440
+            return self._semver_and_pep440(git_detached_version)
         except subprocess.CalledProcessError as err:
             logger.warning(
                 "Cannot determine unreleased version. This can be fixed by adding "
@@ -96,6 +86,20 @@ class ProductInfo:
                 exc_info=err,
             )
             return self.released_version()
+
+    @staticmethod
+    def _semver_and_pep440(git_detached_version: str) -> str:
+        dv = SemVer.parse(git_detached_version)
+        datestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+        # new commits on main branch since the last tag
+        new_commits = dv.pre_release.split("-")[0] if dv.pre_release else None
+        # show that it's a version different from the released one in stats
+        bump_patch = dv.patch + 1
+        # create something that is both https://semver.org and https://peps.python.org/pep-0440/
+        semver_and_pep0440 = f"{dv.major}.{dv.minor}.{bump_patch}+{new_commits}{datestamp}"
+        # validate the semver
+        SemVer.parse(semver_and_pep0440)
+        return semver_and_pep0440
 
     def version_file_in(self, root: Path) -> Path:
         names = [self._version_file_name]
@@ -117,7 +121,7 @@ class ProductInfo:
     def _read_version(version_file: Path) -> str:
         version_data: dict[str, str] = {}
         with version_file.open("r") as f:
-            exec(f.read(), version_data)
+            exec(f.read(), version_data)  # pylint: disable=exec-used
         if "__version__" not in version_data:
             raise SyntaxError("Cannot find __version__")
         return version_data["__version__"]

@@ -118,5 +118,5 @@ def init_project(target):
         f.write(f"# Version changelog\n\n## 0.0.0\n\nInitial {project_name} commit\n")
 
 
-if "__main__" == __name__:
+if __name__ == "__main__":
     blueprint()
