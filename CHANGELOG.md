@@ -1,5 +1,10 @@
 # Version changelog
 
+## 0.2.1
+
+* Aligned `Installation` framework with UCX project ([#32](https://github.com/databrickslabs/blueprint/pull/32)).
+
+
 ## 0.2.0
 
 * Added common install state primitives with strong typing ([#27](https://github.com/databrickslabs/blueprint/pull/27)).
