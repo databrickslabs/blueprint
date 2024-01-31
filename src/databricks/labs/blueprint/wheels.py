@@ -1,4 +1,5 @@
 import datetime
+import inspect
 import logging
 import shutil
 import subprocess
@@ -42,6 +43,11 @@ class ProductInfo:
         self._project_root = find_project_root(__file)
         self._version_file_name = version_file_name
         self._github_org = github_org
+
+    @classmethod
+    def from_class(cls, klass: type, *, version_file_name: str = "__about__.py") -> "ProductInfo":
+        file = inspect.getfile(klass)
+        return cls(file, version_file_name=version_file_name)
 
     def project_root(self):
         # TODO: introduce the "in wheel detection", using the __about__.py as marker
@@ -145,7 +151,7 @@ class WheelsV2(AbstractContextManager):
 
     def upload_to_dbfs(self) -> str:
         with self._local_wheel.open("rb") as f:
-            return self._installation.upload_dbfs(f"wheels/{self._local_wheel.name}", f.read())
+            return self._installation.upload_dbfs(f"wheels/{self._local_wheel.name}", f)
 
     def upload_to_wsfs(self) -> str:
         with self._local_wheel.open("rb") as f:
