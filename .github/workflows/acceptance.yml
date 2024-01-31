@@ -13,7 +13,7 @@ jobs:
   integration:
     if: github.event_name == 'pull_request'
     environment: runtime
-    runs-on: larger
+    runs-on: larger # needs to be explicitly enabled per repo
     steps:
       - name: Checkout Code
         uses: actions/checkout@v2.5.0
