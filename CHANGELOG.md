@@ -1,5 +1,10 @@
 # Version changelog
 
+## 0.2.2
+
+* Fixed issues with uploading wheels to DBFS and loading a non-existing install state ([#34](https://github.com/databrickslabs/blueprint/pull/34)).
+
+
 ## 0.2.1
 
 * Aligned `Installation` framework with UCX project ([#32](https://github.com/databrickslabs/blueprint/pull/32)).
