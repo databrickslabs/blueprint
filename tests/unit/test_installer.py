@@ -54,8 +54,7 @@ def test_state_not_found():
 
     state = InstallState(ws, "blueprint")
 
-    with pytest.raises(NotFound):
-        _ = state.jobs
+    assert {} == state.jobs
 
 
 def test_state_corrupt():

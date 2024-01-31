@@ -5,6 +5,7 @@ from datetime import timedelta
 from typing import Any
 
 from databricks.sdk import WorkspaceClient
+from databricks.sdk.errors import NotFound
 from databricks.sdk.retries import retried
 
 from databricks.labs.blueprint.installation import IllegalState, Installation
@@ -61,7 +62,10 @@ class InstallState:
     def __getattr__(self, item: str) -> dict[str, str]:
         with self._lock:
             if not self._state:
-                self._state = self._installation.load(RawState)
+                try:
+                    self._state = self._installation.load(RawState)
+                except NotFound:
+                    self._state = RawState(resources={})
         if not self._state:
             raise StateError("Failed to load raw state")
         if item not in self._state.resources:
