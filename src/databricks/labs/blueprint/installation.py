@@ -217,6 +217,8 @@ class Installation:
         self._overwrite_content(filename, as_dict, type_ref)
         return f"{self.install_folder()}/{filename}"
 
+
+
     def upload(self, filename: str, raw: bytes):
         """The `upload` method uploads raw bytes to a file on WorkspaceFS with the given `filename`. This method is
         used to upload files that are not typed, i.e., they do not have a corresponding `type_ref` object."""
@@ -231,7 +233,26 @@ class Installation:
                 logger.debug(f"Creating missing folders: {parent_folder}")
                 self._ws.workspace.mkdirs(parent_folder)
                 attempt()
+            return self._strip_notebook_source_suffix(dst, raw)
+
+    _NOTEBOOK_MAGIC = {
+        'py': b"# Databricks notebook source",
+        'scala': b"// Databricks notebook source",
+        'sql': b"-- Databricks notebook source",
+    }
+
+    @classmethod
+    def _strip_notebook_source_suffix(cls, dst: str, raw: bytes) -> str:
+        if '.' not in dst:
             return dst
+        ext = dst.split('.')[-1]
+        magic = cls._NOTEBOOK_MAGIC.get(ext)
+        if not magic:
+            return dst
+        magic_len = len(magic)
+        if len(raw) > magic_len and raw[0:magic_len] == magic:
+            return dst.removesuffix(f'.{ext}')
+        return dst
 
     def upload_dbfs(self, filename: str, raw: bytes) -> str:
         """The `upload_dbfs` method uploads raw bytes to a file on DBFS (Databricks File System) with the given
