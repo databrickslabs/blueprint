@@ -12,6 +12,7 @@ import types
 from collections.abc import Callable, Collection
 from functools import partial
 from json import JSONDecodeError
+from pathlib import Path
 from typing import Any, BinaryIO, TypeVar, get_args, get_type_hints
 
 import databricks.sdk.core
@@ -27,10 +28,18 @@ logger = logging.getLogger(__name__)
 
 Json = dict[str, Any]
 
-__all__ = ["Installation", "IllegalState"]
+__all__ = ["Installation", "IllegalState", "NotInstalled", "SerdeError"]
 
 
 class IllegalState(ValueError):
+    pass
+
+
+class NotInstalled(NotFound):
+    pass
+
+
+class SerdeError(TypeError):
     pass
 
 
@@ -46,6 +55,7 @@ class Installation:
     of your code in different scenarios, such as when a file is not found or when the contents of a file do not match
     the expected format."""
 
+    T = TypeVar("T")
     _PRIMITIVES = (int, bool, float, str)
 
     def __init__(self, ws: WorkspaceClient, product: str, *, install_folder: str | None = None):
@@ -58,7 +68,7 @@ class Installation:
     def current(cls, ws: WorkspaceClient, product: str, *, assume_user: bool = False) -> "Installation":
         """Returns the Installation object for the given product in the current workspace.
 
-        If the installation is not found, a `NotFound` error is raised. If `assume_user` argument is True, the method
+        If the installation is not found, a `NotInstalled` error is raised. If `assume_user` argument is True, the method
         will assume that the installation is in the user's home directory and return it if found. If False, the method
         will only return an installation that is in the `/Applications` directory."""
         user_folder = cls._user_home_installation(ws, product)
@@ -69,10 +79,11 @@ class Installation:
                 ws.workspace.get_status(candidate)
                 return cls(ws, product, install_folder=candidate)
             except NotFound:
+                logger.debug(f"{product} is not installed at {candidate}")
                 continue
         if assume_user:
             return cls(ws, product, install_folder=user_folder)
-        raise NotFound(f"Application not installed: {product}")
+        raise NotInstalled(f"Application not installed: {product}")
 
     @classmethod
     def existing(cls, ws: WorkspaceClient, product: str) -> Collection["Installation"]:
@@ -93,6 +104,12 @@ class Installation:
             user_folder = f"/Users/{user.user_name}/.{product}"
             tasks.append(functools.partial(check_folder, user_folder))
         return Threads.strict(f"finding {product} installations", tasks)
+
+    @classmethod
+    def load_local(cls, type_ref: type[T], file: Path) -> T:
+        with file.open("rb") as f:
+            as_dict = cls._convert_content(file.name, f)
+            return cls._unmarshal_type(as_dict, file.name, type_ref)
 
     def product(self) -> str:
         return self._product
@@ -141,9 +158,10 @@ class Installation:
         self._install_folder = self._user_home_installation(self._ws, self.product())
         return self._install_folder
 
-    T = TypeVar("T")
+    def username(self) -> str:
+        return os.path.basename(os.path.dirname(self.install_folder()))
 
-    def load(self, type_ref: type[T], *, filename: str | None = None) -> T | None:
+    def load(self, type_ref: type[T], *, filename: str | None = None) -> T:
         """The `load` method loads an object of type `type_ref` from a file on WorkspaceFS. If no `filename` is
         provided, the `__file__` attribute of `type_ref` will be used as the filename.
 
@@ -152,14 +170,10 @@ class Installation:
         the expected version using a method named `v{actual_version}_migrate` on the `type_ref` class. If the migration
         is successful, the method will return the migrated object. If the migration is not successful, the method will
         raise an `IllegalState` exception."""
-        expected_version = None
-        if hasattr(type_ref, "__version__"):
-            expected_version = getattr(type_ref, "__version__")
         filename = self._get_filename(filename, type_ref)
+        logger.debug(f"Loading {type_ref.__name__} from {filename}")
         as_dict = self._load_content(filename)
-        if expected_version:
-            as_dict = self._migrate_file_format(type_ref, expected_version, as_dict, filename)
-        return self._unmarshal(as_dict, [], type_ref)
+        return self._unmarshal_type(as_dict, filename, type_ref)
 
     def save(self, inst: T, *, filename: str | None = None):
         """The `save` method saves a dataclass object of type `T` to a file on WorkspaceFS.
@@ -191,7 +205,7 @@ class Installation:
         `MyClass` is then created and saved to a file using the `save` method. The object is then loaded from the file
         using the `load` method and compared to the original object to verify that it was saved correctly."""
         if not inst:
-            raise TypeError("missing value")
+            raise SerdeError("missing value")
         type_ref = self._get_type_ref(inst)
         filename = self._get_filename(filename, type_ref)
         version = None
@@ -210,9 +224,11 @@ class Installation:
             dst = f"{self.install_folder()}/{filename}"
             attempt = partial(self._ws.workspace.upload, dst, raw, format=ImportFormat.AUTO, overwrite=True)
             try:
+                logger.debug(f"Uploading: {dst}")
                 attempt()
             except NotFound:
                 parent_folder = os.path.dirname(dst)
+                logger.debug(f"Creating missing folders: {parent_folder}")
                 self._ws.workspace.mkdirs(parent_folder)
                 attempt()
             return dst
@@ -225,15 +241,36 @@ class Installation:
             dst = f"{self.install_folder()}/{filename}"
             attempt = partial(self._ws.dbfs.upload, dst, raw, overwrite=True)
             try:
+                logger.debug(f"Uploading to DBFS: {dst}")
                 attempt()
             except NotFound:
                 parent_folder = os.path.dirname(dst)
+                logger.debug(f"Creating missing DBFS folders: {parent_folder}")
                 self._ws.dbfs.mkdirs(parent_folder)
                 attempt()
             return dst
 
     def files(self) -> list[workspace.ObjectInfo]:
         return list(self._ws.workspace.list(self.install_folder(), recursive=True))
+
+    def remove(self):
+        self._ws.workspace.delete(self.install_folder(), recursive=True)
+
+    def workspace_link(self, path: str) -> str:
+        """Returns a link to a file in a workspace.
+
+        Usage:
+            >>> import webbrowser
+            >>> installation = Installation.current()
+            >>> webbrowser.open(installation.workspace_link('config.yml'))
+        """
+        return f"{self._host()}/#workspace{self.install_folder()}/{path.removeprefix('/')}"
+
+    def workspace_markdown_link(self, label: str, path: str) -> str:
+        return f"[{label}]({self.workspace_link(path)})"
+
+    def _host(self):
+        return self._ws.config.host
 
     def _overwrite_content(self, filename: str, as_dict: Json, type_ref: type):
         """The `_overwrite_content` method is a private method that is used to serialize an object of type `type_ref`
@@ -249,26 +286,40 @@ class Installation:
         extension = filename.split(".")[-1]
         if extension not in converters:
             raise KeyError(f"Unknown extension: {extension}")
+        logger.debug(f"Converting {type_ref.__name__} into {extension.upper()} format")
         raw = converters[extension](as_dict, type_ref)
         self.upload(filename, raw)
 
+    @classmethod
+    def _unmarshal_type(cls, as_dict, filename, type_ref):
+        expected_version = None
+        if hasattr(type_ref, "__version__"):
+            expected_version = getattr(type_ref, "__version__")
+        if expected_version:
+            as_dict = cls._migrate_file_format(type_ref, expected_version, as_dict, filename)
+        return cls._unmarshal(as_dict, [], type_ref)
+
     def _load_content(self, filename: str) -> Json:
         with self._lock:
-            converters: dict[str, Callable[[BinaryIO], Any]] = {
-                "json": json.load,
-                "yml": self._load_yaml,
-                "csv": self._load_csv,
-            }
-            extension = filename.split(".")[-1]
-            if extension not in converters:
-                raise KeyError(f"Unknown extension: {extension}")
-            try:
-                with self._ws.workspace.download(f"{self.install_folder()}/{filename}") as f:
-                    return converters[extension](f)
-            except JSONDecodeError:
-                return {}
-            except NotFound:
-                return {}
+            # TODO: check how to make this fail fast during unit testing, otherwise
+            # this currently hangs with the real installation class and mocked workspace client
+            with self._ws.workspace.download(f"{self.install_folder()}/{filename}") as f:
+                return self._convert_content(filename, f)
+
+    @classmethod
+    def _convert_content(cls, filename: str, raw: BinaryIO) -> Json:
+        converters: dict[str, Callable[[BinaryIO], Any]] = {
+            "json": json.load,
+            "yml": cls._load_yaml,
+            "csv": cls._load_csv,
+        }
+        extension = filename.split(".")[-1]
+        if extension not in converters:
+            raise KeyError(f"Unknown extension: {extension}")
+        try:
+            return converters[extension](raw)
+        except JSONDecodeError:
+            return {}
 
     def __repr__(self):
         return self.install_folder()
@@ -346,7 +397,7 @@ class Installation:
             return cls._marshal_databricks_config(inst)
         if type_ref in cls._PRIMITIVES:
             return inst, True
-        raise TypeError(f'{".".join(path)}: unknown: {inst}')
+        raise SerdeError(f'{".".join(path)}: unknown: {inst}')
 
     @classmethod
     def _marshal_union(cls, type_ref: type, path: list[str], inst: Any) -> tuple[Any, bool]:
@@ -356,13 +407,13 @@ class Installation:
             if ok:
                 return value, True
             combo.append(cls._explain_why(variant, [*path, f"(as {variant})"], inst))
-        raise TypeError(f'{".".join(path)}: union: {" or ".join(combo)}')
+        raise SerdeError(f'{".".join(path)}: union: {" or ".join(combo)}')
 
     @classmethod
     def _marshal_generic(cls, type_ref: type, path: list[str], inst: Any) -> tuple[Any, bool]:
         type_args = get_args(type_ref)
         if not type_args:
-            raise TypeError(f"Missing type arguments: {type_args}")
+            raise SerdeError(f"Missing type arguments: {type_args}")
         if len(type_args) == 2:
             return cls._marshal_dict(type_args[1], path, inst)
         return cls._marshal_list(type_args[0], path, inst)
@@ -381,7 +432,7 @@ class Installation:
         for i, v in enumerate(inst):
             value, ok = cls._marshal(type_ref, [*path, f"{i}"], v)
             if not ok:
-                raise TypeError(cls._explain_why(type_ref, [*path, f"{i}"], v))
+                raise SerdeError(cls._explain_why(type_ref, [*path, f"{i}"], v))
             as_list.append(value)
         return as_list, True
 
@@ -393,7 +444,7 @@ class Installation:
         for k, v in inst.items():
             as_dict[k], ok = cls._marshal(type_ref, [*path, k], v)
             if not ok:
-                raise TypeError(cls._explain_why(type_ref, [*path, k], v))
+                raise SerdeError(cls._explain_why(type_ref, [*path, k], v))
         return as_dict, True
 
     @classmethod
@@ -405,7 +456,7 @@ class Installation:
             raw = getattr(inst, field)
             value, ok = cls._marshal(hint, [*path, field], raw)
             if not ok:
-                raise TypeError(cls._explain_why(hint, [*path, field], raw))
+                raise SerdeError(cls._explain_why(hint, [*path, field], raw))
             if not value:
                 continue
             as_dict[field] = value
@@ -453,14 +504,14 @@ class Installation:
             return databricks.sdk.core.Config(**inst)  # type: ignore[return-value]
         if type_ref == types.NoneType:
             return None
-        raise TypeError(f'{".".join(path)}: unknown: {type_ref}: {inst}')
+        raise SerdeError(f'{".".join(path)}: unknown: {type_ref}: {inst}')
 
     @classmethod
     def _unmarshal_dataclass(cls, inst, path, type_ref):
         if inst is None:
             return None
         if not isinstance(inst, dict):
-            raise TypeError(cls._explain_why(dict, path, inst))
+            raise SerdeError(cls._explain_why(dict, path, inst))
         from_dict = {}
         fields = getattr(type_ref, "__dataclass_fields__")
         for field_name, hint in get_type_hints(type_ref).items():
@@ -471,7 +522,7 @@ class Installation:
                 default_value = field.default
                 default_factory = field.default_factory
                 if default_factory == dataclasses.MISSING and default_value == dataclasses.MISSING:
-                    raise TypeError(cls._explain_why(hint, [*path, field_name], value))
+                    raise SerdeError(cls._explain_why(hint, [*path, field_name], value))
                 if default_value != dataclasses.MISSING:
                     value = default_value
                 else:
@@ -491,14 +542,14 @@ class Installation:
     def _unmarshal_generic(cls, inst, path, type_ref):
         type_args = get_args(type_ref)
         if not type_args:
-            raise TypeError(f"Missing type arguments: {type_args}")
+            raise SerdeError(f"Missing type arguments: {type_args}")
         if len(type_args) == 2:
             return cls._unmarshal_dict(inst, path, type_args[1])
         return cls._unmarshal_list(inst, path, type_args[0])
 
     @classmethod
     def _unmarshal_list(cls, inst, path, hint):
-        if not inst:
+        if inst is None:
             return None
         as_list = []
         for i, v in enumerate(inst):
@@ -510,7 +561,7 @@ class Installation:
         if not inst:
             return None
         if not isinstance(inst, dict):
-            raise TypeError(cls._explain_why(type_ref, path, inst))
+            raise SerdeError(cls._explain_why(type_ref, path, inst))
         from_dict = {}
         for k, v in inst.items():
             from_dict[k] = cls._unmarshal(v, [*path, k], type_ref)
@@ -555,14 +606,14 @@ class Installation:
     def _dump_csv(raw: list[Json], type_ref: type) -> bytes:
         type_args = get_args(type_ref)
         if not type_args:
-            raise TypeError(f"Writing CSV is only supported for lists. Got {type_ref}")
+            raise SerdeError(f"Writing CSV is only supported for lists. Got {type_ref}")
         dataclass_ref = type_args[0]
         if not dataclasses.is_dataclass(dataclass_ref):
-            raise TypeError(f"Only lists of dataclasses allowed. Got {dataclass_ref}")
+            raise SerdeError(f"Only lists of dataclasses allowed. Got {dataclass_ref}")
         non_empty_keys = set()
         for as_dict in raw:
             if not isinstance(as_dict, dict):
-                raise TypeError(f"Expecting a list of dictionaries. Got {as_dict}")
+                raise SerdeError(f"Expecting a list of dictionaries. Got {as_dict}")
             for k, v in as_dict.items():
                 if not v:
                     continue
@@ -599,9 +650,13 @@ class MockInstallation(Installation):
         self._overwrites = overwrites
         self._uploads: dict[str, bytes] = {}
         self._dbfs: dict[str, bytes] = {}
+        self._removed = False
 
     def install_folder(self) -> str:
-        return "~/mock/"
+        return "~/mock"
+
+    def _host(self):
+        return "https://localhost"
 
     def upload(self, filename: str, raw: bytes):
         self._uploads[filename] = raw
@@ -611,10 +666,33 @@ class MockInstallation(Installation):
         self._dbfs[filename] = raw
         return f"{self.install_folder()}/{filename}"
 
+    def files(self) -> list[workspace.ObjectInfo]:
+        out = []
+        for filename in self._overwrites.keys():
+            out.append(
+                workspace.ObjectInfo(
+                    path=f"{self.install_folder()}/{filename}",
+                    object_type=workspace.ObjectType.FILE,
+                )
+            )
+        for filename in self._uploads:
+            out.append(
+                workspace.ObjectInfo(
+                    path=f"{self.install_folder()}/{filename}",
+                    object_type=workspace.ObjectType.FILE,
+                )
+            )
+        return out
+
+    def remove(self):
+        self._removed = True
+
     def _overwrite_content(self, filename: str, as_dict: Json, type_ref: type):
         self._overwrites[filename] = as_dict
 
     def _load_content(self, filename: str) -> Json:
+        if filename not in self._overwrites:
+            raise NotFound(filename)
         return self._overwrites[filename]
 
     def assert_file_written(self, filename: str, expected: Any):
@@ -627,6 +705,9 @@ class MockInstallation(Installation):
 
     def assert_file_dbfs_uploaded(self, filename):
         self._assert_upload(filename, self._dbfs)
+
+    def assert_removed(self):
+        assert self._removed
 
     @staticmethod
     def _assert_upload(filename: Any, loc: dict[str, bytes]):
