@@ -31,9 +31,28 @@ class InstallState:
 
     _state: RawState | None = None
 
-    def __init__(self, ws: WorkspaceClient, product: str, *, install_folder: str | None = None):
-        self._installation = Installation(ws, product, install_folder=install_folder)
+    def __init__(
+        self,
+        ws: WorkspaceClient | None,
+        product: str | None,
+        *,
+        install_folder: str | None = None,
+        installation: Installation | None = None,
+    ):
+        self._installation = self._init_installation(ws, product, install_folder, installation)
         self._lock = threading.Lock()
+
+    @classmethod
+    def from_installation(cls, installation: Installation) -> "InstallState":
+        return cls(None, None, installation=installation)
+
+    @staticmethod
+    def _init_installation(ws, product, install_folder, installation):
+        if installation is not None:
+            return installation
+        if ws is None and product is None:
+            raise ValueError("WorkspaceClient and product are required")
+        return Installation(ws, product, install_folder=install_folder)
 
     def install_folder(self):
         return self._installation.install_folder()

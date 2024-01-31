@@ -7,8 +7,14 @@ from databricks.sdk import WorkspaceClient
 from databricks.sdk.errors import NotFound
 from databricks.sdk.service.workspace import ImportFormat
 
-from databricks.labs.blueprint.installation import IllegalState
+from databricks.labs.blueprint.installation import IllegalState, MockInstallation
 from databricks.labs.blueprint.installer import InstallState
+
+
+def test_from_installation():
+    installation = MockInstallation()
+    state = InstallState.from_installation(installation)
+    assert "~/mock" == state.install_folder()
 
 
 def test_install_folder():
@@ -48,7 +54,8 @@ def test_state_not_found():
 
     state = InstallState(ws, "blueprint")
 
-    assert {} == state.jobs
+    with pytest.raises(NotFound):
+        _ = state.jobs
 
 
 def test_state_corrupt():
