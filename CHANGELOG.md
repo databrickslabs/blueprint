@@ -1,5 +1,10 @@
 # Version changelog
 
+## 0.2.3
+
+* Added special handling for notebooks in `Installation.upload(...)` ([#36](https://github.com/databrickslabs/blueprint/pull/36)).
+
+
 ## 0.2.2
 
 * Fixed issues with uploading wheels to DBFS and loading a non-existing install state ([#34](https://github.com/databrickslabs/blueprint/pull/34)).
