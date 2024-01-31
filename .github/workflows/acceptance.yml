@@ -41,5 +41,5 @@ jobs:
         run: hatch run integration
         env:
           CLOUD_ENV: azure
-          DATABRICKS_HOST: "${{ secrets.DATABRICKS_HOST }}"
+          DATABRICKS_HOST: "${{ vars.DATABRICKS_HOST }}"
           DATABRICKS_CLUSTER_ID: "${{ vars.DATABRICKS_CLUSTER_ID }}"
