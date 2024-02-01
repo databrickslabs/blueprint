@@ -16,7 +16,6 @@ from pathlib import Path
 from typing import Any, BinaryIO, TypeVar, get_args, get_type_hints
 
 import databricks.sdk.core
-import yaml  # pylint: disable=wrong-import-order
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.errors import NotFound
 from databricks.sdk.mixins import workspace
@@ -607,16 +606,23 @@ class Installation:
     @staticmethod
     def _dump_yaml(raw: Json, _: type) -> bytes:
         try:
-            return yaml.dump(raw).encode("utf8")
+            from yaml import dump  # pylint: disable=import-outside-toplevel
+
+            return dump(raw).encode("utf8")
         except ImportError as err:
             raise SyntaxError("PyYAML is not installed. Fix: pip install databricks-labs-blueprint[yaml]") from err
 
     @staticmethod
     def _load_yaml(raw: BinaryIO) -> Json:
         try:
+            from yaml import (  # pylint: disable=import-outside-toplevel
+                YAMLError,
+                safe_load,
+            )
+
             try:
-                return yaml.safe_load(raw)
-            except yaml.YAMLError as err:
+                return safe_load(raw)
+            except YAMLError as err:
                 raise JSONDecodeError(str(err), "<yaml>", 0) from err
         except ImportError as err:
             raise SyntaxError("PyYAML is not installed. Fix: pip install databricks-labs-blueprint[yaml]") from err
