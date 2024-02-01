@@ -27,7 +27,7 @@ def test_install_folder():
 def test_jobs_state():
     ws = create_autospec(WorkspaceClient)
     ws.current_user.me().user_name = "foo"
-    ws.workspace.download.return_value = io.StringIO('{"$version":1, "resources": {"jobs": {"foo": 123}}}')
+    ws.workspace.download.return_value = io.StringIO('{"version":1, "resources": {"jobs": {"foo": 123}}}')
 
     state = InstallState(ws, "blueprint")
 
@@ -39,7 +39,7 @@ def test_jobs_state():
 def test_invalid_config_version():
     ws = create_autospec(WorkspaceClient)
     ws.current_user.me().user_name = "foo"
-    ws.workspace.download.return_value = io.StringIO('{"$version":9, "resources": {"jobs": [1,2,3]}}')
+    ws.workspace.download.return_value = io.StringIO('{"version":9, "resources": {"jobs": [1,2,3]}}')
 
     state = InstallState(ws, "blueprint")
 
@@ -70,13 +70,13 @@ def test_state_corrupt():
 def test_state_overwrite_existing():
     ws = create_autospec(WorkspaceClient)
     ws.current_user.me().user_name = "foo"
-    ws.workspace.download.return_value = io.StringIO('{"$version":1, "resources": {"sql": {"a": "b"}}}')
+    ws.workspace.download.return_value = io.StringIO('{"version":1, "resources": {"sql": {"a": "b"}}}')
 
     state = InstallState(ws, "blueprint")
     state.jobs["foo"] = "bar"
     state.save()
 
-    new_state = {"resources": {"sql": {"a": "b"}, "jobs": {"foo": "bar"}}, "$version": 1}
+    new_state = {"resources": {"sql": {"a": "b"}, "jobs": {"foo": "bar"}}, "version": 1}
     ws.workspace.upload.assert_called_with(
         "/Users/foo/.blueprint/state.json",
         json.dumps(new_state, indent=2).encode("utf8"),

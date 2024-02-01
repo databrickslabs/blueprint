@@ -99,7 +99,7 @@ class Installation:
                 return None
 
         tasks = [functools.partial(check_folder, f"/Applications/{product}")]
-        for user in ws.users.list(attributes="user_name"):
+        for user in ws.users.list(attributes="userName"):
             user_folder = f"/Users/{user.user_name}/.{product}"
             tasks.append(functools.partial(check_folder, user_folder))
         return Threads.strict(f"finding {product} installations", tasks)
@@ -177,7 +177,7 @@ class Installation:
     def save(self, inst: T, *, filename: str | None = None):
         """The `save` method saves a dataclass object of type `T` to a file on WorkspaceFS.
         If no `filename` is provided, the name of the `type_ref` class will be used as the filename.
-        If the object has a `__version__` attribute, the method will add a `$version` field to the serialized object
+        If the object has a `__version__` attribute, the method will add a `version` field to the serialized object
         with the value of the `__version__` attribute.
 
         Here is an example of how you can use the `save` method:
@@ -212,7 +212,7 @@ class Installation:
             version = getattr(inst, "__version__")
         as_dict, _ = self._marshal(type_ref, [], inst)
         if version:
-            as_dict["$version"] = version
+            as_dict["version"] = version
         self._overwrite_content(filename, as_dict, type_ref)
         return f"{self.install_folder()}/{filename}"
 
@@ -251,7 +251,7 @@ class Installation:
             return dst.removesuffix(f".{ext}")
         return dst
 
-    def upload_dbfs(self, filename: str, raw: bytes) -> str:
+    def upload_dbfs(self, filename: str, raw: BinaryIO) -> str:
         """The `upload_dbfs` method uploads raw bytes to a file on DBFS (Databricks File System) with the given
         `filename`. This method is used to upload files to DBFS, which is a distributed file system that is integrated
         with Databricks."""
@@ -342,6 +342,14 @@ class Installation:
     def __repr__(self):
         return self.install_folder()
 
+    def __eq__(self, o):
+        if not isinstance(o, Installation):
+            return False
+        return self.install_folder() == o.install_folder()
+
+    def __hash__(self):
+        return hash(self.install_folder())
+
     @staticmethod
     def _user_home_installation(ws: WorkspaceClient, product: str):
         me = ws.current_user.me()
@@ -349,18 +357,18 @@ class Installation:
 
     @staticmethod
     def _migrate_file_format(type_ref, expected_version, as_dict, filename):
-        actual_version = as_dict.pop("$version", 1)
+        actual_version = as_dict.pop("version", 1)
         while actual_version < expected_version:
             migrate = getattr(type_ref, f"v{actual_version}_migrate", None)
             if not migrate:
                 break
             as_dict = migrate(as_dict)
             prev_version = actual_version
-            actual_version = as_dict.pop("$version", 1)
+            actual_version = as_dict.pop("version", 1)
             if actual_version == prev_version:
                 raise IllegalState(f"cannot migrate {filename} from v{prev_version}")
         if actual_version != expected_version:
-            raise IllegalState(f"expected state $version={expected_version}, got={actual_version}")
+            raise IllegalState(f"expected state version={expected_version}, got={actual_version}")
         return as_dict
 
     @staticmethod
@@ -655,10 +663,11 @@ class Installation:
 
     @staticmethod
     def _load_csv(raw: BinaryIO) -> list[Json]:
-        out = []
-        for row in csv.DictReader(raw):  # type: ignore[arg-type]
-            out.append(row)
-        return out
+        with io.TextIOWrapper(raw, encoding="utf8") as text_file:
+            out = []
+            for row in csv.DictReader(text_file):  # type: ignore[arg-type]
+                out.append(row)
+            return out
 
 
 class MockInstallation(Installation):
@@ -687,8 +696,8 @@ class MockInstallation(Installation):
         self._uploads[filename] = raw
         return f"{self.install_folder()}/{filename}"
 
-    def upload_dbfs(self, filename: str, raw: bytes) -> str:
-        self._dbfs[filename] = raw
+    def upload_dbfs(self, filename: str, raw: BinaryIO) -> str:
+        self._dbfs[filename] = raw.read()
         return f"{self.install_folder()}/{filename}"
 
     def files(self) -> list[workspace.ObjectInfo]:
@@ -722,6 +731,10 @@ class MockInstallation(Installation):
 
     def assert_file_written(self, filename: str, expected: Any):
         assert filename in self._overwrites, f"{filename} had no writes"
+        if isinstance(expected, dict):
+            for k, v in expected.items():
+                if v == ...:
+                    self._overwrites[filename][k] = ...
         actual = self._overwrites[filename]
         assert expected == actual, f"{filename} content missmatch"
 

@@ -19,7 +19,14 @@ def test_build_and_upload_wheel():
 
         remote_on_wsfs = wheels.upload_to_wsfs()
         installation.assert_file_uploaded(re.compile("wheels/databricks_labs_blueprint-*"))
-        installation.assert_file_written("version.json", {"version": product_info.version(), "wheel": remote_on_wsfs})
+        installation.assert_file_written(
+            "version.json",
+            {
+                "version": product_info.version(),
+                "wheel": remote_on_wsfs,
+                "date": ...,
+            },
+        )
 
         wheels.upload_to_dbfs()
         installation.assert_file_dbfs_uploaded(re.compile("wheels/databricks_labs_blueprint-*"))
