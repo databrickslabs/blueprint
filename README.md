@@ -488,7 +488,7 @@ for blueprint in Installation.existing(ws, "blueprint"):
 
 The `save(obj)` method saves a dataclass instance of type `T` to a file on WorkspaceFS. If no `filename` is provided, 
 the name of the `type_ref` class will be used as the filename. Any missing parent directories are created automatically.
-If the object has a `__version__` attribute, the method will add a `$version` field to the serialized object
+If the object has a `__version__` attribute, the method will add a `version` field to the serialized object
 with the value of the `__version__` attribute. See [configuration format evolution](#configuration-format-evolution) 
 for more details. `save(obj)` works with JSON and YAML configurations without the need to supply `filename` keyword 
 attribute. When you need to save [CSV files](#saving-csv-files), the `filename` attribute is required. If you need to 
@@ -567,7 +567,7 @@ class SomeConfig:  # <-- auto-detected filename is `some-config.json`
 
 ws = WorkspaceClient()
 installation = Installation.current(ws, "blueprint")
-cfg = installation.load(EvolvedConfig)
+cfg = installation.load(SomeConfig)
 
 installation.save(SomeConfig("0.1.2"))
 installation.assert_file_written("some-config.json", {"version": "0.1.2"})
@@ -604,13 +604,13 @@ class EvolvedConfig:
     @staticmethod
     def v1_migrate(raw: dict) -> dict:
         raw["added_in_v1"] = 111
-        raw["$version"] = 2
+        raw["version"] = 2
         return raw
 
     @staticmethod
     def v2_migrate(raw: dict) -> dict:
         raw["added_in_v2"] = 222
-        raw["$version"] = 3
+        raw["version"] = 3
         return raw
 
 installation = Installation.current(WorkspaceClient(), "blueprint")
@@ -681,7 +681,7 @@ installation = MockInstallation()
 installation.save(WorkspaceConfig(inventory_database="some_blueprint"))
 
 installation.assert_file_written("config.yml", {
-  "$version": 2,
+  "version": 2,
   "inventory_database": "some_blueprint",
   "log_level": "INFO",
   "num_threads": 10,
@@ -696,7 +696,7 @@ ws.workspace.upload.assert_called_with(
   "/Users/foo/.blueprint/config.yml",
   yaml.dump(
     {
-      "$version": 2,
+      "version": 2,
       "num_threads": 10,
       "inventory_database": "some_blueprint",
       "include_group_names": ["foo", "bar"],

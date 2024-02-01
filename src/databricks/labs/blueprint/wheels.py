@@ -1,4 +1,3 @@
-import datetime
 import inspect
 import logging
 import shutil
@@ -7,6 +6,7 @@ import sys
 import tempfile
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 
 from databricks.sdk import WorkspaceClient
@@ -96,7 +96,7 @@ class ProductInfo:
     @staticmethod
     def _semver_and_pep440(git_detached_version: str) -> str:
         dv = SemVer.parse(git_detached_version)
-        datestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+        datestamp = datetime.now().strftime("%Y%m%d%H%M%S")
         # new commits on main branch since the last tag
         new_commits = dv.pre_release.split("-")[0] if dv.pre_release else None
         # show that it's a version different from the released one in stats
@@ -137,6 +137,7 @@ class ProductInfo:
 class Version:
     version: str
     wheel: str
+    date: str
 
 
 class WheelsV2(AbstractContextManager):
@@ -156,8 +157,12 @@ class WheelsV2(AbstractContextManager):
     def upload_to_wsfs(self) -> str:
         with self._local_wheel.open("rb") as f:
             remote_wheel = self._installation.upload(f"wheels/{self._local_wheel.name}", f.read())
-            self._installation.save(Version(version=self._product_info.version(), wheel=remote_wheel))
+            self._installation.save(Version(self._product_info.version(), remote_wheel, self._now_iso()))
             return remote_wheel
+
+    @staticmethod
+    def _now_iso():
+        return datetime.now(timezone.utc).isoformat()
 
     def __enter__(self) -> "WheelsV2":
         self._tmp_dir = tempfile.TemporaryDirectory()

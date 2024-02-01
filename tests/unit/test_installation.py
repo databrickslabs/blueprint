@@ -107,7 +107,7 @@ def test_save_typed_file():
         "/Users/foo/.blueprint/config.yml",
         yaml.dump(
             {
-                "$version": 2,
+                "version": 2,
                 "num_threads": 10,
                 "inventory_database": "some_blueprint",
                 "include_group_names": ["foo", "bar"],
@@ -179,7 +179,7 @@ def test_load_typed_file():
     ws.workspace.download.return_value = io.StringIO(
         yaml.dump(
             {
-                "$version": 2,
+                "version": 2,
                 "num_threads": 20,
                 "inventory_database": "some_blueprint",
                 "connect": {"host": "https://foo", "token": "bar"},
@@ -197,8 +197,8 @@ def test_load_typed_file():
 def test_load_csv_file():
     ws = create_autospec(WorkspaceClient)
     ws.current_user.me().user_name = "foo"
-    ws.workspace.download.return_value = io.StringIO(
-        "\n".join(["workspace_id,workspace_name", "1234,first", "1235,second"])
+    ws.workspace.download.return_value = io.BytesIO(
+        "\n".join(["workspace_id,workspace_name", "1234,first", "1235,second"]).encode("utf8")
     )
     installation = Installation(ws, "blueprint")
 
@@ -252,7 +252,7 @@ def test_mock_save_typed_file():
     installation.assert_file_written(
         "config.yml",
         {
-            "$version": 2,
+            "version": 2,
             "inventory_database": "some_blueprint",
             "log_level": "INFO",
             "num_threads": 10,
@@ -286,13 +286,13 @@ class EvolvedConfig:
     @staticmethod
     def v1_migrate(raw: dict) -> dict:
         raw["added_in_v1"] = 111
-        raw["$version"] = 2
+        raw["version"] = 2
         return raw
 
     @staticmethod
     def v2_migrate(raw: dict) -> dict:
         raw["added_in_v2"] = 222
-        raw["$version"] = 3
+        raw["version"] = 3
         return raw
 
 
@@ -318,7 +318,7 @@ class BrokenConfig:
     @staticmethod
     def v1_migrate(raw: dict) -> dict:
         raw["added_in_v1"] = 111
-        raw["$version"] = 2
+        raw["version"] = 2
         return {}
 
 
