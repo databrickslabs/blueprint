@@ -1,5 +1,11 @@
 # Version changelog
 
+## 0.2.4
+
+* Added more integration tests for `Installation` ([#39](https://github.com/databrickslabs/blueprint/pull/39)).
+* Fixed `yaml` optional import error ([#38](https://github.com/databrickslabs/blueprint/pull/38)).
+
+
 ## 0.2.3
 
 * Added special handling for notebooks in `Installation.upload(...)` ([#36](https://github.com/databrickslabs/blueprint/pull/36)).
