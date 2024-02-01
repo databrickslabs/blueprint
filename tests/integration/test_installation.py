@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 
 import pytest
+from databricks.sdk.errors import PermissionDenied
 from databricks.sdk.service.provisioning import Workspace
 
 from databricks.labs.blueprint.installation import Installation
@@ -18,6 +19,7 @@ def test_install_folder_custom(ws):
     assert installation.install_folder() == "/custom/folder"
 
 
+@pytest.mark.xfail(raises=PermissionDenied)
 def test_detect_global(ws, make_random):
     product = make_random(4)
     Installation(ws, product, install_folder=f"/Applications/{product}").upload("some", b"...")
@@ -27,6 +29,8 @@ def test_detect_global(ws, make_random):
     assert current.install_folder() == f"/Applications/{product}"
 
 
+# integration tests are running from lower-privileged environment
+@pytest.mark.xfail(raises=PermissionDenied)
 def test_existing(ws, make_random):
     product = make_random(4)
 
