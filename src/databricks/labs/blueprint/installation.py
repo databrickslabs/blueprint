@@ -169,6 +169,7 @@ class Installation:
         the expected version using a method named `v{actual_version}_migrate` on the `type_ref` class. If the migration
         is successful, the method will return the migrated object. If the migration is not successful, the method will
         raise an `IllegalState` exception."""
+        self._enable_files_in_repos()
         filename = self._get_filename(filename, type_ref)
         logger.debug(f"Loading {type_ref.__name__} from {filename}")
         as_dict = self._load_content(filename)
@@ -668,6 +669,16 @@ class Installation:
             for row in csv.DictReader(text_file):  # type: ignore[arg-type]
                 out.append(row)
             return out
+
+    def _enable_files_in_repos(self):
+        # check if "enableWorkspaceFilesystem" is set to false
+        workspace_file_system = self._ws.workspace_conf.get_status("enableWorkspaceFilesystem")
+
+        logger.debug("Checking Files In Repos configuration")
+
+        if workspace_file_system["enableWorkspaceFilesystem"] == "false":
+            logger.debug("enableWorkspaceFilesystem is False, enabling the config")
+            self._ws.workspace_conf.set_status("""{"enableWorkspaceFilesystem": "true"}""")
 
 
 class MockInstallation(Installation):

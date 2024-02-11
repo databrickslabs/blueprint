@@ -4,6 +4,7 @@ from unittest.mock import create_autospec
 
 import pytest
 import yaml
+import random
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.core import Config
 from databricks.sdk.errors import NotFound
@@ -327,3 +328,25 @@ def test_migrations_broken():
 
     with pytest.raises(IllegalState):
         installation.load(BrokenConfig)
+
+
+def mock_get_status(*args, **kwargs):
+    random_return_value = random.choice(["true", "false"])
+    if args[0] == 'enableProjectTypeInWorkspace':
+        return {"enableProjectTypeInWorkspace": random_return_value}
+    elif args[0] == 'enableWorkspaceFilesystem':
+        return {"enableWorkspaceFilesystem": random_return_value}
+
+
+def test_enable_files_in_repos(mocker):
+    ws = create_autospec(WorkspaceClient)
+    ws.current_user.me().user_name = "foo"
+    installation = Installation(ws, "ucx")
+
+    ws.workspace_conf.get_status = mocker.patch(
+        "databricks.sdk.service.settings.WorkspaceConfAPI.get_status", side_effect=mock_get_status
+    )
+
+    installation._enable_files_in_repos()
+    assert True
+
