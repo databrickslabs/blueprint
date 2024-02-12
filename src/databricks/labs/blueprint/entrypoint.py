@@ -48,7 +48,7 @@ def find_project_root(__file: str) -> Path:
             return root
     # Wheel installation is under site-packages hence return the parent of site-packages
     if "site-packages" in __file:
-        return Path(__file.split("site-packages")[0] + "site-packages/").parent
+        return Path(__file.split("site-packages")[0] + "site-packages/")
 
     msg = "Cannot find project root"
     raise NotADirectoryError(msg)
