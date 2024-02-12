@@ -19,15 +19,6 @@ from databricks.labs.blueprint.installation import (
 )
 
 
-@pytest.fixture()
-def mock_install(mocker):
-    ws = create_autospec(WorkspaceClient)
-    ws.current_user.me().user_name = "foo"
-    ws.workspace_conf.get_status = mocker.patch(
-        "databricks.sdk.service.settings.WorkspaceConfAPI.get_status", side_effect=mock_get_status
-    )
-
-
 def test_current_not_found():
     ws = create_autospec(WorkspaceClient)
     ws.current_user.me().user_name = "foo"
@@ -183,7 +174,7 @@ def test_save_typed_file_array_csv():
     )
 
 
-def test_load_typed_file(mocker):
+def test_load_typed_file():
     ws = create_autospec(WorkspaceClient)
     ws.current_user.me().user_name = "foo"
     ws.workspace.download.return_value = io.StringIO(
@@ -195,9 +186,6 @@ def test_load_typed_file(mocker):
                 "connect": {"host": "https://foo", "token": "bar"},
             }
         )
-    )
-    ws.workspace_conf.get_status = mocker.patch(
-        "databricks.sdk.service.settings.WorkspaceConfAPI.get_status", side_effect=mock_get_status
     )
     installation = Installation(ws, "blueprint")
 
@@ -223,9 +211,7 @@ def test_load_csv_file():
 
 
 @pytest.mark.parametrize("ext", ["json", "csv"])
-def test_load_typed_list_file(ext, mocker):
-    ws = create_autospec(WorkspaceClient)
-    ws.current_user.me().user_name = "foo"
+def test_load_typed_list_file(ext):
     installation = MockInstallation(
         {
             f"workspaces.{ext}": [
@@ -233,10 +219,6 @@ def test_load_typed_list_file(ext, mocker):
                 {"workspace_id": 1235, "workspace_name": "second"},
             ]
         }
-    )
-    installation._ws = ws
-    ws.workspace_conf.get_status = mocker.patch(
-        "databricks.sdk.service.settings.WorkspaceConfAPI.get_status", side_effect=mock_get_status
     )
     workspaces = installation.load(list[Workspace], filename=f"workspaces.{ext}")
 
@@ -314,14 +296,8 @@ class EvolvedConfig:
         return raw
 
 
-def test_migrations_on_load(mocker):
+def test_migrations_on_load():
     installation = MockInstallation({"config.yml": {"initial": 999}})
-    ws = create_autospec(WorkspaceClient)
-    ws.current_user.me().user_name = "foo"
-    ws.workspace_conf.get_status = mocker.patch(
-        "databricks.sdk.service.settings.WorkspaceConfAPI.get_status", side_effect=mock_get_status
-    )
-    installation._ws = ws
 
     cfg = installation.load(EvolvedConfig)
 
@@ -346,14 +322,8 @@ class BrokenConfig:
         return {}
 
 
-def test_migrations_broken(mocker):
-    ws = create_autospec(WorkspaceClient)
-    ws.current_user.me().user_name = "foo"
+def test_migrations_broken():
     installation = MockInstallation({"config.yml": {"initial": 999}})
-    installation._ws = ws
-    ws.workspace_conf.get_status = mocker.patch(
-        "databricks.sdk.service.settings.WorkspaceConfAPI.get_status", side_effect=mock_get_status
-    )
 
     with pytest.raises(IllegalState):
         installation.load(BrokenConfig)

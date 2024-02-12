@@ -169,7 +169,6 @@ class Installation:
         the expected version using a method named `v{actual_version}_migrate` on the `type_ref` class. If the migration
         is successful, the method will return the migrated object. If the migration is not successful, the method will
         raise an `IllegalState` exception."""
-        self._enable_files_in_repos()
         filename = self._get_filename(filename, type_ref)
         logger.debug(f"Loading {type_ref.__name__} from {filename}")
         as_dict = self._load_content(filename)
@@ -226,7 +225,10 @@ class Installation:
             try:
                 logger.debug(f"Uploading: {dst}")
                 attempt()
-            except NotFound:
+            except NotFound as error:
+                if error.error_code == "FEATURE_DISABLED":
+                    self._enable_files_in_repos()
+                    self.upload(filename, raw)
                 parent_folder = os.path.dirname(dst)
                 logger.debug(f"Creating missing folders: {parent_folder}")
                 self._ws.workspace.mkdirs(parent_folder)
