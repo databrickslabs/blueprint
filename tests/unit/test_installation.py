@@ -346,3 +346,14 @@ def test_enable_files_in_repos(mocker):
 
     installation._enable_files_in_repos()
     assert True
+
+
+def test_upload_feature_disabled_failure():
+    ws = create_autospec(WorkspaceClient)
+    ws.current_user.me().user_name = "foo"
+    ws.workspace.upload.side_effect = [NotFound(error_code="FEATURE_DISABLED"), None]
+    installation = Installation(ws, "blueprint")
+
+    installation.save(WorkspaceConfig(inventory_database="some_blueprint"))
+
+    ws.workspace.mkdirs.assert_called_with("/Users/foo/.blueprint")

@@ -228,7 +228,6 @@ class Installation:
             except NotFound as error:
                 if error.error_code == "FEATURE_DISABLED":
                     self._enable_files_in_repos()
-                    self.upload(filename, raw)
                 parent_folder = os.path.dirname(dst)
                 logger.debug(f"Creating missing folders: {parent_folder}")
                 self._ws.workspace.mkdirs(parent_folder)
