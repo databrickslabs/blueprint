@@ -678,7 +678,7 @@ class Installation:
 
         if workspace_file_system["enableWorkspaceFilesystem"] == "false":
             logger.debug("enableWorkspaceFilesystem is False, enabling the config")
-            self._ws.workspace_conf.set_status("""{"enableWorkspaceFilesystem": "true"}""")
+            self._ws.workspace_conf.set_status({"enableWorkspaceFilesystem": "true"})
 
 
 class MockInstallation(Installation):
