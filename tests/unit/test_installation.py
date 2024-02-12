@@ -1,10 +1,10 @@
 import io
+import random
 from dataclasses import dataclass
 from unittest.mock import create_autospec
 
 import pytest
 import yaml
-import random
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.core import Config
 from databricks.sdk.errors import NotFound
@@ -332,9 +332,9 @@ def test_migrations_broken():
 
 def mock_get_status(*args, **kwargs):
     random_return_value = random.choice(["true", "false"])
-    if args[0] == 'enableProjectTypeInWorkspace':
+    if args[0] == "enableProjectTypeInWorkspace":
         return {"enableProjectTypeInWorkspace": random_return_value}
-    elif args[0] == 'enableWorkspaceFilesystem':
+    elif args[0] == "enableWorkspaceFilesystem":
         return {"enableWorkspaceFilesystem": random_return_value}
 
 
@@ -349,4 +349,3 @@ def test_enable_files_in_repos(mocker):
 
     installation._enable_files_in_repos()
     assert True
-
