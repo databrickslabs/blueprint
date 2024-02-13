@@ -1,6 +1,6 @@
 import io
 from dataclasses import dataclass
-from unittest.mock import create_autospec, MagicMock
+from unittest.mock import MagicMock, create_autospec
 
 import pytest
 import yaml
@@ -219,6 +219,7 @@ def test_load_typed_list_file(ext):
             ]
         }
     )
+
     workspaces = installation.load(list[Workspace], filename=f"workspaces.{ext}")
 
     assert 2 == len(workspaces)
@@ -344,6 +345,7 @@ def test_enable_files_in_repos():
     installation._enable_files_in_repos()
     ws.workspace_conf.set_status.assert_called_once()
     ws.workspace_conf.set_status.assert_called_with({"enableWorkspaceFilesystem": "true"})
+
 
 def test_upload_feature_disabled_failure():
     ws = create_autospec(WorkspaceClient)
