@@ -1,5 +1,10 @@
 # Version changelog
 
+## 0.2.5
+
+* Automatically enable workspace filesystem if the feature is disabled ([#42](https://github.com/databrickslabs/blueprint/pull/42)).
+
+
 ## 0.2.4
 
 * Added more integration tests for `Installation` ([#39](https://github.com/databrickslabs/blueprint/pull/39)).
