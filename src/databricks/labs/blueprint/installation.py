@@ -225,7 +225,9 @@ class Installation:
             try:
                 logger.debug(f"Uploading: {dst}")
                 attempt()
-            except NotFound:
+            except NotFound as error:
+                if error.error_code == "FEATURE_DISABLED":
+                    self._enable_files_in_repos()
                 parent_folder = os.path.dirname(dst)
                 logger.debug(f"Creating missing folders: {parent_folder}")
                 self._ws.workspace.mkdirs(parent_folder)
@@ -668,6 +670,16 @@ class Installation:
             for row in csv.DictReader(text_file):  # type: ignore[arg-type]
                 out.append(row)
             return out
+
+    def _enable_files_in_repos(self):
+        # check if "enableWorkspaceFilesystem" is set to false
+        workspace_file_system = self._ws.workspace_conf.get_status("enableWorkspaceFilesystem")
+
+        logger.debug("Checking Files In Repos configuration")
+
+        if workspace_file_system["enableWorkspaceFilesystem"] == "false":
+            logger.debug("enableWorkspaceFilesystem is False, enabling the config")
+            self._ws.workspace_conf.set_status({"enableWorkspaceFilesystem": "true"})
 
 
 class MockInstallation(Installation):
