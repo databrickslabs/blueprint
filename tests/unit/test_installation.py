@@ -1,6 +1,6 @@
 import io
 from dataclasses import dataclass
-from unittest.mock import create_autospec
+from unittest.mock import create_autospec, MagicMock
 
 import pytest
 import yaml
@@ -332,17 +332,18 @@ def test_enable_files_in_repos():
     ws = create_autospec(WorkspaceClient)
     ws.current_user.me().user_name = "foo"
     installation = Installation(ws, "ucx")
+    ws.workspace_conf.set_status = MagicMock()
 
     # enableWorkspaceFilesystem is true
     ws.workspace_conf.get_status.return_value = {"enableWorkspaceFilesystem": "true"}
     installation._enable_files_in_repos()
-    assert True
+    ws.workspace_conf.set_status.assert_not_called()
 
     # enableWorkspaceFilesystem is false
     ws.workspace_conf.get_status.return_value = {"enableWorkspaceFilesystem": "false"}
     installation._enable_files_in_repos()
-    assert True
-
+    ws.workspace_conf.set_status.assert_called_once()
+    ws.workspace_conf.set_status.assert_called_with({"enableWorkspaceFilesystem": "true"})
 
 def test_upload_feature_disabled_failure():
     ws = create_autospec(WorkspaceClient)
