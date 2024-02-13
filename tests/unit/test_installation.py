@@ -1,5 +1,4 @@
 import io
-import random
 from dataclasses import dataclass
 from unittest.mock import create_autospec
 
@@ -329,21 +328,18 @@ def test_migrations_broken():
         installation.load(BrokenConfig)
 
 
-def mock_get_status(*args):
-    random_return_value = random.choice(["true", "false"])
-    if args[0] == "enableWorkspaceFilesystem":
-        return {"enableWorkspaceFilesystem": random_return_value}
-
-
-def test_enable_files_in_repos(mocker):
+def test_enable_files_in_repos():
     ws = create_autospec(WorkspaceClient)
     ws.current_user.me().user_name = "foo"
     installation = Installation(ws, "ucx")
 
-    ws.workspace_conf.get_status = mocker.patch(
-        "databricks.sdk.service.settings.WorkspaceConfAPI.get_status", side_effect=mock_get_status
-    )
+    # enableWorkspaceFilesystem is true
+    ws.workspace_conf.get_status.return_value = {"enableWorkspaceFilesystem": "true"}
+    installation._enable_files_in_repos()
+    assert True
 
+    # enableWorkspaceFilesystem is false
+    ws.workspace_conf.get_status.return_value = {"enableWorkspaceFilesystem": "false"}
     installation._enable_files_in_repos()
     assert True
 
