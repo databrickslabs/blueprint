@@ -28,12 +28,6 @@ jobs:
           cache-dependency-path: '**/pyproject.toml'
           python-version: '3.10'
 
-      # temporary measure, until action is deployed properly
-      - name: Setup Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: 1.21
-
       - name: Acceptance
         uses: databrickslabs/sandbox/acceptance@feat/acc-arts
         with:
