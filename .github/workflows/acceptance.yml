@@ -13,7 +13,7 @@ jobs:
   integration:
     if: github.event_name == 'pull_request'
     environment: runtime
-    runs-on: larger # needs to be explicitly enabled per repo
+    runs-on: larger
     steps:
       - name: Checkout Code
         uses: actions/checkout@v2.5.0
@@ -28,18 +28,11 @@ jobs:
           cache-dependency-path: '**/pyproject.toml'
           python-version: '3.10'
 
-      - name: Install hatch
-        run: pip install hatch==1.7.0
-
-      - uses: azure/login@v1
+      - name: Acceptance
+        uses: databrickslabs/sandbox/acceptance@acceptance/v0.0.1
         with:
-          client-id: ${{ secrets.ARM_CLIENT_ID }}
-          tenant-id: ${{ secrets.ARM_TENANT_ID }}
-          allow-no-subscriptions: true
-
-      - name: Run integration tests
-        run: hatch run integration
+          vault_uri: ${{ secrets.VAULT_URI }}
         env:
-          CLOUD_ENV: azure
-          DATABRICKS_HOST: "${{ vars.DATABRICKS_HOST }}"
-          DATABRICKS_CLUSTER_ID: "${{ vars.DATABRICKS_CLUSTER_ID }}"
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
+          ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
