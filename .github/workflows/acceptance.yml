@@ -28,8 +28,6 @@ jobs:
           cache-dependency-path: '**/pyproject.toml'
           python-version: '3.10'
 
-#      - run: bash -c "python3 --version"
-
       - name: Acceptance
         uses: databrickslabs/sandbox/acceptance@feat/acc-arts
         with:
