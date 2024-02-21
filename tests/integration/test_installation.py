@@ -23,12 +23,21 @@ def test_install_folder_custom(ws):
 def test_flaky():
     assert 1 == random.choice([1, 2])
 
+
 def test_flaky2():
     assert 1 == random.choice([1, 1, 3, 4])
 
 
 def test_flaky3():
     assert 1 == random.choice([1, 1, 1, 4, 5, 6])
+
+
+def test_flaky4():
+    assert 1 == random.choice([1, 2])
+
+
+def test_flaky5():
+    assert 1 == random.choice([1, 2])
 
 
 @pytest.mark.xfail(raises=PermissionDenied)
