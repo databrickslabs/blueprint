@@ -1,4 +1,3 @@
-import random
 from dataclasses import dataclass
 
 import pytest
@@ -20,26 +19,6 @@ def test_install_folder_custom(ws):
     assert installation.install_folder() == "/custom/folder"
 
 
-def test_flaky():
-    assert 1 == random.choice([1, 2])
-
-
-def test_flaky2():
-    assert 1 == random.choice([1, 1, 3, 4])
-
-
-def test_flaky3():
-    assert 1 == random.choice([1, 1, 1, 4, 5, 6])
-
-
-def test_flaky4():
-    assert 1 == random.choice([1, 2])
-
-
-def test_flaky5():
-    assert 1 == random.choice([1, 2])
-
-
 @pytest.mark.xfail(raises=PermissionDenied)
 def test_detect_global(ws, make_random):
     product = make_random(4)
@@ -47,7 +26,7 @@ def test_detect_global(ws, make_random):
 
     current = Installation.current(ws, product)
 
-    assert current.install_folder() == f"/Applications/{product}_"
+    assert current.install_folder() == f"/Applications/{product}"
 
 
 # integration tests are running from lower-privileged environment
