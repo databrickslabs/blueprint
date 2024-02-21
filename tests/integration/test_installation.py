@@ -24,10 +24,6 @@ def test_flaky():
     assert 1 == random.choice([1,2])
 
 
-def test_failing():
-    assert False
-
-
 @pytest.mark.xfail(raises=PermissionDenied)
 def test_detect_global(ws, make_random):
     product = make_random(4)
@@ -35,7 +31,7 @@ def test_detect_global(ws, make_random):
 
     current = Installation.current(ws, product)
 
-    assert current.install_folder() == f"/Applications/{product}"
+    assert current.install_folder() == f"/Applications/{product}_"
 
 
 # integration tests are running from lower-privileged environment
