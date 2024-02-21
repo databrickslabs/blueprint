@@ -21,6 +21,7 @@ def test_install_folder_custom(ws):
 
 
 def test_flaky():
+
     assert 1 == random.choice([1, 2])
 
 
