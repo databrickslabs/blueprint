@@ -1,3 +1,4 @@
+import random
 from dataclasses import dataclass
 
 import pytest
@@ -17,6 +18,14 @@ def test_install_folder_custom(ws):
     installation = Installation(ws, "blueprint", install_folder="/custom/folder")
 
     assert installation.install_folder() == "/custom/folder"
+
+
+def test_flaky():
+    assert 1 == random.choice([1,2])
+
+
+def test_failing():
+    assert False
 
 
 @pytest.mark.xfail(raises=PermissionDenied)
