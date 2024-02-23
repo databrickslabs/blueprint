@@ -2,6 +2,7 @@ import os
 import re
 
 import pytest
+from databricks.sdk.service.compute import Language
 
 from databricks.labs.blueprint.__about__ import __version__
 from databricks.labs.blueprint.entrypoint import is_in_debug
@@ -51,3 +52,10 @@ def test_released_version(tmp_path):
     assert __version__ == product_info.version()
     assert not product_info.is_unreleased_version()
     assert not product_info.is_git_checkout()
+
+
+def test_locator():
+    from databricks.sdk.version import __version__
+    sdk_info = ProductInfo.from_class(Language, version_file_name='version.py')
+    released_version = sdk_info.released_version()
+    assert __version__ == released_version

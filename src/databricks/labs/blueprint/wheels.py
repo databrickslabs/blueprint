@@ -12,7 +12,7 @@ from pathlib import Path
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.mixins.compute import SemVer
 
-from databricks.labs.blueprint.entrypoint import find_project_root
+from databricks.labs.blueprint.entrypoint import find_project_root, find_dir_with_leaf
 from databricks.labs.blueprint.installation import Installation
 from databricks.labs.blueprint.installer import InstallState
 
@@ -40,7 +40,7 @@ class ProductInfo:
         version_file_name: str = "__about__.py",
         github_org: str = "databrickslabs",
     ):
-        self._project_root = find_project_root(__file)
+        self.__file = __file
         self._version_file_name = version_file_name
         self._github_org = github_org
 
@@ -49,9 +49,16 @@ class ProductInfo:
         file = inspect.getfile(klass)
         return cls(file, version_file_name=version_file_name)
 
+    def _local_project_root(self):
+        return find_project_root(self.__file)
+
+    @property
+    def _project_root(self):
+        return self._local_project_root()
+
     def project_root(self):
         # TODO: introduce the "in wheel detection", using the __about__.py as marker
-        return self._project_root
+        return self._local_project_root()
 
     def version(self):
         """Returns current version of the project"""
@@ -65,16 +72,17 @@ class ProductInfo:
         return self.__version
 
     def product_name(self) -> str:
-        version_file = self.version_file_in(self._project_root)
+        version_file = self._find_version_file_in_sub_folders(self._project_root)
         version_file_folder = version_file.parent
         return version_file_folder.name.replace("_", "-")
 
     def released_version(self) -> str:
-        version_file = self.version_file_in(self._project_root)
+        find_dir_with_leaf()
+        version_file = self._find_version_file_in_sub_folders(self._project_root)
         return self._read_version(version_file)
 
     def is_git_checkout(self) -> bool:
-        git_config = self._project_root / ".git" / "config"
+        git_config = self._local_project_root() / ".git" / "config"
         return git_config.exists()
 
     def is_unreleased_version(self) -> bool:
@@ -107,11 +115,12 @@ class ProductInfo:
         SemVer.parse(semver_and_pep0440)
         return semver_and_pep0440
 
-    def version_file_in(self, root: Path) -> Path:
+    def _find_version_file_in_sub_folders(self, root: Path) -> Path:
         names = [self._version_file_name]
         queue: list[Path] = [root]
         while queue:
             current = queue.pop(0)
+            # iterate sub folders until we find __about__.py
             for file in current.iterdir():
                 if file.name in names:
                     return file
@@ -138,6 +147,9 @@ class Version:
     version: str
     wheel: str
     date: str
+
+    def as_semver(self) -> SemVer:
+        return SemVer.parse(self.version)
 
 
 class WheelsV2(AbstractContextManager):
@@ -202,7 +214,7 @@ class WheelsV2(AbstractContextManager):
         return next(Path(tmp_dir).glob("*.whl"))
 
     def _override_version_to_unreleased(self, tmp_dir_path: Path):
-        version_file = self._product_info.version_file_in(tmp_dir_path)
+        version_file = self._product_info._find_version_file_in_sub_folders(tmp_dir_path)
         with version_file.open("w") as f:
             f.write(f'__version__ = "{self._product_info.version()}"')
 
