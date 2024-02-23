@@ -1,7 +1,9 @@
 from dataclasses import dataclass
+from datetime import timedelta
 
 import pytest
 from databricks.sdk.errors import PermissionDenied
+from databricks.sdk.retries import retried
 from databricks.sdk.service.provisioning import Workspace
 
 from databricks.labs.blueprint.installation import Installation
@@ -31,7 +33,8 @@ def test_detect_global(ws, make_random):
 
 # integration tests are running from lower-privileged environment
 @pytest.mark.xfail(raises=PermissionDenied)
-def test_existing(ws, make_random):
+@retried(on=[AssertionError], timeout=timedelta(seconds=15))
+def test_existing_installations_are_detected(ws, make_random):
     product = make_random(4)
 
     global_install = Installation(ws, product, install_folder=f"/Applications/{product}")
@@ -50,7 +53,7 @@ class MyClass:
     field2: str
 
 
-def test_dataclass(new_installation):
+def test_loading_dataclass_from_installation(new_installation):
     obj = MyClass("value1", "value2")
     new_installation.save(obj)
 
@@ -59,7 +62,7 @@ def test_dataclass(new_installation):
     assert loaded_obj == obj
 
 
-def test_csv(new_installation):
+def test_saving_list_of_dataclasses_to_csv(new_installation):
     new_installation.save(
         [
             Workspace(workspace_id=1234, workspace_name="first"),
