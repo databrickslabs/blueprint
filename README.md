@@ -459,12 +459,14 @@ from databricks.labs.blueprint.installation import Installation
 ws = WorkspaceClient()
 
 # current user installation
-installation = Installation.current(ws, "blueprint", assume_user=True)
+installation = Installation.assume_user_home(ws, "blueprint")
 assert "/Users/foo/.blueprint" == installation.install_folder()
+assert not installation.is_global()
 
 # workspace global installation
 installation = Installation.current(ws, "blueprint")
 assert "/Applications/blueprint" == installation.install_folder()
+assert installation.is_global()
 ```
 
 [[back to top](#databricks-labs-blueprint)]
@@ -478,6 +480,17 @@ Let's say, users `foo@example.com` and `bar@example.com` installed `blueprint` p
 code will print `/Workspace/bar@example.com/.blueprint` and `/Workspace/foo@example.com/.blueprint`:
 
 ```python
+from databricks.sdk import WorkspaceClient
+from databricks.labs.blueprint.installation import Installation
+
+ws = WorkspaceClient()
+
+global_install = Installation.assume_global(ws, 'blueprint')
+global_install.upload("some.bin", b"...")
+
+user_install = Installation.assume_user_home(ws, 'blueprint')
+user_install.upload("some.bin", b"...")
+
 for blueprint in Installation.existing(ws, "blueprint"):
   print(blueprint.install_folder())
 ```

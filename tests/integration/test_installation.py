@@ -1,9 +1,7 @@
 from dataclasses import dataclass
-from datetime import timedelta
 
 import pytest
 from databricks.sdk.errors import PermissionDenied
-from databricks.sdk.retries import retried
 from databricks.sdk.service.provisioning import Workspace
 
 from databricks.labs.blueprint.installation import Installation
@@ -24,23 +22,23 @@ def test_install_folder_custom(ws):
 @pytest.mark.xfail(raises=PermissionDenied)
 def test_detect_global(ws, make_random):
     product = make_random(4)
-    Installation(ws, product, install_folder=f"/Applications/{product}").upload("some", b"...")
+    Installation.assume_global(ws, product).upload("some", b"...")
 
     current = Installation.current(ws, product)
 
     assert current.install_folder() == f"/Applications/{product}"
+    assert current.is_global()
 
 
 # integration tests are running from lower-privileged environment
 @pytest.mark.xfail(raises=PermissionDenied)
-@retried(on=[AssertionError], timeout=timedelta(seconds=15))
 def test_existing_installations_are_detected(ws, make_random):
     product = make_random(4)
 
-    global_install = Installation(ws, product, install_folder=f"/Applications/{product}")
+    global_install = Installation.assume_global(ws, product)
     global_install.upload("some", b"...")
 
-    user_install = Installation(ws, product)
+    user_install = Installation.assume_user_home(ws, product)
     user_install.upload("some2", b"...")
 
     existing = Installation.existing(ws, product)
