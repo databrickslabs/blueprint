@@ -71,7 +71,7 @@ class Installation:
         will assume that the installation is in the user's home directory and return it if found. If False, the method
         will only return an installation that is in the `/Applications` directory."""
         user_folder = cls._user_home_installation(ws, product)
-        applications_folder = f"/Applications/{product}"
+        applications_folder = cls._global_installation(product)
         folders = [user_folder, applications_folder]
         for candidate in folders:
             try:
@@ -83,6 +83,18 @@ class Installation:
         if assume_user:
             return cls(ws, product, install_folder=user_folder)
         raise NotInstalled(f"Application not installed: {product}")
+
+    @classmethod
+    def assume_user_home(cls, ws: WorkspaceClient, product: str):
+        """Constructs installation with explicit location in the user home folder"""
+        user_folder = cls._user_home_installation(ws, product)
+        return cls(ws, product, install_folder=user_folder)
+
+    @classmethod
+    def assume_global(cls, ws: WorkspaceClient, product: str):
+        """Constructs installation with explicit global location in the /Applications folder"""
+        applications_folder = cls._global_installation(product)
+        return cls(ws, product, install_folder=applications_folder)
 
     @classmethod
     def existing(cls, ws: WorkspaceClient, product: str) -> Collection["Installation"]:
@@ -98,10 +110,13 @@ class Installation:
             except NotFound:
                 return None
 
-        tasks = [functools.partial(check_folder, f"/Applications/{product}")]
+        tasks = [functools.partial(check_folder, cls._global_installation(product))]
         for user in ws.users.list(attributes="userName"):
-            user_folder = f"/Users/{user.user_name}/.{product}"
-            tasks.append(functools.partial(check_folder, user_folder))
+            service_principal_folder = f"/Users/{user.user_name}/.{product}"
+            tasks.append(functools.partial(check_folder, service_principal_folder))
+        for service_principal in ws.service_principals.list(attributes="applicationId"):
+            service_principal_folder = f"/Users/{service_principal.application_id}/.{product}"
+            tasks.append(functools.partial(check_folder, service_principal_folder))
         return Threads.strict(f"finding {product} installations", tasks)
 
     @classmethod
@@ -156,6 +171,10 @@ class Installation:
             return self._install_folder
         self._install_folder = self._user_home_installation(self._ws, self.product())
         return self._install_folder
+
+    def is_global(self) -> bool:
+        """Returns true if current installation is in /Applications folder"""
+        return self.install_folder() == self._global_installation(self._product)
 
     def username(self) -> str:
         return os.path.basename(os.path.dirname(self.install_folder()))
@@ -309,6 +328,10 @@ class Installation:
         logger.debug(f"Converting {type_ref.__name__} into {extension.upper()} format")
         raw = converters[extension](as_dict, type_ref)
         self.upload(filename, raw)
+
+    @staticmethod
+    def _global_installation(product):
+        return f"/Applications/{product}"
 
     @classmethod
     def _unmarshal_type(cls, as_dict, filename, type_ref):
