@@ -4,11 +4,11 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from collections.abc import Iterable
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Iterable
 
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.mixins.compute import SemVer
@@ -102,6 +102,12 @@ class ProductInfo:
                 exc_info=err,
             )
             return self.released_version()
+
+    def current_installation(self, ws: WorkspaceClient) -> Installation:
+        return Installation.current(ws, self.product_name())
+
+    def wheels(self, ws: WorkspaceClient) -> "WheelsV2":
+        return WheelsV2(self.current_installation(ws), self)
 
     @staticmethod
     def _semver_and_pep440(git_detached_version: str) -> str:

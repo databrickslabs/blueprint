@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 Json = dict[str, Any]
 
-__all__ = ["Installation", "IllegalState", "NotInstalled", "SerdeError"]
+__all__ = ["Installation", "MockInstallation", "IllegalState", "NotInstalled", "SerdeError"]
 
 
 class IllegalState(ValueError):
@@ -192,6 +192,13 @@ class Installation:
         logger.debug(f"Loading {type_ref.__name__} from {filename}")
         as_dict = self._load_content(filename)
         return self._unmarshal_type(as_dict, filename, type_ref)
+
+    def load_or_default(self, type_ref: type[T]) -> T:
+        try:
+            return self.load(type_ref)
+        except NotFound:
+            filename = self._get_filename(None, type_ref)
+            return self._unmarshal_type({}, filename, type_ref)
 
     def save(self, inst: T, *, filename: str | None = None):
         """The `save` method saves a dataclass object of type `T` to a file on WorkspaceFS.
