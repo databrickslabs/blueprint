@@ -76,6 +76,6 @@ class Upgrades:
     @staticmethod
     def _parse_version(name: str) -> SemVer:
         split = name.split("_")
-        if len(split) < 1:
+        if len(split) < 2:
             raise ValueError(f"invalid spec: {name}")
         return SemVer.parse(split[0])

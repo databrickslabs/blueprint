@@ -51,3 +51,17 @@ def test_upgrades_already_applied():
     installation.assert_file_written(
         "applied-upgrades.json", {"upgrades": ["v0.1.3_other.py", "v0.2.0_another_breaking_change.py"], "version": 1}
     )
+
+
+def test_no_upgrades_folder():
+    ws = create_autospec(WorkspaceClient)
+    no_upgrades = Path(__file__).parent / "fixtures/no_upgrades/__init__.py"
+    product_info = ProductInfo(no_upgrades.as_posix())
+    installation = MockInstallation(
+        {
+            "version.json": {"version": "0.1.0", "wheel": "...", "date": "..."},
+        }
+    )
+    upgrades = Upgrades(product_info, installation)
+
+    upgrades.apply(ws)
