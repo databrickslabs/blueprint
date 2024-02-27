@@ -48,7 +48,7 @@ def test_released_version(tmp_path):
     installation = MockInstallation()
     info = ProductInfo.from_class(MockInstallation)
     working_copy = WheelsV2(installation, info)._copy_root_to(tmp_path)
-    product_info = ProductInfo(working_copy)
+    product_info = ProductInfo(working_copy / "src/databricks/labs/blueprint/cli.py")
 
     assert __version__ == product_info.version()
     assert not product_info.is_unreleased_version()
@@ -57,6 +57,7 @@ def test_released_version(tmp_path):
 
 def test_determines_sdk_version():
     from databricks.sdk.version import __version__ as sdk_version
+
     sdk_info = ProductInfo.from_class(Language)
     released_version = sdk_info.released_version()
     assert sdk_version == released_version

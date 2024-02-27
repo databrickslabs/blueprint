@@ -3,10 +3,6 @@ from databricks.labs.blueprint.upgrades import Upgrades
 
 
 def test_upgrades_works():
-    installation = MockInstallation({
-        'version.json': {
-            'version': '0.0.1'
-        }
-    })
+    installation = MockInstallation({"version.json": {"version": "0.0.1"}})
     upgrades = Upgrades(installation)
     # upgrades.

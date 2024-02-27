@@ -8,12 +8,12 @@ from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Generator, Iterable
+from typing import Iterable
 
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.mixins.compute import SemVer
 
-from databricks.labs.blueprint.entrypoint import find_project_root, find_dir_with_leaf
+from databricks.labs.blueprint.entrypoint import find_project_root
 from databricks.labs.blueprint.installation import Installation
 from databricks.labs.blueprint.installer import InstallState
 
@@ -34,7 +34,7 @@ IGNORE_DIR_NAMES = {
 
 
 class ProductInfo:
-    _version_file_names = ['__about__.py', '__version__.py', 'version.py']
+    _version_file_names = ["__about__.py", "__version__.py", "version.py"]
 
     def __init__(self, __file: str, *, github_org: str = "databrickslabs"):
         self._version_file = self._infer_version_file(Path(__file), self._version_file_names)
@@ -48,6 +48,12 @@ class ProductInfo:
         return find_project_root(self._version_file.as_posix())
 
     def version_file(self) -> Path:
+        """Returns the path to a file, where __version__ variable is defined.
+
+        The path to this package can be thought as a way to determine the other
+        assets of your deployed wheel.
+
+        See https://packaging.python.org/guides/single-sourcing-package-version/"""
         return self._version_file
 
     def version(self):
