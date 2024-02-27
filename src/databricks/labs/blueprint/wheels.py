@@ -33,6 +33,10 @@ IGNORE_DIR_NAMES = {
 }
 
 
+class SingleSourceVersionError(NotImplementedError):
+    pass
+
+
 class ProductInfo:
     _version_file_names = ["__about__.py", "__version__.py", "version.py"]
 
@@ -86,7 +90,9 @@ class ProductInfo:
 
     def unreleased_version(self) -> str:
         try:
-            out = subprocess.run(["git", "describe", "--tags"], stdout=subprocess.PIPE, check=True)  # noqa S607
+            out = subprocess.run(
+                ["git", "describe", "--tags"], stdout=subprocess.PIPE, check=True, cwd=self.checkout_root()
+            )  # noqa S607
             git_detached_version = out.stdout.decode("utf8")
             return self._semver_and_pep440(git_detached_version)
         except subprocess.CalledProcessError as err:
@@ -122,7 +128,8 @@ class ProductInfo:
                 return version_file
             except SyntaxError:
                 continue
-        raise NotImplementedError(f"cannot find {' or '.join(version_file_names)} in the tree of {start}")
+        candidates = " or ".join(version_file_names)
+        raise SingleSourceVersionError(f"cannot find {candidates} with __version__ variable in the tree of {start}")
 
     @staticmethod
     def _traverse_up(start: Path, version_file_names: list[str]) -> Iterable[Path]:
