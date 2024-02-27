@@ -196,15 +196,15 @@ class WheelsV2(AbstractContextManager):
         if not verbose:
             stdout = subprocess.DEVNULL
             stderr = subprocess.DEVNULL
-        project_root = self._product_info.checkout_root()
+        checkout_root = self._product_info.checkout_root()
         if self._product_info.is_git_checkout() and self._product_info.is_unreleased_version():
             # working copy becomes project root for building a wheel
-            project_root = self._copy_root_to(tmp_dir)
+            checkout_root = self._copy_root_to(tmp_dir)
             # and override the version file
-            self._override_version_to_unreleased(project_root)
-        logger.debug(f"Building wheel for {project_root} in {tmp_dir}")
+            self._override_version_to_unreleased(checkout_root)
+        logger.debug(f"Building wheel for {checkout_root} in {tmp_dir}")
         subprocess.run(
-            [sys.executable, "-m", "pip", "wheel", "--no-deps", "--wheel-dir", tmp_dir, project_root.as_posix()],
+            [sys.executable, "-m", "pip", "wheel", "--no-deps", "--wheel-dir", tmp_dir, checkout_root.as_posix()],
             check=True,
             stdout=stdout,
             stderr=stderr,
@@ -213,12 +213,14 @@ class WheelsV2(AbstractContextManager):
         return next(Path(tmp_dir).glob("*.whl"))
 
     def _override_version_to_unreleased(self, tmp_dir_path: Path):
-        version_file = self._product_info.version_file()
+        checkout_root = self._product_info.checkout_root()
+        relative_version_file = self._product_info.version_file().relative_to(checkout_root)
+        version_file = tmp_dir_path / relative_version_file
         with version_file.open("w") as f:
             f.write(f'__version__ = "{self._product_info.version()}"')
 
     def _copy_root_to(self, tmp_dir: str | Path):
-        project_root = self._product_info.checkout_root()
+        checkout_root = self._product_info.checkout_root()
         tmp_dir_path = Path(tmp_dir) / "working-copy"
 
         # copy everything to a temporary directory
@@ -231,7 +233,7 @@ class WheelsV2(AbstractContextManager):
                 ignored_names.append(name)
             return ignored_names
 
-        shutil.copytree(project_root, tmp_dir_path, ignore=copy_ignore)
+        shutil.copytree(checkout_root, tmp_dir_path, ignore=copy_ignore)
         return tmp_dir_path
 
 
