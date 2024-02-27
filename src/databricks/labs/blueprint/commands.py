@@ -214,8 +214,7 @@ class CommandExecutor:
                     pos += 1
                 else:
                     break
-            if pos < leading_whitespace:
-                leading_whitespace = pos
+            leading_whitespace = min(leading_whitespace, pos)
         new_command = ""
         for line in lines:
             if line == "" or line.strip(" \t") == "":
