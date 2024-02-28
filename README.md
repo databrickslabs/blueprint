@@ -3,7 +3,7 @@ Databricks Labs Blueprint
 ---
 
 [![python](https://img.shields.io/badge/python-3.10,%203.11,%203.12-green)](https://github.com/databrickslabs/blueprint/actions/workflows/push.yml)
-[![codecov](https://codecov.io/github/databrickslabs/blueprint/graph/badge.svg?token=x1JSVddfZa)](https://codecov.io/github/databrickslabs/blueprint)
+[![codecov](https://codecov.io/github/databrickslabs/blueprint/graph/badge.svg?token=x1JSVddfZa)](https://codecov.io/github/databrickslabs/blueprint) [![lines of code](https://tokei.rs/b1/github/databrickslabs/blueprint)]([https://codecov.io/github/databrickslabs/blueprint](https://github.com/databrickslabs/blueprint))
 
 
 Baseline for Databricks Labs projects written in Python. Sources are validated with `mypy` and `pylint`. See [Contributing instructions](CONTRIBUTING.md) if you would like to improve this project.
