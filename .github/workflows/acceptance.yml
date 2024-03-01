@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   integration:
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' && github.event.pull_request.draft == false
     environment: runtime
     runs-on: larger
     steps:
