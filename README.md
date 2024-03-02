@@ -38,6 +38,7 @@ Baseline for Databricks Labs projects written in Python. Sources are validated w
     - [Listing All Files in the Install Folder](#listing-all-files-in-the-install-folder)
     - [Unit Testing Installation State](#unit-testing-installation-state)
     - [Assert Rewriting with PyTest](#assert-rewriting-with-pytest)
+  - [Application State Migrations](#application-state-migrations)
   - [Building Wheels](#building-wheels)
     - [Released Version Detection](#released-version-detection)
     - [Unreleased Version Detection](#unreleased-version-detection)
@@ -592,7 +593,8 @@ installation.assert_file_written("some-config.json", {"version": "0.1.2"})
 
 As time progresses, your application evolves. So does the configuration file format with it. This library provides
 a common utility to seamlessly evolve configuration file format across versions, providing callbacks to convert
-from older versions to newer.
+from older versions to newer. If you need to migrate configuration or database state of the entire application, 
+use the [application state migrations](#application-state-migrations).
 
 If the type has a `__version__` attribute, the method will check that the version of the object in the file
 matches the expected version. If the versions do not match, the method will attempt to migrate the object to
@@ -741,6 +743,60 @@ pytest.register_assert_rewrite('databricks.labs.blueprint.installation')
 
 [[back to top](#databricks-labs-blueprint)]
 
+## Application State Migrations
+
+As time goes by, your applications evolve as well, requiring the addition of new columns to database schemas, 
+changes of the database state, or some migrations of configured workflows. This utility allows you to do seamless 
+upgrades from version X to version Z through version Y. Idiomatic usage in your deployment automation is as follows:
+
+```python
+from ... import Config
+from databricks.sdk import WorkspaceClient
+from databricks.labs.blueprint.upgrades import Upgrades
+from databricks.labs.blueprint.wheels import ProductInfo
+
+product_info = ProductInfo.from_class(Config)
+ws = WorkspaceClient(product=product_info.product_name(), product_version=product_info.version())
+installation = product_info.current_installation(ws)
+config = installation.load(Config)
+upgrades = Upgrades(product_info, installation)
+upgrades.apply(ws)
+```
+
+The upgrade process loads the version of [the product](#application-name-detection) that is about to be installed from `__about__.py` file that
+declares the [`__version__` variable](#released-version-detection). This version is compares with the version currently installed on
+the Databricks Workspace by loading it from the `version.json` file in the [installation folder](#install-folder). This file is kept
+up-to-date automatically if you use the [databricks.labs.blueprint.wheels.WheelsV2](#publishing-wheels-to-databricks-workspace).
+
+If those versions are different, the process looks for the `upgrades` folder next to `__about__.py` file and
+computes a difference for the upgrades in need to be rolled out. Every upgrade script in that directory has to
+start with a valid SemVer identifier, followed by the alphanumeric description of the change,
+like `v0.0.1_add_service.py`. Each script has to expose a function that takes [`Installation`](#installation) and
+`WorkspaceClient` arguments to perform the relevant upgrades. Here's the example:
+
+```python
+from ... import Config
+
+import logging, dataclasses
+from databricks.sdk import WorkspaceClient
+from databricks.labs.blueprint.installation import Installation
+
+upgrade_logger = logging.getLogger(__name__)
+
+def upgrade(installation: Installation, ws: WorkspaceClient):
+    upgrade_logger.info(f"creating new automated service user for the installation")
+    config = installation.load(Config)
+    service_principal = ws.service_principals.create(display_name='blueprint-service')
+    new_config = dataclasses.replace(config, application_id=service_principal.application_id)
+    installation.save(new_config)
+```
+
+To prevent the same upgrade script from being applies twice, we use `applied-upgrades.json` file in
+the installation directory. At the moment, there's no `downgrade(installation, ws)`, but it can easily be added in 
+the future versions of this library.
+
+[[back to top](#databricks-labs-blueprint)]
+
 ## Building Wheels
 
 We recommend deploying applications as wheels, which are part of the [application installation](#application-and-installation-state). But versioning, testing, and deploying those is often a tedious process.
@@ -792,7 +848,7 @@ logger.info(f'Product name is: {product_info.product_name()}')
 
 ### Publishing Wheels to Databricks Workspace
 
-Before you execute a wheel on Databricks, you have to build it and upload it. This library provides detects [released](#released-version-detection) or [unreleased](#unreleased-version-detection) version of the wheel, copies it over to a temporary folder, changes the `__about__.py` file with the right version, and builds the wheel in the temporary location, so that it's not polluted with build artifacts. `Wheels` is a context manager, so it removes all temporary files and folders ather `with` block finishes. This library is successfully used to concurrently test wheels on Shared Databricks Clusters through notebook-scoped libraries.
+Before you execute a wheel on Databricks, you have to build it and upload it. This library provides detects [released](#released-version-detection) or [unreleased](#unreleased-version-detection) version of the wheel, copies it over to a temporary folder, changes the `__about__.py` file with the right version, and builds the wheel in the temporary location, so that it's not polluted with build artifacts. `Wheels` is a context manager, so it removes all temporary files and folders ather `with` block finishes. This library is successfully used to concurrently test wheels on Shared Databricks Clusters through notebook-scoped libraries. Before you deploy the new version of the wheel, it is highly advised that you perform [application state upgrades](#application-state-migrations).
 
 Every call `wheels.upload_to_wsfs()` updates `version.json` file in the [install folder](#install-folder), which holds `version` field with the current wheel version. There's also `wheel` field, that contains the path to the current wheel file on WorkspaceFS.
 
