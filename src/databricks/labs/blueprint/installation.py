@@ -546,7 +546,7 @@ class Installation:
     class _FromDict(Protocol):
         @classmethod
         def from_dict(cls, raw: dict):
-            ...
+            pass
 
     @classmethod
     def _unmarshal(cls, inst: Any, path: list[str], type_ref: type[T]) -> T | None:
