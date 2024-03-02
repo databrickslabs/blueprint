@@ -33,6 +33,7 @@ Baseline for Databricks Labs projects written in Python. Sources are validated w
     - [Saving `@dataclass` configuration](#saving-dataclass-configuration)
     - [Saving CSV files](#saving-csv-files)
     - [Loading `@dataclass` configuration](#loading-dataclass-configuration)
+    - [Brute-forcing `SerdeError` with `as_dict()` and `from_dict()`](#brute-forcing-serdeerror-with-as_dict-and-from_dict)
     - [Configuration Format Evolution](#configuration-format-evolution)
     - [Uploading Untyped Files](#uploading-untyped-files)
     - [Listing All Files in the Install Folder](#listing-all-files-in-the-install-folder)
@@ -585,6 +586,40 @@ cfg = installation.load(SomeConfig)
 
 installation.save(SomeConfig("0.1.2"))
 installation.assert_file_written("some-config.json", {"version": "0.1.2"})
+```
+
+[[back to top](#databricks-labs-blueprint)]
+
+### Brute-forcing `SerdeError` with `as_dict()` and `from_dict()`
+
+In the rare circumstances when you cannot use [@dataclass](#loading-dataclass-configuration) or you get `SerdeError` that you cannot explain, you can implement `from_dict(cls, raw: dict) -> 'T'` and `as_dict(self) -> dict` methods on the class:
+
+```python
+from databricks.sdk import WorkspaceClient
+from databricks.labs.blueprint.installation import Installation
+
+class SomePolicy:
+    def __init__(self, a, b):
+        self._a = a
+        self._b = b
+
+    def as_dict(self) -> dict:
+        return {"a": self._a, "b": self._b}
+
+    @classmethod
+    def from_dict(cls, raw: dict):
+        return cls(raw.get("a"), raw.get("b"))
+
+    def __eq__(self, o):
+        assert isinstance(o, SomePolicy)
+        return self._a == o._a and self._b == o._b
+
+policy = SomePolicy(1, 2)
+installation = Installation.current(WorkspaceClient(), "blueprint")
+installation.save(policy, filename="backups/policy-123.json")
+load = installation.load(SomePolicy, filename="backups/policy-123.json")
+
+assert load == policy
 ```
 
 [[back to top](#databricks-labs-blueprint)]
