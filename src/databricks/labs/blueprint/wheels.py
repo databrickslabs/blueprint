@@ -4,6 +4,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from collections.abc import Iterable
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -32,26 +33,32 @@ IGNORE_DIR_NAMES = {
 }
 
 
+class SingleSourceVersionError(NotImplementedError):
+    pass
+
+
 class ProductInfo:
-    def __init__(
-        self,
-        __file: str,
-        *,
-        version_file_name: str = "__about__.py",
-        github_org: str = "databrickslabs",
-    ):
-        self._project_root = find_project_root(__file)
-        self._version_file_name = version_file_name
+    _version_file_names = ["__about__.py", "__version__.py", "version.py"]
+
+    def __init__(self, __file: str, *, github_org: str = "databrickslabs"):
+        self._version_file = self._infer_version_file(Path(__file), self._version_file_names)
         self._github_org = github_org
 
     @classmethod
-    def from_class(cls, klass: type, *, version_file_name: str = "__about__.py") -> "ProductInfo":
-        file = inspect.getfile(klass)
-        return cls(file, version_file_name=version_file_name)
+    def from_class(cls, klass: type) -> "ProductInfo":
+        return cls(inspect.getfile(klass))
 
-    def project_root(self):
-        # TODO: introduce the "in wheel detection", using the __about__.py as marker
-        return self._project_root
+    def checkout_root(self):
+        return find_project_root(self._version_file.as_posix())
+
+    def version_file(self) -> Path:
+        """Returns the path to a file, where __version__ variable is defined.
+
+        The path to this package can be thought as a way to determine the other
+        assets of your deployed wheel.
+
+        See https://packaging.python.org/guides/single-sourcing-package-version/"""
+        return self._version_file
 
     def version(self):
         """Returns current version of the project"""
@@ -64,17 +71,18 @@ class ProductInfo:
         self.__version = self.unreleased_version()
         return self.__version
 
+    def as_semver(self) -> SemVer:
+        return SemVer.parse(self.version())
+
     def product_name(self) -> str:
-        version_file = self.version_file_in(self._project_root)
-        version_file_folder = version_file.parent
+        version_file_folder = self._version_file.parent
         return version_file_folder.name.replace("_", "-")
 
     def released_version(self) -> str:
-        version_file = self.version_file_in(self._project_root)
-        return self._read_version(version_file)
+        return self._read_version(self._version_file)
 
     def is_git_checkout(self) -> bool:
-        git_config = self._project_root / ".git" / "config"
+        git_config = self.checkout_root() / ".git" / "config"
         return git_config.exists()
 
     def is_unreleased_version(self) -> bool:
@@ -82,7 +90,9 @@ class ProductInfo:
 
     def unreleased_version(self) -> str:
         try:
-            out = subprocess.run(["git", "describe", "--tags"], stdout=subprocess.PIPE, check=True)  # noqa S607
+            out = subprocess.run(
+                ["git", "describe", "--tags"], stdout=subprocess.PIPE, check=True, cwd=self.checkout_root()
+            )  # noqa S607
             git_detached_version = out.stdout.decode("utf8")
             return self._semver_and_pep440(git_detached_version)
         except subprocess.CalledProcessError as err:
@@ -92,6 +102,12 @@ class ProductInfo:
                 exc_info=err,
             )
             return self.released_version()
+
+    def current_installation(self, ws: WorkspaceClient) -> Installation:
+        return Installation.current(ws, self.product_name())
+
+    def wheels(self, ws: WorkspaceClient) -> "WheelsV2":
+        return WheelsV2(self.current_installation(ws), self)
 
     @staticmethod
     def _semver_and_pep440(git_detached_version: str) -> str:
@@ -107,21 +123,32 @@ class ProductInfo:
         SemVer.parse(semver_and_pep0440)
         return semver_and_pep0440
 
-    def version_file_in(self, root: Path) -> Path:
-        names = [self._version_file_name]
-        queue: list[Path] = [root]
-        while queue:
-            current = queue.pop(0)
-            for file in current.iterdir():
-                if file.name in names:
-                    return file
-                if not file.is_dir():
+    @classmethod
+    def _infer_version_file(cls, start: Path, version_file_names: list[str]) -> Path:
+        # be aware, that WheelsV2 overwrites this wheel file with unreleased version identifier,
+        # if it's a git checkout, so that's why we cannot use __init__.py as version marker file,
+        # at least for now.
+        for version_file in cls._traverse_up(start, version_file_names):
+            try:
+                cls._read_version(version_file)
+                return version_file
+            except SyntaxError:
+                continue
+        candidates = " or ".join(version_file_names)
+        raise SingleSourceVersionError(f"cannot find {candidates} with __version__ variable in the tree of {start}")
+
+    @staticmethod
+    def _traverse_up(start: Path, version_file_names: list[str]) -> Iterable[Path]:
+        prev_folder = start
+        folder = start.parent
+        while not folder.samefile(prev_folder):
+            for name in version_file_names:
+                candidate = folder / name
+                if not candidate.exists():
                     continue
-                virtual_env_marker = file / "pyvenv.cfg"
-                if virtual_env_marker.exists():
-                    continue
-                queue.append(file)
-        raise NotImplementedError(f"cannot find {names} in {root}")
+                yield candidate
+            prev_folder = folder
+            folder = folder.parent
 
     @staticmethod
     def _read_version(version_file: Path) -> str:
@@ -138,6 +165,9 @@ class Version:
     version: str
     wheel: str
     date: str
+
+    def as_semver(self) -> SemVer:
+        return SemVer.parse(self.version)
 
 
 class WheelsV2(AbstractContextManager):
@@ -185,15 +215,15 @@ class WheelsV2(AbstractContextManager):
         if not verbose:
             stdout = subprocess.DEVNULL
             stderr = subprocess.DEVNULL
-        project_root = self._product_info.project_root()
+        checkout_root = self._product_info.checkout_root()
         if self._product_info.is_git_checkout() and self._product_info.is_unreleased_version():
             # working copy becomes project root for building a wheel
-            project_root = self._copy_root_to(tmp_dir)
+            checkout_root = self._copy_root_to(tmp_dir)
             # and override the version file
-            self._override_version_to_unreleased(project_root)
-        logger.debug(f"Building wheel for {project_root} in {tmp_dir}")
+            self._override_version_to_unreleased(checkout_root)
+        logger.debug(f"Building wheel for {checkout_root} in {tmp_dir}")
         subprocess.run(
-            [sys.executable, "-m", "pip", "wheel", "--no-deps", "--wheel-dir", tmp_dir, project_root.as_posix()],
+            [sys.executable, "-m", "pip", "wheel", "--no-deps", "--wheel-dir", tmp_dir, checkout_root.as_posix()],
             check=True,
             stdout=stdout,
             stderr=stderr,
@@ -202,12 +232,14 @@ class WheelsV2(AbstractContextManager):
         return next(Path(tmp_dir).glob("*.whl"))
 
     def _override_version_to_unreleased(self, tmp_dir_path: Path):
-        version_file = self._product_info.version_file_in(tmp_dir_path)
+        checkout_root = self._product_info.checkout_root()
+        relative_version_file = self._product_info.version_file().relative_to(checkout_root)
+        version_file = tmp_dir_path / relative_version_file
         with version_file.open("w") as f:
             f.write(f'__version__ = "{self._product_info.version()}"')
 
     def _copy_root_to(self, tmp_dir: str | Path):
-        project_root = self._product_info.project_root()
+        checkout_root = self._product_info.checkout_root()
         tmp_dir_path = Path(tmp_dir) / "working-copy"
 
         # copy everything to a temporary directory
@@ -220,7 +252,7 @@ class WheelsV2(AbstractContextManager):
                 ignored_names.append(name)
             return ignored_names
 
-        shutil.copytree(project_root, tmp_dir_path, ignore=copy_ignore)
+        shutil.copytree(checkout_root, tmp_dir_path, ignore=copy_ignore)
         return tmp_dir_path
 
 

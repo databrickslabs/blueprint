@@ -1,3 +1,4 @@
+import inspect
 import json
 import sys
 from unittest import mock
@@ -7,7 +8,7 @@ from databricks.labs.blueprint.cli import App
 
 def test_commands():
     some = mock.Mock()
-    app = App(__file__)
+    app = App(inspect.getfile(App))
 
     @app.command(is_unauthenticated=True)
     def foo(name: str):

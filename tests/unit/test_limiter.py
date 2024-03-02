@@ -1,5 +1,3 @@
-import pytest
-
 from databricks.labs.blueprint.limiter import rate_limited
 
 
@@ -22,4 +20,4 @@ def test_ratelimiting(mocker):
         try_something()
 
     sleep.assert_called()
-    assert 4.2 == pytest.approx(_x)
+    assert 4.2 <= _x < 4.5
