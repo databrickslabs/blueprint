@@ -1,1 +1,1 @@
-# this file is empty
+raise ValueError("must not reach")

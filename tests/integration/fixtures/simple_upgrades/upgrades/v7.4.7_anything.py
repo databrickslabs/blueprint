@@ -8,5 +8,4 @@ logger = logging.getLogger(__name__)
 
 
 def upgrade(installation: Installation, ws: WorkspaceClient):
-    logger.info("applying v7.4.7")
-    ws.jobs.get(123)
+    raise ValueError("must not trigger")
