@@ -13,7 +13,15 @@ from collections.abc import Callable, Collection
 from functools import partial
 from json import JSONDecodeError
 from pathlib import Path
-from typing import Any, BinaryIO, TypeVar, get_args, get_type_hints
+from typing import (
+    Any,
+    BinaryIO,
+    Protocol,
+    TypeVar,
+    get_args,
+    get_type_hints,
+    runtime_checkable,
+)
 
 import databricks.sdk.core
 from databricks.sdk import WorkspaceClient
@@ -455,6 +463,8 @@ class Installation:
             return cls._marshal_databricks_config(inst)
         if type_ref in cls._PRIMITIVES:
             return inst, True
+        if hasattr(inst, "as_dict"):
+            return inst.as_dict(), True
         raise SerdeError(f'{".".join(path)}: unknown: {inst}')
 
     @classmethod
@@ -532,6 +542,12 @@ class Installation:
             return None, False
         return inst.value, True
 
+    @runtime_checkable
+    class _FromDict(Protocol):
+        @classmethod
+        def from_dict(cls, raw: dict):
+            pass
+
     @classmethod
     def _unmarshal(cls, inst: Any, path: list[str], type_ref: type[T]) -> T | None:
         # pylint: disable-next=import-outside-toplevel
@@ -562,6 +578,8 @@ class Installation:
             return databricks.sdk.core.Config(**inst)  # type: ignore[return-value]
         if type_ref == types.NoneType:
             return None
+        if isinstance(type_ref, cls._FromDict):
+            return type_ref.from_dict(inst)
         raise SerdeError(f'{".".join(path)}: unknown: {type_ref}: {inst}')
 
     @classmethod

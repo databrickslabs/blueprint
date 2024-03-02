@@ -356,3 +356,32 @@ def test_upload_feature_disabled_failure():
     installation.save(WorkspaceConfig(inventory_database="some_blueprint"))
 
     ws.workspace.mkdirs.assert_called_with("/Users/foo/.blueprint")
+
+
+class SomePolicy:
+    def __init__(self, a, b):
+        self._a = a
+        self._b = b
+
+    def as_dict(self):
+        return {"a": self._a, "b": self._b}
+
+    @classmethod
+    def from_dict(cls, raw):
+        return cls(raw.get("a"), raw.get("b"))
+
+    def __eq__(self, o):
+        assert isinstance(o, SomePolicy)
+        return self._a == o._a and self._b == o._b
+
+
+def test_as_dict_serde():
+    installation = MockInstallation()
+
+    policy = SomePolicy(1, 2)
+    installation.save(policy, filename="backups/policy-123.json")
+
+    installation.assert_file_written("backups/policy-123.json", {"a": 1, "b": 2})
+
+    load = installation.load(SomePolicy, filename="backups/policy-123.json")
+    assert load == policy

@@ -2,7 +2,7 @@ name: acceptance
 
 on:
   pull_request:
-    types: [opened, synchronize]
+    types: [opened, synchronize, ready_for_review]
 
 permissions:
   id-token: write
