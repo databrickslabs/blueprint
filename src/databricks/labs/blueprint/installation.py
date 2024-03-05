@@ -443,6 +443,8 @@ class Installation:
             _UnionGenericAlias,
         )
 
+        if hasattr(inst, "as_dict"):
+            return inst.as_dict(), True
         if dataclasses.is_dataclass(type_ref):
             return cls._marshal_dataclass(type_ref, path, inst)
         if isinstance(type_ref, types.GenericAlias):
@@ -463,8 +465,7 @@ class Installation:
             return cls._marshal_databricks_config(inst)
         if type_ref in cls._PRIMITIVES:
             return inst, True
-        if hasattr(inst, "as_dict"):
-            return inst.as_dict(), True
+
         raise SerdeError(f'{".".join(path)}: unknown: {inst}')
 
     @classmethod

@@ -385,3 +385,21 @@ def test_as_dict_serde():
 
     load = installation.load(SomePolicy, filename="backups/policy-123.json")
     assert load == policy
+
+
+@dataclass
+class Policy:
+    policy_id: str
+    name: str
+
+    def as_dict(self) -> dict:
+        return {"policy_id": self.policy_id, "name": self.name}
+
+
+def test_data_class():
+    installation = MockInstallation()
+    policy = Policy("123", "foo")
+    installation.save(policy, filename="backups/policy-test.json")
+    installation.assert_file_written("backups/policy-test.json", {"policy_id": "123", "name": "foo"})
+    load = installation.load(Policy, filename="backups/policy-test.json")
+    assert load == policy
