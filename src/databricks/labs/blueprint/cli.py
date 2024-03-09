@@ -1,6 +1,7 @@
 """Baseline CLI for Databricks Labs projects."""
 
 import functools
+import inspect
 import json
 import logging
 from collections.abc import Callable
@@ -9,6 +10,7 @@ from dataclasses import dataclass
 from databricks.sdk import AccountClient, WorkspaceClient
 
 from databricks.labs.blueprint.entrypoint import get_logger, run_main
+from databricks.labs.blueprint.tui import Prompts
 from databricks.labs.blueprint.wheels import ProductInfo
 
 
@@ -26,6 +28,13 @@ class Command:
         if self.is_account:
             return False
         return True
+
+    def prompts_argument_name(self) -> str | None:
+        sig = inspect.signature(self.fn)
+        for param in sig.parameters.values():
+            if param.annotation is Prompts:
+                return param.name
+        return None
 
 
 class App:
@@ -70,19 +79,33 @@ class App:
         databricks_logger.setLevel(log_level.upper())
         kwargs = {k.replace("-", "_"): v for k, v in flags.items()}
         try:
-            product_name = self._product_info.product_name()
-            product_version = self._product_info.version()
-            if self._mapping[command].needs_workspace_client():
-                kwargs["w"] = WorkspaceClient(product=product_name, product_version=product_version)
-            elif self._mapping[command].is_account:
-                kwargs["a"] = AccountClient(product=product_name, product_version=product_version)
-            self._mapping[command].fn(**kwargs)
+            cmd = self._mapping[command]
+            if cmd.needs_workspace_client():
+                kwargs["w"] = self._workspace_client()
+            elif cmd.is_account:
+                kwargs["a"] = self._account_client()
+            prompts_argument = cmd.prompts_argument_name()
+            if prompts_argument:
+                kwargs[prompts_argument] = Prompts()
+            cmd.fn(**kwargs)
         except Exception as err:  # pylint: disable=broad-exception-caught
             logger = self._logger.getChild(command)
             if log_level.lower() in {"debug", "trace"}:
                 logger.error(f"Failed to call {command}", exc_info=err)
             else:
                 logger.error(f"{err.__class__.__name__}: {err}")
+
+    def _account_client(self):
+        return AccountClient(
+            product=self._product_info.product_name(),
+            product_version=self._product_info.version(),
+        )
+
+    def _workspace_client(self):
+        return WorkspaceClient(
+            product=self._product_info.product_name(),
+            product_version=self._product_info.version(),
+        )
 
     def __call__(self):
         run_main(self._route)

@@ -50,6 +50,7 @@ Baseline for Databricks Labs projects written in Python. Sources are validated w
     * [Publishing Wheels to Databricks Workspace](#publishing-wheels-to-databricks-workspace)
   * [Databricks CLI's `databricks labs ...` Router](#databricks-clis-databricks-labs--router)
     * [Account-level Commands](#account-level-commands)
+    * [Commands with interactive prompts](#commands-with-interactive-prompts)
     * [Integration with Databricks Connect](#integration-with-databricks-connect)
     * [Starting New Projects](#starting-new-projects)
 * [Notable Downstream Projects](#notable-downstream-projects)
@@ -73,6 +74,8 @@ This library contains a proven set of building blocks, tested in production thro
 Your command-line apps do need testable interactivity, which is provided by `from databricks.labs.blueprint.tui import Prompts`. Here are some examples of it:
 
 ![ucx install](docs/ucx-install.gif)
+
+It is also integrated with our [command router](#commands-with-interactive-prompts). 
 
 [[back to top](#databricks-labs-blueprint)]
 
@@ -998,6 +1001,32 @@ def workspaces(a: AccountClient):
     """Shows workspaces"""
     for ws in a.workspaces.list():
         logger.info(f"Workspace: {ws.workspace_name} ({ws.workspace_id})")
+```
+
+[[back to top](#databricks-labs-blueprint)]
+
+### Commands with interactive prompts
+
+If your command needs some terminal interactivity, simply add [`prompts: Prompts` argument](#basic-terminal-user-interface-tui-primitives) to your command:
+
+```python
+from databricks.sdk import WorkspaceClient
+from databricks.labs.blueprint.entrypoint import get_logger
+from databricks.labs.blueprint.cli import App
+from databricks.labs.blueprint.tui import Prompts
+
+app = App(__file__)
+logger = get_logger(__file__)
+
+
+@app.command
+def me(w: WorkspaceClient, prompts: Prompts):
+    """Shows current username"""
+    if prompts.confirm("Are you sure?"):
+        logger.info(f"Hello, {w.current_user.me().user_name}!")
+
+if "__main__" == __name__:
+    app()
 ```
 
 [[back to top](#databricks-labs-blueprint)]
