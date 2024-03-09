@@ -1,3 +1,4 @@
+import sys
 from pathlib import Path
 
 from databricks.labs.blueprint.cli import App
@@ -90,7 +91,7 @@ def init_project(target):
             relative_file_name = current.as_posix().replace("blueprint", project_name)
             dst_file = dst_dir / relative_file_name
             dst_file.parent.mkdir(exist_ok=True, parents=True)
-            with current.open("r") as r, dst_file.open("w") as w:
+            with current.open("r", encoding=sys.getdefaultencoding()) as r, dst_file.open("w") as w:
                 content = r.read().replace("blueprint", project_name)
                 content = content.replace("databricks-sdk", "databricks-labs-blueprint")
                 w.write(content)
