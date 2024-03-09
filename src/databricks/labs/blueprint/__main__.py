@@ -81,6 +81,7 @@ def init_project(target):
         ".databricks-login.json",
         "coverage.xml",
         "dist",
+        "docs",
     }
     queue: list[Path] = [src_dir]  # type: ignore[annotation-unchecked]
     while queue:
