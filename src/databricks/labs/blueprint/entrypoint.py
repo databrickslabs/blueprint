@@ -80,6 +80,6 @@ def relative_paths(*maybe_paths) -> list[Path]:
     :param *maybe_paths: string-like arguments
 
     """
-    all_paths = [Path(str(_)) for _ in maybe_paths]
+    all_paths = [Path(str(_)).absolute() for _ in maybe_paths]
     common_path = Path(os.path.commonpath([_.as_posix() for _ in all_paths]))
     return [_.relative_to(common_path).absolute() for _ in all_paths]
