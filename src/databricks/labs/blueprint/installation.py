@@ -1,3 +1,5 @@
+"""The `Installation` class is used to manage the `~/.{product}` folder on WorkspaceFS to track typed files."""
+
 import csv
 import dataclasses
 import enum
@@ -43,11 +45,11 @@ class IllegalState(ValueError):
 
 
 class NotInstalled(NotFound):
-    pass
+    """Raised when a product is not installed."""
 
 
 class SerdeError(TypeError):
-    pass
+    """Raised when a serialization or deserialization error occurs."""
 
 
 class Installation:
@@ -66,6 +68,8 @@ class Installation:
     _PRIMITIVES = (int, bool, float, str)
 
     def __init__(self, ws: WorkspaceClient, product: str, *, install_folder: str | None = None):
+        """The `Installation` class constructor creates an `Installation` object for the given product in
+        the current workspace."""
         self._ws = ws
         self._product = product
         self._install_folder = install_folder
@@ -129,11 +133,13 @@ class Installation:
 
     @classmethod
     def load_local(cls, type_ref: type[T], file: Path) -> T:
+        """Loads a typed file from the local file system."""
         with file.open("rb") as f:
             as_dict = cls._convert_content(file.name, f)
             return cls._unmarshal_type(as_dict, file.name, type_ref)
 
     def product(self) -> str:
+        """The `product` method returns the name of the product associated with the installation."""
         return self._product
 
     def install_folder(self) -> str:
@@ -185,6 +191,7 @@ class Installation:
         return self.install_folder() == self._global_installation(self._product)
 
     def username(self) -> str:
+        """Returns the username associated with the installation folder"""
         return os.path.basename(os.path.dirname(self.install_folder()))
 
     def load(self, type_ref: type[T], *, filename: str | None = None) -> T:
@@ -202,6 +209,7 @@ class Installation:
         return self._unmarshal_type(as_dict, filename, type_ref)
 
     def load_or_default(self, type_ref: type[T]) -> T:
+        """If the file is not found, the method will return a default instance of the `type_ref` class."""
         try:
             return self.load(type_ref)
         except NotFound:
@@ -276,6 +284,7 @@ class Installation:
 
     @classmethod
     def _strip_notebook_source_suffix(cls, dst: str, raw: bytes) -> str:
+        """If the file is a Databricks notebook, the method will remove the suffix from the filename."""
         if "." not in dst:
             return dst
         ext = dst.split(".")[-1]
@@ -305,9 +314,13 @@ class Installation:
             return dst
 
     def files(self) -> list[workspace.ObjectInfo]:
+        """The `files` method returns a list of all files in the installation folder on WorkspaceFS.
+        This method is used to list the files that are managed by the `Installation` class."""
         return list(self._ws.workspace.list(self.install_folder(), recursive=True))
 
     def remove(self):
+        """The `remove` method deletes the installation folder on WorkspaceFS.
+        This method is used to remove all files and folders that are managed by the `Installation` class."""
         self._ws.workspace.delete(self.install_folder(), recursive=True)
 
     def workspace_link(self, path: str) -> str:
@@ -321,9 +334,11 @@ class Installation:
         return f"{self._host()}/#workspace{self.install_folder()}/{path.removeprefix('/')}"
 
     def workspace_markdown_link(self, label: str, path: str) -> str:
+        """Returns a markdown link to a file in a workspace."""
         return f"[{label}]({self.workspace_link(path)})"
 
     def _host(self):
+        """Returns the host of the current workspace."""
         return self._ws.config.host
 
     def _overwrite_content(self, filename: str, as_dict: Json, type_ref: type):
@@ -346,10 +361,14 @@ class Installation:
 
     @staticmethod
     def _global_installation(product):
+        """The `_global_installation` method is a private method that is used to determine the installation folder
+        for the given product in the `/Applications` directory. This method is called by the `install_folder` method."""
         return f"/Applications/{product}"
 
     @classmethod
     def _unmarshal_type(cls, as_dict, filename, type_ref):
+        """The `_unmarshal_type` method is a private method that is used to deserialize a dictionary to an object of
+        type `type_ref`. This method is called by the `load` method."""
         expected_version = None
         if hasattr(type_ref, "__version__"):
             expected_version = getattr(type_ref, "__version__")
@@ -358,6 +377,8 @@ class Installation:
         return cls._unmarshal(as_dict, [], type_ref)
 
     def _load_content(self, filename: str) -> Json:
+        """The `_load_content` method is a private method that is used to load the contents of a file from
+        WorkspaceFS as a dictionary. This method is called by the `load` method."""
         with self._lock:
             # TODO: check how to make this fail fast during unit testing, otherwise
             # this currently hangs with the real installation class and mocked workspace client
@@ -366,6 +387,8 @@ class Installation:
 
     @classmethod
     def _convert_content(cls, filename: str, raw: BinaryIO) -> Json:
+        """The `_convert_content` method is a private method that is used to convert the raw bytes of a file to a
+        dictionary. This method is called by the `_load_content` method."""
         converters: dict[str, Callable[[BinaryIO], Any]] = {
             "json": json.load,
             "yml": cls._load_yaml,
@@ -388,15 +411,20 @@ class Installation:
         return self.install_folder() == o.install_folder()
 
     def __hash__(self):
+        """The `__hash__` method is used to hash the `Installation` object.
+        This method is called by the `hash` function."""
         return hash(self.install_folder())
 
     @staticmethod
     def _user_home_installation(ws: WorkspaceClient, product: str):
+        """The `_user_home_installation` method is a private method that is used to determine the installation folder
+        for the current user. This method is called by the `install_folder` method."""
         me = ws.current_user.me()
         return f"/Users/{me.user_name}/.{product}"
 
     @staticmethod
     def _migrate_file_format(type_ref, expected_version, as_dict, filename):
+        """The `_migrate_file_format` method is a private method that is used to migrate the file format of a file"""
         actual_version = as_dict.pop("version", 1)
         while actual_version < expected_version:
             migrate = getattr(type_ref, f"v{actual_version}_migrate", None)
@@ -413,6 +441,8 @@ class Installation:
 
     @staticmethod
     def _get_filename(filename: str | None, type_ref: type) -> str:
+        """The `_get_filename` method is a private method that is used to determine the filename of a file based on
+        the type of the object that is being saved. This method is called by the `save` method."""
         if not filename and hasattr(type_ref, "__file__"):
             return getattr(type_ref, "__file__")
         if not filename:
@@ -422,6 +452,8 @@ class Installation:
 
     @classmethod
     def _get_type_ref(cls, inst) -> type:
+        """The `_get_type_ref` method is a private method that is used to determine the type of an object. This method
+        is called by the `save` method."""
         type_ref = type(inst)
         if type_ref == list:
             return cls._get_list_type_ref(inst)
@@ -429,6 +461,7 @@ class Installation:
 
     @staticmethod
     def _get_list_type_ref(inst: T) -> type[list[T]]:
+        """The `_get_list_type_ref` method is a private method that is used to determine the type of a list object."""
         from_list: list = inst  # type: ignore[assignment]
         if len(from_list) == 0:
             raise ValueError("List cannot be empty")
@@ -437,6 +470,8 @@ class Installation:
 
     @classmethod
     def _marshal(cls, type_ref: type, path: list[str], inst: Any) -> tuple[Any, bool]:
+        """The `_marshal` method is a private method that is used to serialize an object of type `type_ref` to
+        a dictionary. This method is called by the `save` method."""
         # pylint: disable-next=import-outside-toplevel
         from typing import (  # type: ignore[attr-defined]
             _GenericAlias,
@@ -470,6 +505,8 @@ class Installation:
 
     @classmethod
     def _marshal_union(cls, type_ref: type, path: list[str], inst: Any) -> tuple[Any, bool]:
+        """The `_marshal_union` method is a private method that is used to serialize an object of type `type_ref` to
+        a dictionary. This method is called by the `save` method."""
         combo = []
         for variant in get_args(type_ref):
             value, ok = cls._marshal(variant, [*path, f"(as {variant})"], inst)
@@ -480,6 +517,8 @@ class Installation:
 
     @classmethod
     def _marshal_generic(cls, type_ref: type, path: list[str], inst: Any) -> tuple[Any, bool]:
+        """The `_marshal_generic` method is a private method that is used to serialize an object of type `type_ref`
+        to a dictionary. This method is called by the `save` method."""
         type_args = get_args(type_ref)
         if not type_args:
             raise SerdeError(f"Missing type arguments: {type_args}")
@@ -489,12 +528,16 @@ class Installation:
 
     @staticmethod
     def _marshal_generic_alias(type_ref, inst):
+        """The `_marshal_generic_alias` method is a private method that is used to serialize an object of type
+        `type_ref` to a dictionary. This method is called by the `save` method."""
         if not inst:
             return None, False
         return inst, isinstance(inst, type_ref.__origin__)  # type: ignore[attr-defined]
 
     @classmethod
     def _marshal_list(cls, type_ref: type, path: list[str], inst: Any) -> tuple[Any, bool]:
+        """The `_marshal_list` method is a private method that is used to serialize an object of type `type_ref` to
+        a dictionary. This method is called by the `save` method."""
         as_list = []
         if not inst:
             return None, False
@@ -507,6 +550,8 @@ class Installation:
 
     @classmethod
     def _marshal_dict(cls, type_ref: type, path: list[str], inst: Any) -> tuple[Any, bool]:
+        """The `_marshal_dict` method is a private method that is used to serialize an object of type `type_ref` to
+        a dictionary. This method is called by the `save` method."""
         if not isinstance(inst, dict):
             return None, False
         as_dict = {}
@@ -518,6 +563,8 @@ class Installation:
 
     @classmethod
     def _marshal_dataclass(cls, type_ref: type, path: list[str], inst: Any) -> tuple[Any, bool]:
+        """The `_marshal_dataclass` method is a private method that is used to serialize an object of type `type_ref`
+        to a dictionary. This method is called by the `save` method."""
         if inst is None:
             return None, False
         as_dict = {}
@@ -533,24 +580,34 @@ class Installation:
 
     @staticmethod
     def _marshal_databricks_config(inst):
+        """The `_marshal_databricks_config` method is a private method that is used to serialize an object of type
+        `databricks.sdk.core.Config` to a dictionary. This method is called by the `save` method."""
         if not inst:
             return None, False
         return inst.as_dict(), True
 
     @staticmethod
     def _marshal_enum(inst):
+        """The `_marshal_enum` method is a private method that is used to serialize an object of type `enum.Enum` to
+        a dictionary. This method is called by the `save` method."""
         if not inst:
             return None, False
         return inst.value, True
 
     @runtime_checkable
     class _FromDict(Protocol):
+        """The `_FromDict` protocol is used to define a type that can be constructed from a dictionary. This protocol
+        is used to define a type that can be constructed from a dictionary. This protocol is used to define a type that
+        can be constructed from a dictionary."""
+
         @classmethod
         def from_dict(cls, raw: dict):
             pass
 
     @classmethod
     def _unmarshal(cls, inst: Any, path: list[str], type_ref: type[T]) -> T | None:
+        """The `_unmarshal` method is a private method that is used to deserialize a dictionary to an object of type
+        `type_ref`. This method is called by the `load` method."""
         # pylint: disable-next=import-outside-toplevel
         from typing import (  # type: ignore[attr-defined]
             _GenericAlias,
@@ -585,6 +642,8 @@ class Installation:
 
     @classmethod
     def _unmarshal_dataclass(cls, inst, path, type_ref):
+        """The `_unmarshal_dataclass` method is a private method that is used to deserialize a dictionary to an object
+        of type `type_ref`. This method is called by the `load` method."""
         if inst is None:
             return None
         if not isinstance(inst, dict):
@@ -609,6 +668,8 @@ class Installation:
 
     @classmethod
     def _unmarshal_union(cls, inst, path, type_ref):
+        """The `_unmarshal_union` method is a private method that is used to deserialize a dictionary to an object
+        of type `type_ref`. This method is called by the `load` method."""
         for variant in get_args(type_ref):
             value = cls._unmarshal(inst, path, variant)
             if value:
@@ -617,6 +678,8 @@ class Installation:
 
     @classmethod
     def _unmarshal_generic(cls, inst, path, type_ref):
+        """The `_unmarshal_generic` method is a private method that is used to deserialize a dictionary to an object
+        of type `type_ref`. This method is called by the `load` method."""
         type_args = get_args(type_ref)
         if not type_args:
             raise SerdeError(f"Missing type arguments: {type_args}")
@@ -626,6 +689,8 @@ class Installation:
 
     @classmethod
     def _unmarshal_list(cls, inst, path, hint):
+        """The `_unmarshal_list` method is a private method that is used to deserialize a dictionary to an object
+        of type `type_ref`. This method is called by the `load` method."""
         if inst is None:
             return None
         as_list = []
@@ -635,6 +700,8 @@ class Installation:
 
     @classmethod
     def _unmarshal_dict(cls, inst, path, type_ref):
+        """The `_unmarshal_dict` method is a private method that is used to deserialize a dictionary to an object
+        of type `type_ref`. This method is called by the `load` method."""
         if not inst:
             return None
         if not isinstance(inst, dict):
@@ -646,6 +713,8 @@ class Installation:
 
     @classmethod
     def _unmarshal_primitive(cls, inst, type_ref):
+        """The `_unmarshal_primitive` method is a private method that is used to deserialize a dictionary to an object
+        of type `type_ref`. This method is called by the `load` method."""
         if not inst:
             return inst
         # convert from str to int if necessary
@@ -654,16 +723,22 @@ class Installation:
 
     @staticmethod
     def _explain_why(type_ref: type, path: list[str], raw: Any) -> str:
+        """The `_explain_why` method is a private method that is used to explain why a value is not of the expected
+        type. This method is called by the `_unmarshal` and `_marshal` methods."""
         if raw is None:
             raw = "value is missing"
         return f'{".".join(path)}: not a {type_ref.__name__}: {raw}'
 
     @staticmethod
     def _dump_json(as_dict: Json, _: type) -> bytes:
+        """The `_dump_json` method is a private method that is used to serialize a dictionary to a JSON string. This
+        method is called by the `save` method."""
         return json.dumps(as_dict, indent=2).encode("utf8")
 
     @staticmethod
     def _dump_yaml(raw: Json, _: type) -> bytes:
+        """The `_dump_yaml` method is a private method that is used to serialize a dictionary to a YAML string. This
+        method is called by the `save` method."""
         try:
             from yaml import dump  # pylint: disable=import-outside-toplevel
 
@@ -673,6 +748,8 @@ class Installation:
 
     @staticmethod
     def _load_yaml(raw: BinaryIO) -> Json:
+        """The `_load_yaml` method is a private method that is used to deserialize a YAML string to a dictionary. This
+        method is called by the `load` method."""
         try:
             from yaml import (  # pylint: disable=import-outside-toplevel
                 YAMLError,
@@ -688,6 +765,8 @@ class Installation:
 
     @staticmethod
     def _dump_csv(raw: list[Json], type_ref: type) -> bytes:
+        """The `_dump_csv` method is a private method that is used to serialize a list of dictionaries to a CSV string.
+        This method is called by the `save` method."""
         type_args = get_args(type_ref)
         if not type_args:
             raise SerdeError(f"Writing CSV is only supported for lists. Got {type_ref}")
@@ -721,7 +800,8 @@ class Installation:
             return out
 
     def _enable_files_in_repos(self):
-        # check if "enableWorkspaceFilesystem" is set to false
+        """The `_enable_files_in_repos` method is a private method that is used to enable the "Files In Repos"
+        feature on the current workspace. This method is called by the `upload` method."""
         workspace_file_system = self._ws.workspace_conf.get_status("enableWorkspaceFilesystem")
 
         logger.debug("Checking Files In Repos configuration")

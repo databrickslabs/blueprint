@@ -1,3 +1,5 @@
+"""Automated rollout of application upgrades deployed in a Databricks workspace."""
+
 import importlib.util
 import logging
 from dataclasses import dataclass, field
@@ -85,6 +87,7 @@ class Upgrades:
             self._installation.save(applied)
 
     def _apply_python_script(self, script: Path, ws: WorkspaceClient):
+        """Load and apply the upgrade script."""
         name = "_".join(script.name.removesuffix(".py").split("_")[1:])
         spec = importlib.util.spec_from_file_location(name, script.as_posix())
         if not spec:
@@ -102,9 +105,11 @@ class Upgrades:
         change.upgrade(self._installation, ws)
 
     def _installed(self) -> SemVer:
+        """Load the installed version of the product."""
         return self._installation.load(Version).as_semver()
 
     def _diff(self, upgrades_folder: Path):
+        """Yield the upgrade scripts that need to be applied."""
         current = self._product_info.as_semver()
         installed_version = self._installed()
         for file in upgrades_folder.glob("v*.py"):
@@ -122,6 +127,7 @@ class Upgrades:
 
     @staticmethod
     def _parse_version(name: str) -> SemVer:
+        """Parse the version from the upgrade script name."""
         split = name.split("_")
         if len(split) < 2:
             raise ValueError(f"invalid spec: {name}")

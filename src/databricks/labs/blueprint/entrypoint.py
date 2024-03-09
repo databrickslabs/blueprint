@@ -1,3 +1,5 @@
+"""Entrypoint utilities for logging and project root detection"""
+
 import logging
 import os
 import sys

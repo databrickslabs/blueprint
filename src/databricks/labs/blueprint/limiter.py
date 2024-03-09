@@ -1,3 +1,5 @@
+"""This module provides a RateLimiter class and a rate_limited decorator to limit the rate of requests"""
+
 import logging
 import threading
 import time

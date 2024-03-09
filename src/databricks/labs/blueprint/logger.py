@@ -1,8 +1,12 @@
+"""A nice formatter for logging. It uses colors and bold text if the console supports it."""
+
 import logging
 import sys
 
 
 class NiceFormatter(logging.Formatter):
+    """A nice formatter for logging. It uses colors and bold text if the console supports it."""
+
     BOLD = "\033[1m"
     RESET = "\033[0m"
     GREEN = "\033[32m"
@@ -14,6 +18,9 @@ class NiceFormatter(logging.Formatter):
     GRAY = "\033[90m"
 
     def __init__(self, *, probe_tty: bool = False) -> None:
+        """Create a new instance of the formatter. If probe_tty is True, then the formatter will
+        attempt to detect if the console supports colors. If probe_tty is False, colors will be
+        enabled by default."""
         super().__init__(fmt="%(asctime)s %(levelname)s [%(name)s] %(message)s", datefmt="%H:%M")
         self._levels = {
             logging.NOTSET: self._bold("TRACE"),
@@ -27,9 +34,11 @@ class NiceFormatter(logging.Formatter):
         self.colors = sys.stdout.isatty() if probe_tty else True
 
     def _bold(self, text):
+        """Return text in bold."""
         return f"{self.BOLD}{text}{self.RESET}"
 
     def format(self, record: logging.LogRecord):  # noqa: A003
+        """Format the log record. If colors are enabled, use them."""
         if not self.colors:
             return super().format(record)
         ts = self.formatTime(record, datefmt="%H:%M:%S")
@@ -60,6 +69,7 @@ class NiceFormatter(logging.Formatter):
 
 
 def install_logger(level="DEBUG"):
+    """Install a console logger with a nice formatter."""
     for h in logging.root.handlers:
         logging.root.removeHandler(h)
     console_handler = logging.StreamHandler(sys.stderr)

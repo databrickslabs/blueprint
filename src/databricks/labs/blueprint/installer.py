@@ -1,3 +1,5 @@
+"""Manages ~/.{product}/state.json file on WorkspaceFS to track installations."""
+
 import logging
 import threading
 from dataclasses import dataclass, field
