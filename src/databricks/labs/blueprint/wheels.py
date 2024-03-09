@@ -1,6 +1,8 @@
 import inspect
 import logging
+import random
 import shutil
+import string
 import subprocess
 import sys
 import tempfile
@@ -40,13 +42,19 @@ class SingleSourceVersionError(NotImplementedError):
 class ProductInfo:
     _version_file_names = ["__about__.py", "__version__.py", "version.py"]
 
-    def __init__(self, __file: str, *, github_org: str = "databrickslabs"):
+    def __init__(self, __file: str, *, github_org: str = "databrickslabs", product_name: str | None = None):
         self._version_file = self._infer_version_file(Path(__file), self._version_file_names)
+        self._product_name = product_name
         self._github_org = github_org
 
     @classmethod
     def from_class(cls, klass: type) -> "ProductInfo":
         return cls(inspect.getfile(klass))
+
+    @classmethod
+    def for_testing(cls, klass: type) -> "ProductInfo":
+        """Create a product info for testing purposes with a random product name."""
+        return cls(inspect.getfile(klass), product_name=cls._make_random(4))
 
     def checkout_root(self):
         return find_project_root(self._version_file.as_posix())
@@ -75,6 +83,9 @@ class ProductInfo:
         return SemVer.parse(self.version())
 
     def product_name(self) -> str:
+        """Returns the product name based on the version file folder name."""
+        if self._product_name:
+            return self._product_name
         version_file_folder = self._version_file.parent
         return version_file_folder.name.replace("_", "-")
 
@@ -108,6 +119,12 @@ class ProductInfo:
 
     def wheels(self, ws: WorkspaceClient) -> "WheelsV2":
         return WheelsV2(self.current_installation(ws), self)
+
+    @staticmethod
+    def _make_random(k) -> str:
+        """Generate a random string of fixed length"""
+        charset = string.ascii_uppercase + string.ascii_lowercase + string.digits
+        return "".join(random.choices(charset, k=int(k)))
 
     @staticmethod
     def _semver_and_pep440(git_detached_version: str) -> str:

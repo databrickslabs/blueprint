@@ -1,6 +1,6 @@
 <!-- FOR CONTRIBUTORS: Edit this file in Visual Studio Code with the recommended extensions, so that we update the table of contents automatically -->
 Databricks Labs Blueprint
----
+===
 
 [![python](https://img.shields.io/badge/python-3.10,%203.11,%203.12-green)](https://github.com/databrickslabs/blueprint/actions/workflows/push.yml)
 [![codecov](https://codecov.io/github/databrickslabs/blueprint/graph/badge.svg?token=x1JSVddfZa)](https://codecov.io/github/databrickslabs/blueprint) [![lines of code](https://tokei.rs/b1/github/databrickslabs/blueprint)]([https://codecov.io/github/databrickslabs/blueprint](https://github.com/databrickslabs/blueprint))
@@ -8,49 +8,53 @@ Databricks Labs Blueprint
 
 Baseline for Databricks Labs projects written in Python. Sources are validated with `mypy` and `pylint`. See [Contributing instructions](CONTRIBUTING.md) if you would like to improve this project.
 
-- [Installation](#installation)
-- [Batteries Included](#batteries-included)
-  - [Basic Terminal User Interface (TUI) Primitives](#basic-terminal-user-interface-tui-primitives)
-    - [Simple Text Questions](#simple-text-questions)
-    - [Confirming Actions](#confirming-actions)
-    - [Single Choice from List](#single-choice-from-list)
-    - [Single Choice from Dictionary](#single-choice-from-dictionary)
-    - [Multiple Choices from Dictionary](#multiple-choices-from-dictionary)
-    - [Unit Testing Prompts](#unit-testing-prompts)
-  - [Nicer Logging Formatter](#nicer-logging-formatter)
-    - [Rendering on Dark Background](#rendering-on-dark-background)
-    - [Rendering in Databricks Notebooks](#rendering-in-databricks-notebooks)
-    - [Integration With Your App](#integration-with-your-app)
-    - [Integration with `console_script` Entrypoints](#integration-with-console_script-entrypoints)
-  - [Parallel Task Execution](#parallel-task-execution)
-    - [Collecting Results](#collecting-results)
-    - [Collecting Errors from Background Tasks](#collecting-errors-from-background-tasks)
-    - [Strict Failures from Background Tasks](#strict-failures-from-background-tasks)
-  - [Application and Installation State](#application-and-installation-state)
-    - [Install Folder](#install-folder)
-    - [Detecting Current Installation](#detecting-current-installation)
-    - [Detecting Installations From All Users](#detecting-installations-from-all-users)
-    - [Saving `@dataclass` configuration](#saving-dataclass-configuration)
-    - [Saving CSV files](#saving-csv-files)
-    - [Loading `@dataclass` configuration](#loading-dataclass-configuration)
-    - [Brute-forcing `SerdeError` with `as_dict()` and `from_dict()`](#brute-forcing-serdeerror-with-as_dict-and-from_dict)
-    - [Configuration Format Evolution](#configuration-format-evolution)
-    - [Uploading Untyped Files](#uploading-untyped-files)
-    - [Listing All Files in the Install Folder](#listing-all-files-in-the-install-folder)
-    - [Unit Testing Installation State](#unit-testing-installation-state)
-    - [Assert Rewriting with PyTest](#assert-rewriting-with-pytest)
-  - [Application State Migrations](#application-state-migrations)
-  - [Building Wheels](#building-wheels)
-    - [Released Version Detection](#released-version-detection)
-    - [Unreleased Version Detection](#unreleased-version-detection)
-    - [Application Name Detection](#application-name-detection)
-    - [Publishing Wheels to Databricks Workspace](#publishing-wheels-to-databricks-workspace)
-  - [Databricks CLI's `databricks labs ...` Router](#databricks-clis-databricks-labs--router)
-    - [Account-level Commands](#account-level-commands)
-    - [Integration with Databricks Connect](#integration-with-databricks-connect)
-    - [Starting New Projects](#starting-new-projects)
-- [Notable Downstream Projects](#notable-downstream-projects)
-- [Project Support](#project-support)
+<!-- TOC -->
+* [Databricks Labs Blueprint](#databricks-labs-blueprint)
+* [Installation](#installation)
+* [Batteries Included](#batteries-included)
+  * [Basic Terminal User Interface (TUI) Primitives](#basic-terminal-user-interface-tui-primitives)
+    * [Simple Text Questions](#simple-text-questions)
+    * [Confirming Actions](#confirming-actions)
+    * [Single Choice from List](#single-choice-from-list)
+    * [Single Choice from Dictionary](#single-choice-from-dictionary)
+    * [Multiple Choices from Dictionary](#multiple-choices-from-dictionary)
+    * [Unit Testing Prompts](#unit-testing-prompts)
+  * [Nicer Logging Formatter](#nicer-logging-formatter)
+    * [Rendering on Dark Background](#rendering-on-dark-background)
+    * [Rendering in Databricks Notebooks](#rendering-in-databricks-notebooks)
+    * [Integration With Your App](#integration-with-your-app)
+    * [Integration with `console_script` Entrypoints](#integration-with-consolescript-entrypoints)
+  * [Parallel Task Execution](#parallel-task-execution)
+    * [Collecting Results](#collecting-results)
+    * [Collecting Errors from Background Tasks](#collecting-errors-from-background-tasks)
+    * [Strict Failures from Background Tasks](#strict-failures-from-background-tasks)
+  * [Application and Installation State](#application-and-installation-state)
+    * [Install Folder](#install-folder)
+    * [Detecting Current Installation](#detecting-current-installation)
+    * [Detecting Installations From All Users](#detecting-installations-from-all-users)
+    * [Saving `@dataclass` configuration](#saving-dataclass-configuration)
+    * [Saving CSV files](#saving-csv-files)
+    * [Loading `@dataclass` configuration](#loading-dataclass-configuration)
+    * [Brute-forcing `SerdeError` with `as_dict()` and `from_dict()`](#brute-forcing-serdeerror-with-asdict-and-fromdict)
+    * [Configuration Format Evolution](#configuration-format-evolution)
+    * [Uploading Untyped Files](#uploading-untyped-files)
+    * [Listing All Files in the Install Folder](#listing-all-files-in-the-install-folder)
+    * [Unit Testing Installation State](#unit-testing-installation-state)
+    * [Assert Rewriting with PyTest](#assert-rewriting-with-pytest)
+  * [Application State Migrations](#application-state-migrations)
+  * [Building Wheels](#building-wheels)
+    * [Released Version Detection](#released-version-detection)
+    * [Unreleased Version Detection](#unreleased-version-detection)
+    * [Application Name Detection](#application-name-detection)
+    * [Using `ProductInfo` with integration tests](#using-productinfo-with-integration-tests)
+    * [Publishing Wheels to Databricks Workspace](#publishing-wheels-to-databricks-workspace)
+  * [Databricks CLI's `databricks labs ...` Router](#databricks-clis-databricks-labs--router)
+    * [Account-level Commands](#account-level-commands)
+    * [Integration with Databricks Connect](#integration-with-databricks-connect)
+    * [Starting New Projects](#starting-new-projects)
+* [Notable Downstream Projects](#notable-downstream-projects)
+* [Project Support](#project-support)
+<!-- TOC -->
 
 # Installation
 
@@ -402,6 +406,8 @@ See [unit testing](#unit-testing-installation-state) for more details.
 The `install_folder` method returns the path to the installation folder on WorkspaceFS. The installation folder 
 is used to store typed files that are managed by the `Installation` class. [Publishing wheels](#publishing-wheels-to-databricks-workspace) 
 update the `version.json` file in the install folder.
+
+When integration testing, you may want to have a [random installation folder](#using-productinfo-with-integration-tests) for each test execution.
 
 If an `install_folder` argument is provided to the constructor of the `Installation` class, it will be used
 as the installation folder. Otherwise, the installation folder will be determined based on the current user's
@@ -871,12 +877,28 @@ logger.info(f'Is unreleased: {is_unreleased}')
 ### Application Name Detection
 
 Library can infer the name of application by taking the directory name when `__about__.py` file is located within the current project. See [released version detection](#released-version-detection) for more details.
+[`ProductInfo.for_testing(klass)`](#using-productinfo-with-integration-tests) creates a new `ProductInfo` object with a random `product_name`.
 
 ```python
 from databricks.labs.blueprint.wheels import ProductInfo
 
 product_info = ProductInfo(__file__)
 logger.info(f'Product name is: {product_info.product_name()}')
+```
+
+[[back to top](#databricks-labs-blueprint)]
+
+### Using `ProductInfo` with integration tests
+
+When you're integration testing your [installations](#installation), you may want to have different [installation folders](#install-folder) for each test execution. `ProductInfo.for_testing(klass)` helps you with this:
+
+```python
+from ... import ConfigurationClass
+from databricks.labs.blueprint.wheels import ProductInfo
+
+first = ProductInfo.for_testing(ConfigurationClass)
+second = ProductInfo.for_testing(ConfigurationClass)
+assert first.product_name() != second.product_name()
 ```
 
 [[back to top](#databricks-labs-blueprint)]
@@ -889,14 +911,13 @@ Every call `wheels.upload_to_wsfs()` updates `version.json` file in the [install
 
 ```python
 from databricks.sdk import WorkspaceClient
-from databricks.labs.blueprint.installation import Installation
-from databricks.labs.blueprint.wheels import ProductInfo, WheelsV2
+from databricks.labs.blueprint.wheels import ProductInfo
 
 w = WorkspaceClient()
 product_info = ProductInfo(__file__)
-installation = Installation(w, product_info.product_name())
+installation = product_info.current_installation(w)
 
-with WheelsV2(installation, product_info) as wheels:
+with product_info.wheels(w) as wheels:
     remote_wheel = wheels.upload_to_wsfs()
     logger.info(f'Uploaded to {remote_wheel}')
 ```

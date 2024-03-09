@@ -79,3 +79,12 @@ def test_marker_without_version_variable():
     no_version_fixture = Path(__file__).parent / "fixtures/some/__init__.py"
     with pytest.raises(SingleSourceVersionError):
         ProductInfo(no_version_fixture.as_posix())
+
+
+def test_product_info_for_testing_product_names_are_different():
+    a = ProductInfo.from_class(MockInstallation)
+    b = ProductInfo.for_testing(MockInstallation)
+    c = ProductInfo.for_testing(MockInstallation)
+    assert a.product_name() != b.product_name()
+    assert b.product_name() != c.product_name()
+    assert a.product_name() != c.product_name()
