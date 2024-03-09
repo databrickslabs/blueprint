@@ -66,7 +66,6 @@ def init_project(target):
 
     project_name = prompts.question("Name of the project", default=target_folder.name)
     src_dir, dst_dir = relative_paths(project_root, target_folder.absolute())
-    import pdb; pdb.set_trace()
 
     ignore_names = {
         ".git",
