@@ -1,3 +1,5 @@
+"""Run tasks in parallel and return results and errors"""
+
 import concurrent
 import datetime as dt
 import functools
@@ -40,6 +42,7 @@ class Threads(Generic[Result]):
     def gather(
         cls, name: str, tasks: Sequence[Task[Result]], num_threads: int | None = None
     ) -> tuple[Collection[Result], list[Exception]]:
+        """Run tasks in parallel and return results and errors"""
         if num_threads is None:
             num_cpus = os.cpu_count()
             if num_cpus is None:
@@ -49,12 +52,14 @@ class Threads(Generic[Result]):
 
     @classmethod
     def strict(cls, name: str, tasks: Sequence[Task[Result]]) -> Collection[Result]:
+        """Run tasks in parallel and raise ManyError if any task fails"""
         collected, errs = cls.gather(name, tasks)
         if errs:
             raise ManyError(errs)
         return collected
 
     def _run(self) -> tuple[Collection[Result], list[Exception]]:
+        """Run tasks in parallel and return results and errors"""
         given_cnt = len(self._tasks)
         if given_cnt == 0:
             return [], []
@@ -78,6 +83,7 @@ class Threads(Generic[Result]):
         return collected, errors
 
     def _on_finish(self, given_cnt: int, collected_cnt: int, failed_cnt: int):
+        """Log the results of the parallel execution"""
         since = dt.datetime.now() - self._started
         success_pct = collected_cnt / given_cnt * 100
         stats = f"{success_pct:.0f}% results available ({collected_cnt}/{given_cnt}). Took {since}"
@@ -91,6 +97,7 @@ class Threads(Generic[Result]):
             logger.info(f"Finished '{self._name}' tasks: {stats}")
 
     def _execute(self):
+        """Run tasks in parallel and return futures"""
         thread_name_prefix = re.sub(r"\W+", "_", self._name)
         with ThreadPoolExecutor(self._num_threads, thread_name_prefix) as pool:
             futures = []
@@ -103,6 +110,7 @@ class Threads(Generic[Result]):
             return concurrent.futures.as_completed(futures)
 
     def _progress_report(self, _):
+        """Log the progress of the parallel execution"""
         total_cnt = len(self._tasks)
         log_every = self._default_log_every
         if total_cnt > self._large_log_every:

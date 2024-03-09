@@ -1,3 +1,5 @@
+"""Baseline CLI for Databricks Labs projects."""
+
 import functools
 import json
 import logging
@@ -33,6 +35,8 @@ class App:
         self._product_info = ProductInfo(__file)
 
     def command(self, fn=None, is_account: bool = False, is_unauthenticated: bool = False):
+        """Decorator to register a function as a command."""
+
         def register(func):
             command_name = func.__name__.replace("_", "-")
             if not func.__doc__:
@@ -52,6 +56,7 @@ class App:
         return fn
 
     def _route(self, raw):
+        """Route the command. This is the entry point for the CLI."""
         payload = json.loads(raw)
         command = payload["command"]
         if command not in self._mapping:

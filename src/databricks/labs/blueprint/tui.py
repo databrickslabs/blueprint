@@ -1,3 +1,5 @@
+"""Text User Interface (TUI) utilities"""
+
 import logging
 import re
 from collections.abc import Callable

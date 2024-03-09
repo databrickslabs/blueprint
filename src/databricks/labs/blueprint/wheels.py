@@ -1,3 +1,5 @@
+"""Product info and wheel builder."""
+
 import inspect
 import logging
 import random
@@ -6,6 +8,7 @@ import string
 import subprocess
 import sys
 import tempfile
+import warnings
 from collections.abc import Iterable
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
@@ -49,6 +52,7 @@ class ProductInfo:
 
     @classmethod
     def from_class(cls, klass: type) -> "ProductInfo":
+        """Create a product info with a class used as a starting point to determine location of the version file."""
         return cls(inspect.getfile(klass))
 
     @classmethod
@@ -57,6 +61,7 @@ class ProductInfo:
         return cls(inspect.getfile(klass), product_name=cls._make_random(4))
 
     def checkout_root(self):
+        """Returns the root of the project, where .git folder is located."""
         return find_project_root(self._version_file.as_posix())
 
     def version_file(self) -> Path:
@@ -80,6 +85,7 @@ class ProductInfo:
         return self.__version
 
     def as_semver(self) -> SemVer:
+        """Returns the version as SemVer object."""
         return SemVer.parse(self.version())
 
     def product_name(self) -> str:
@@ -90,16 +96,20 @@ class ProductInfo:
         return version_file_folder.name.replace("_", "-")
 
     def released_version(self) -> str:
+        """Returns the version from the version file."""
         return self._read_version(self._version_file)
 
     def is_git_checkout(self) -> bool:
+        """Returns True if the project is a git checkout."""
         git_config = self.checkout_root() / ".git" / "config"
         return git_config.exists()
 
     def is_unreleased_version(self) -> bool:
+        """Returns True if we are in the git checkout and the version is unreleased."""
         return "+" in self.version()
 
     def unreleased_version(self) -> str:
+        """Returns the unreleased version based on the `git describe --tags` output."""
         try:
             out = subprocess.run(
                 ["git", "describe", "--tags"], stdout=subprocess.PIPE, check=True, cwd=self.checkout_root()
@@ -115,9 +125,11 @@ class ProductInfo:
             return self.released_version()
 
     def current_installation(self, ws: WorkspaceClient) -> Installation:
+        """Returns the current installation of the product."""
         return Installation.current(ws, self.product_name())
 
     def wheels(self, ws: WorkspaceClient) -> "WheelsV2":
+        """Returns the wheel builder."""
         return WheelsV2(self.current_installation(ws), self)
 
     @staticmethod
@@ -136,6 +148,7 @@ class ProductInfo:
 
     @staticmethod
     def _semver_and_pep440(git_detached_version: str) -> str:
+        """Create a version that is both SemVer and PEP440 compliant."""
         dv = SemVer.parse(git_detached_version)
         datestamp = datetime.now().strftime("%Y%m%d%H%M%S")
         # new commits on main branch since the last tag
@@ -164,6 +177,7 @@ class ProductInfo:
 
     @staticmethod
     def _traverse_up(start: Path, version_file_names: list[str]) -> Iterable[Path]:
+        """Traverse up the directory tree and yield the version files."""
         prev_folder = start
         folder = start.parent
         while not folder.samefile(prev_folder):
@@ -177,6 +191,7 @@ class ProductInfo:
 
     @staticmethod
     def _read_version(version_file: Path) -> str:
+        """Read the version from the version file."""
         version_data: dict[str, str] = {}
         with version_file.open("r") as f:
             exec(f.read(), version_data)  # pylint: disable=exec-used
@@ -206,10 +221,12 @@ class WheelsV2(AbstractContextManager):
         self._verbose = verbose
 
     def upload_to_dbfs(self) -> str:
+        """Uploads the wheel to DBFS location of installation and returns the remote path."""
         with self._local_wheel.open("rb") as f:
             return self._installation.upload_dbfs(f"wheels/{self._local_wheel.name}", f)
 
     def upload_to_wsfs(self) -> str:
+        """Uploads the wheel to WSFS location of installation and returns the remote path."""
         with self._local_wheel.open("rb") as f:
             remote_wheel = self._installation.upload(f"wheels/{self._local_wheel.name}", f.read())
             self._installation.save(Version(self._product_info.version(), remote_wheel, self._now_iso()))
@@ -217,14 +234,17 @@ class WheelsV2(AbstractContextManager):
 
     @staticmethod
     def _now_iso():
+        """Returns the current time in ISO format."""
         return datetime.now(timezone.utc).isoformat()
 
     def __enter__(self) -> "WheelsV2":
+        """Builds the wheel and returns the instance. Use it as a context manager."""
         self._tmp_dir = tempfile.TemporaryDirectory()
         self._local_wheel = self._build_wheel(self._tmp_dir.name, verbose=self._verbose)
         return self
 
     def __exit__(self, __exc_type, __exc_value, __traceback):
+        """Cleans up the temporary directory. Use it as a context manager."""
         self._tmp_dir.cleanup()
 
     def _build_wheel(self, tmp_dir: str, *, verbose: bool = False):
@@ -257,6 +277,7 @@ class WheelsV2(AbstractContextManager):
         return next(Path(tmp_dir).glob("*.whl"))
 
     def _override_version_to_unreleased(self, tmp_dir_path: Path):
+        """Overrides the version file to unreleased version."""
         checkout_root = self._product_info.checkout_root()
         relative_version_file = self._product_info.version_file().relative_to(checkout_root)
         version_file = tmp_dir_path / relative_version_file
@@ -264,6 +285,7 @@ class WheelsV2(AbstractContextManager):
             f.write(f'__version__ = "{self._product_info.version()}"')
 
     def _copy_root_to(self, tmp_dir: str | Path):
+        """Copies the root to a temporary directory."""
         checkout_root = self._product_info.checkout_root()
         tmp_dir_path = Path(tmp_dir) / "working-copy"
 
@@ -287,5 +309,6 @@ class Wheels(WheelsV2):
     def __init__(
         self, ws: WorkspaceClient, install_state: InstallState, product_info: ProductInfo, *, verbose: bool = False
     ):
+        warnings.warn("Wheels is deprecated, use WheelsV2 instead", DeprecationWarning)
         installation = Installation(ws, product_info.product_name(), install_folder=install_state.install_folder())
         super().__init__(installation, product_info, verbose=verbose)
