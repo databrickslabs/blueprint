@@ -143,3 +143,9 @@ class MockPrompts(Prompts):
                 return default
             return answer
         raise ValueError(f"not mocked: {text}")
+
+    def extend(self, patterns_to_answers: dict[str, str]):
+        """Extend the existing list of questions and answers"""
+        patterns = [(re.compile(k), v) for k, v in patterns_to_answers.items()]
+        self._questions_to_answers.extend(patterns)
+        self._questions_to_answers.sort(key=lambda _: len(_[0].pattern), reverse=True)
