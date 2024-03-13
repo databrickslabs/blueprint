@@ -188,7 +188,7 @@ class Installation:
 
     def is_global(self) -> bool:
         """Returns true if current installation is in /Applications folder"""
-        return self.install_folder() == self._global_installation(self._product)
+        return self.install_folder() == self._global_installation(self.product())
 
     def username(self) -> str:
         """Returns the username associated with the installation folder"""
@@ -819,16 +819,23 @@ class MockInstallation(Installation):
         pytest.register_assert_rewrite('databricks.labs.blueprint.installation')
     """
 
-    def __init__(self, overwrites: Any = None):  # pylint: disable=super-init-not-called
+    def __init__(self, overwrites: Any = None, *, is_global=True):  # pylint: disable=super-init-not-called
         if not overwrites:
             overwrites = {}
         self._overwrites = overwrites
         self._uploads: dict[str, bytes] = {}
         self._dbfs: dict[str, bytes] = {}
         self._removed = False
+        self._is_global = is_global
 
     def install_folder(self) -> str:
         return "~/mock"
+
+    def is_global(self) -> bool:
+        return self._is_global
+
+    def product(self) -> str:
+        return "mock"
 
     def _host(self):
         return "https://localhost"
