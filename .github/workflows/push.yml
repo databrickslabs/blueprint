@@ -34,7 +34,7 @@ jobs:
 
       - name: Run unit tests
         run: |
-          pip install hatch==1.7.0
+          pip install hatch==1.9.4
           make test
 
       - name: Publish test coverage
