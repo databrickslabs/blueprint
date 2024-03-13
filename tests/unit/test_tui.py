@@ -39,8 +39,6 @@ def test_extend_prompts():
         prompts.question("new_question")
     assert "not mocked: new_question" == err.value.args[0]
 
-    prompts.extend({r"new_question": "new_answer"})
+    prompts = prompts.extend({r"new_question": "new_answer"})
     res = prompts.question("new_question")
     assert "new_answer" == res
-
-

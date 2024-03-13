@@ -1,5 +1,7 @@
 """Text User Interface (TUI) utilities"""
 
+from __future__ import annotations
+
 import logging
 import re
 from collections.abc import Callable
@@ -144,8 +146,10 @@ class MockPrompts(Prompts):
             return answer
         raise ValueError(f"not mocked: {text}")
 
-    def extend(self, patterns_to_answers: dict[str, str]):
+    def extend(self, patterns_to_answers: dict[str, str]) -> MockPrompts:
         """Extend the existing list of questions and answers"""
         patterns = [(re.compile(k), v) for k, v in patterns_to_answers.items()]
         self._questions_to_answers.extend(patterns)
         self._questions_to_answers.sort(key=lambda _: len(_[0].pattern), reverse=True)
+
+        return self
