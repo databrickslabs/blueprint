@@ -32,13 +32,20 @@ def test_ask_for_int():
 
 def test_extend_prompts():
     prompts = MockPrompts({r"initial_question": "initial_answer"})
+
+    # Test that the initial question is mocked
     res = prompts.question("initial_question")
     assert "initial_answer" == res
 
-    with pytest.raises(ValueError) as err:
+    # Test that the new question is not mocked
+    with pytest.raises(ValueError, match="not mocked: new_question"):
         prompts.question("new_question")
-    assert "not mocked: new_question" == err.value.args[0]
 
-    prompts = prompts.extend({r"new_question": "new_answer"})
-    res = prompts.question("new_question")
+    # Test that the new question is mocked after using extend
+    new_prompts = prompts.extend({r"new_question": "new_answer"})
+    res = new_prompts.question("new_question")
     assert "new_answer" == res
+
+    # Test that new question is still not mocked in the original prompts
+    with pytest.raises(ValueError, match="not mocked: new_question"):
+        prompts.question("new_question")
