@@ -483,11 +483,11 @@ class Installation:
             return inst.as_dict(), True
         if dataclasses.is_dataclass(type_ref):
             return cls._marshal_dataclass(type_ref, path, inst)
-        if isinstance(type_ref, types.GenericAlias):
-            return cls._marshal_generic(type_ref, path, inst)
         if isinstance(type_ref, (types.UnionType, _UnionGenericAlias)):  # type: ignore[attr-defined]
             return cls._marshal_union(type_ref, path, inst)
-        if isinstance(type_ref, _GenericAlias):  # type: ignore[attr-defined]
+        if isinstance(type_ref, (_GenericAlias, types.GenericAlias)):  # type: ignore[attr-defined]
+            if type_ref.__origin__ in (dict, list) or isinstance(type_ref, types.GenericAlias):
+                return cls._marshal_generic(type_ref, path, inst)
             return cls._marshal_generic_alias(type_ref, inst)
         if isinstance(inst, databricks.sdk.core.Config):
             return inst.as_dict(), True
@@ -570,6 +570,9 @@ class Installation:
             return None, False
         as_dict = {}
         for field, hint in get_type_hints(type_ref).items():
+            origin = getattr(hint, "__origin__", None)
+            if origin is typing.ClassVar:
+                continue
             raw = getattr(inst, field)
             value, ok = cls._marshal(hint, [*path, field], raw)
             if not ok:
@@ -619,12 +622,10 @@ class Installation:
             return cls._unmarshal_dataclass(inst, path, type_ref)
         if isinstance(type_ref, (types.UnionType, _UnionGenericAlias)):
             return cls._unmarshal_union(inst, path, type_ref)
-        if isinstance(type_ref, types.GenericAlias):
-            return cls._unmarshal_generic(inst, path, type_ref)
-        if isinstance(type_ref, _GenericAlias):
+        if isinstance(type_ref, (_GenericAlias, types.GenericAlias)):
             if not inst:
                 return None
-            if type_ref.__origin__ in (dict, list):
+            if type_ref.__origin__ in (dict, list) or isinstance(type_ref, types.GenericAlias):
                 return cls._unmarshal_generic(inst, path, type_ref)
             return cls._unmarshal(inst, path, type_ref.__origin__)
         if isinstance(type_ref, enum.EnumMeta):
