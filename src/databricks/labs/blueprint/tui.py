@@ -148,8 +148,8 @@ class MockPrompts(Prompts):
 
     def extend(self, patterns_to_answers: dict[str, str]) -> MockPrompts:
         """Extend the existing list of questions and answers"""
-        patterns = [(re.compile(k), v) for k, v in patterns_to_answers.items()]
-        self._questions_to_answers.extend(patterns)
-        self._questions_to_answers.sort(key=lambda _: len(_[0].pattern), reverse=True)
-
-        return self
+        new_patterns_to_answers = {
+            **{pattern.pattern: answer for pattern, answer in self._questions_to_answers},
+            **patterns_to_answers,
+        }
+        return MockPrompts(new_patterns_to_answers)
