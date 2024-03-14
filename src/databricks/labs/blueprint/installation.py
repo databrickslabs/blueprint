@@ -11,6 +11,7 @@ import os.path
 import re
 import threading
 import types
+import typing
 from collections.abc import Callable, Collection
 from functools import partial
 from json import JSONDecodeError
@@ -623,6 +624,8 @@ class Installation:
         if isinstance(type_ref, _GenericAlias):
             if not inst:
                 return None
+            if type_ref.__origin__ in (dict, list):
+                return cls._unmarshal_generic(inst, path, type_ref)
             return cls._unmarshal(inst, path, type_ref.__origin__)
         if isinstance(type_ref, enum.EnumMeta):
             if not inst:
@@ -651,6 +654,9 @@ class Installation:
         from_dict = {}
         fields = getattr(type_ref, "__dataclass_fields__")
         for field_name, hint in get_type_hints(type_ref).items():
+            origin = getattr(hint, "__origin__", None)
+            if origin is typing.ClassVar:
+                continue
             raw = inst.get(field_name)
             value = cls._unmarshal(raw, [*path, field_name], hint)
             if value is None:
