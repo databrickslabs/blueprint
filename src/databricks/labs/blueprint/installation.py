@@ -577,7 +577,7 @@ class Installation:
             value, ok = cls._marshal(hint, [*path, field], raw)
             if not ok:
                 raise SerdeError(cls._explain_why(hint, [*path, field], raw))
-            if value is None:
+            if not value:
                 continue
             as_dict[field] = value
         return as_dict, True
