@@ -430,3 +430,20 @@ def test_load_complex_data_class():
     )
     load = installation.load(ComplexClass, filename="backups/complex-class.json")
     assert load == complex_class
+
+
+def test_load_empty_data_class():
+    installation = MockInstallation()
+    complex_class = ComplexClass("test", {"key": "value"}, [], {})
+    installation.save(complex_class, filename="backups/complex-class.json")
+    installation.assert_file_written(
+        "backups/complex-class.json",
+        {
+            "name": "test",
+            "spark_conf": {"key": "value"},
+            "policies": [],
+            "policies_map": {},
+        },
+    )
+    load = installation.load(ComplexClass, filename="backups/complex-class.json")
+    assert load == complex_class
