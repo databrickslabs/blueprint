@@ -1,4 +1,5 @@
 import io
+import typing
 from dataclasses import dataclass
 from unittest.mock import MagicMock, create_autospec
 
@@ -403,3 +404,29 @@ def test_data_class():
     installation.assert_file_written("backups/policy-test.json", {"policy_id": "123", "name": "foo"})
     load = installation.load(Policy, filename="backups/policy-test.json")
     assert load == policy
+
+
+@dataclass
+class ComplexClass:
+    name: str
+    spark_conf: typing.Dict[str, str]
+    policies: typing.List[Policy]
+    policies_map: typing.Dict[str, Policy]
+    CONST: typing.ClassVar[str] = "CONST"
+
+
+def test_load_complex_data_class():
+    installation = MockInstallation()
+    complex_class = ComplexClass("test", {"key": "value"}, [Policy("123", "foo")], {"123": Policy("123", "foo")})
+    installation.save(complex_class, filename="backups/complex-class.json")
+    installation.assert_file_written(
+        "backups/complex-class.json",
+        {
+            "name": "test",
+            "spark_conf": {"key": "value"},
+            "policies": [{"policy_id": "123", "name": "foo"}],
+            "policies_map": {"123": {"name": "foo", "policy_id": "123"}},
+        },
+    )
+    load = installation.load(ComplexClass, filename="backups/complex-class.json")
+    assert load == complex_class
