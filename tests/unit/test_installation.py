@@ -410,8 +410,8 @@ def test_data_class():
 class ComplexClass:
     name: str
     spark_conf: typing.Dict[str, str]
-    policies: typing.List[Policy]
-    policies_map: typing.Dict[str, Policy]
+    policies: typing.List[Policy] | None = None
+    policies_map: typing.Dict[str, Policy] | None = None
     CONST: typing.ClassVar[str] = "CONST"
 
 
@@ -426,6 +426,21 @@ def test_load_complex_data_class():
             "spark_conf": {"key": "value"},
             "policies": [{"policy_id": "123", "name": "foo"}],
             "policies_map": {"123": {"name": "foo", "policy_id": "123"}},
+        },
+    )
+    load = installation.load(ComplexClass, filename="backups/complex-class.json")
+    assert load == complex_class
+
+
+def test_load_empty_data_class():
+    installation = MockInstallation()
+    complex_class = ComplexClass("test", {"key": "value"}, None, None)
+    installation.save(complex_class, filename="backups/complex-class.json")
+    installation.assert_file_written(
+        "backups/complex-class.json",
+        {
+            "name": "test",
+            "spark_conf": {"key": "value"},
         },
     )
     load = installation.load(ComplexClass, filename="backups/complex-class.json")

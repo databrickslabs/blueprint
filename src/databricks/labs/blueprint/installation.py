@@ -540,7 +540,7 @@ class Installation:
         """The `_marshal_list` method is a private method that is used to serialize an object of type `type_ref` to
         a dictionary. This method is called by the `save` method."""
         as_list = []
-        if not inst:
+        if not isinstance(inst, list):
             return None, False
         for i, v in enumerate(inst):
             value, ok = cls._marshal(type_ref, [*path, f"{i}"], v)
@@ -623,11 +623,7 @@ class Installation:
         if isinstance(type_ref, (types.UnionType, _UnionGenericAlias)):
             return cls._unmarshal_union(inst, path, type_ref)
         if isinstance(type_ref, (_GenericAlias, types.GenericAlias)):
-            if not inst:
-                return None
-            if type_ref.__origin__ in (dict, list) or isinstance(type_ref, types.GenericAlias):
-                return cls._unmarshal_generic(inst, path, type_ref)
-            return cls._unmarshal(inst, path, type_ref.__origin__)
+            return cls._unmarshal_generic(inst, path, type_ref)
         if isinstance(type_ref, enum.EnumMeta):
             if not inst:
                 return None
@@ -687,9 +683,16 @@ class Installation:
     def _unmarshal_generic(cls, inst, path, type_ref):
         """The `_unmarshal_generic` method is a private method that is used to deserialize a dictionary to an object
         of type `type_ref`. This method is called by the `load` method."""
+        # pylint: disable-next=import-outside-toplevel
+        from typing import _GenericAlias  # type: ignore[attr-defined]
+
         type_args = get_args(type_ref)
         if not type_args:
             raise SerdeError(f"Missing type arguments: {type_args}")
+        if type_ref.__origin__ not in (dict, list) and isinstance(type_ref, _GenericAlias):
+            return cls._unmarshal(inst, path, type_ref.__origin__)
+        if inst is None:
+            return None
         if len(type_args) == 2:
             return cls._unmarshal_dict(inst, path, type_args[1])
         return cls._unmarshal_list(inst, path, type_args[0])
@@ -709,7 +712,7 @@ class Installation:
     def _unmarshal_dict(cls, inst, path, type_ref):
         """The `_unmarshal_dict` method is a private method that is used to deserialize a dictionary to an object
         of type `type_ref`. This method is called by the `load` method."""
-        if not inst:
+        if inst is None:
             return None
         if not isinstance(inst, dict):
             raise SerdeError(cls._explain_why(type_ref, path, inst))
