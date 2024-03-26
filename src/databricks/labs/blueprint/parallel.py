@@ -53,8 +53,11 @@ class Threads(Generic[Result]):
     @classmethod
     def strict(cls, name: str, tasks: Sequence[Task[Result]]) -> Collection[Result]:
         """Run tasks in parallel and raise ManyError if any task fails"""
+        __tracebackhide__ = True
         collected, errs = cls.gather(name, tasks)
         if errs:
+            if len(errs) == 1:
+                raise errs[0]
             raise ManyError(errs)
         return collected
 
