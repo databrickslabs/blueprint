@@ -53,7 +53,9 @@ class Threads(Generic[Result]):
     @classmethod
     def strict(cls, name: str, tasks: Sequence[Task[Result]]) -> Collection[Result]:
         """Run tasks in parallel and raise ManyError if any task fails"""
-        __tracebackhide__ = True
+        # this dunder variable is hiding this method from tracebacks, making it cleaner
+        # for the user to see the actual error without too much noise.
+        __tracebackhide__ = True  # pylint: disable=unused-variable
         collected, errs = cls.gather(name, tasks)
         if errs:
             if len(errs) == 1:
