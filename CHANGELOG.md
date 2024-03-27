@@ -1,5 +1,10 @@
 # Version changelog
 
+## 0.4.4
+
+* If `Threads.strict()` raises just one error, don't wrap it with `ManyError` ([#79](https://github.com/databrickslabs/blueprint/issues/79)). The `strict` method in the `gather` function of the `parallel.py` module in the `databricks/labs/blueprint` package has been updated to change the way it handles errors. Previously, if any task in the `tasks` sequence failed, the `strict` method would raise a `ManyError` exception containing all the errors. With this change, if only one error occurs, that error will be raised directly without being wrapped in a `ManyError` exception. This simplifies error handling and avoids unnecessary nesting of exceptions. Additionally, the `__tracebackhide__` dunder variable has been added to the method to improve the readability of tracebacks by hiding it from the user. This update aims to provide a more streamlined and user-friendly experience for handling errors in parallel processing tasks.
+
+
 ## 0.4.3
 
 * Fixed marshalling & unmarshalling edge cases ([#76](https://github.com/databrickslabs/blueprint/issues/76)). The serialization and deserialization methods in the code have been updated to improve handling of edge cases during marshalling and unmarshalling of data. When encountering certain edge cases, the `_marshal_list` method will now return an empty list instead of None, and both the `_unmarshal` and `_unmarshal_dict` methods will return None as is if the input is None. Additionally, the `_unmarshal` method has been updated to call `_unmarshal_generic` instead of checking if the type reference is a dictionary or list when it is a generic alias. The `_unmarshal_generic` method has also been updated to handle cases where the input is None. A new test case, `test_load_empty_data_class()`, has been added to the `tests/unit/test_installation.py` file to verify this behavior, ensuring that the correct behavior is maintained when encountering these edge cases during the marshalling and unmarshalling processes. These changes increase the reliability of the serialization and deserialization processes.
