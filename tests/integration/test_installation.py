@@ -16,7 +16,7 @@ def test_install_folder(ws):
 def test_install_folder_custom(ws):
     installation = Installation(ws, "blueprint", install_folder="/custom/folder")
 
-    assert installation.install_folder() == "/custom/folder"
+    assert installation.install_folder() == "/custom/folder..."
 
 
 @pytest.mark.xfail(raises=PermissionDenied)
