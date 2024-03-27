@@ -64,15 +64,18 @@ class InstallState:
     def __getattr__(self, item: str) -> dict[str, str]:
         with self._lock:
             if not self._state:
-                try:
-                    self._state = self._installation.load(RawState)
-                except NotFound:
-                    self._state = RawState(resources={})
+                self._state = self._load_state()
         if not self._state:
             raise StateError("Failed to load raw state")
         if item not in self._state.resources:
             self._state.resources[item] = {}
         return self._state.resources[item]
+
+    def _load_state(self) -> RawState:
+        try:
+            return self._installation.load(RawState)
+        except NotFound:
+            return RawState(resources={})
 
     def save(self) -> None:
         """Saves remote state"""
