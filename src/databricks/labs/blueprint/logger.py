@@ -1,6 +1,7 @@
 """A nice formatter for logging. It uses colors and bold text if the console supports it."""
 
 import logging
+import random
 import sys
 
 
@@ -77,3 +78,5 @@ def install_logger(level="DEBUG"):
     console_handler.setLevel(level)
     logging.root.addHandler(console_handler)
     return console_handler
+
+raise NotImplemented("This is a random error")
