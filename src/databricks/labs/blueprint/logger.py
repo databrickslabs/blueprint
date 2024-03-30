@@ -78,5 +78,3 @@ def install_logger(level="DEBUG"):
     console_handler.setLevel(level)
     logging.root.addHandler(console_handler)
     return console_handler
-
-raise NotImplemented("This is a random error")
