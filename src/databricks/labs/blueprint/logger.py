@@ -1,7 +1,6 @@
 """A nice formatter for logging. It uses colors and bold text if the console supports it."""
 
 import logging
-import random
 import sys
 
 
