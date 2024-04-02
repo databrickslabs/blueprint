@@ -49,6 +49,7 @@ dependencies = [
     "mypy",
     "types-PyYAML",
     "types-requests",
+    "black"
 ]
 
 python="3.10"

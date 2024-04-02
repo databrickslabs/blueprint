@@ -9,6 +9,7 @@ import re
 import threading
 from collections.abc import Callable, Collection, Sequence
 from concurrent.futures import ThreadPoolExecutor
+from functools import partial
 from typing import Generic, TypeVar
 
 MIN_THREADS = 8
@@ -136,10 +137,26 @@ class Threads(Generic[Result]):
 
         @functools.wraps(func)
         def inner(*args, **kwargs):
+            def _get_signature(f):
+                if isinstance(f, partial):
+                    try:
+                        args = []
+                        args.extend(repr(x) for x in f.args)
+                        args.extend(f"{k}={v!r}" for (k, v) in f.keywords.items())
+                        args_str = ", ".join(args)
+                        if args_str:
+                            return f"{name}({args_str})"
+                        return name
+                    except Exception:  # pylint: disable=broad-exception-caught
+                        return str(f)
+
+                return name
+
             try:
                 return func(*args, **kwargs), None
             except Exception as err:  # pylint: disable=broad-exception-caught
-                logger.error(f"{name} task failed: {err!s}", exc_info=err)
+                signature = _get_signature(func)
+                logger.error(f"{signature} task failed: {err!s}", exc_info=err)
                 return None, err
 
         return inner
