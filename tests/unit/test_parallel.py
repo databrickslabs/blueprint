@@ -137,6 +137,11 @@ def test_odd_partial_failed(caplog):
         partial(fails_on_odd),
         partial(fails_on_odd, n="aaa"),
     ]
+
+    signatures = [Threads._get_result_function_signature(func, "test") for func in tasks]
+
+    assert signatures == ["test(n=1)", "test(1, dummy='6')", "test", "test(n='aaa')"]
+
     results, errors = Threads.gather("testing", tasks)
 
     assert [] == results
