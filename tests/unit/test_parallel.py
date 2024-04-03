@@ -1,4 +1,5 @@
 import logging
+from functools import partial
 
 from databricks.sdk.core import DatabricksError
 
@@ -117,3 +118,34 @@ def test_all_works(caplog):
     assert [True, True, True, True] == results
     assert 0 == len(errors)
     assert ["Finished 'testing' tasks: 100% results available (4/4)"] == _predictable_messages(caplog)
+
+
+def test_odd_partial_failed(caplog):
+    caplog.set_level(logging.INFO)
+
+    def fails_on_odd(n=1, dummy=None):
+        if isinstance(n, str):
+            raise RuntimeError("strings are not supported!")
+
+        if n % 2:
+            msg = "failed"
+            raise DatabricksError(msg)
+
+    tasks = [
+        partial(fails_on_odd, n=1),
+        partial(fails_on_odd, 1, dummy="6"),
+        partial(fails_on_odd),
+        partial(fails_on_odd, n="aaa"),
+    ]
+
+    results, errors = Threads.gather("testing", tasks)
+
+    assert [] == results
+    assert 4 == len(errors)
+    assert [
+        "All 'testing' tasks failed!!!",
+        "testing task failed: failed",
+        "testing(1, dummy='6') task failed: failed",
+        "testing(n='aaa') task failed: strings are not supported!",
+        "testing(n=1) task failed: failed",
+    ] == _predictable_messages(caplog)

@@ -131,7 +131,25 @@ class Threads(Generic[Result]):
                 logger.info(msg)
 
     @staticmethod
-    def _wrap_result(func, name):
+    def _get_result_function_signature(func, name):
+        if not isinstance(func, functools.partial):
+            return name
+
+        # try to build up signature, this should never fail
+        try:
+            args = []
+            args.extend(repr(x) for x in func.args)
+            args.extend(f"{k}={v!r}" for (k, v) in func.keywords.items())
+            args_str = ", ".join(args)
+            if args_str:
+                return f"{name}({args_str})"
+            return name
+        # but if it would ever fail, better return generic serialized name, than messing up traceback even more...
+        except Exception:  # pylint: disable=broad-exception-caught
+            return str(func)
+
+    @classmethod
+    def _wrap_result(cls, func, name):
         """This method emulates GoLang's error return style"""
 
         @functools.wraps(func)
@@ -139,7 +157,8 @@ class Threads(Generic[Result]):
             try:
                 return func(*args, **kwargs), None
             except Exception as err:  # pylint: disable=broad-exception-caught
-                logger.error(f"{name} task failed: {err!s}", exc_info=err)
+                signature = cls._get_result_function_signature(func, name)
+                logger.error(f"{signature} task failed: {err!s}", exc_info=err)
                 return None, err
 
         return inner
