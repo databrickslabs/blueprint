@@ -41,7 +41,7 @@ class NiceFormatter(logging.Formatter):
         """Format the log record. If colors are enabled, use them."""
         if not self.colors:
             return super().format(record)
-        ts = self.formatTime(record, datefmt="%H:%M:%S")
+        timestamp = self.formatTime(record, datefmt="%H:%M:%S")
         level = self._levels[record.levelno]
         # databricks.labs.ucx.foo.bar -> d.l.u.foo.bar
         module_split = record.name.split(".")
@@ -65,13 +65,13 @@ class NiceFormatter(logging.Formatter):
         thread_name = ""
         if record.threadName != "MainThread":
             thread_name = f"[{record.threadName}]"
-        return f"{self.GRAY}{ts}{self.RESET} {level} {color_marker}[{name}]{thread_name} {msg}{self.RESET}"
+        return f"{self.GRAY}{timestamp}{self.RESET} {level} {color_marker}[{name}]{thread_name} {msg}{self.RESET}"
 
 
 def install_logger(level="DEBUG"):
     """Install a console logger with a nice formatter."""
-    for h in logging.root.handlers:
-        logging.root.removeHandler(h)
+    for handler in logging.root.handlers:
+        logging.root.removeHandler(handler)
     console_handler = logging.StreamHandler(sys.stderr)
     console_handler.setFormatter(NiceFormatter())
     console_handler.setLevel(level)

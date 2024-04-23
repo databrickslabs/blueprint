@@ -149,14 +149,14 @@ class ProductInfo:
     @staticmethod
     def _semver_and_pep440(git_detached_version: str) -> str:
         """Create a version that is both SemVer and PEP440 compliant."""
-        dv = SemVer.parse(git_detached_version)
+        detached_version = SemVer.parse(git_detached_version)
         datestamp = datetime.now().strftime("%Y%m%d%H%M%S")
         # new commits on main branch since the last tag
-        new_commits = dv.pre_release.split("-")[0] if dv.pre_release else None
+        new_commits = detached_version.pre_release.split("-")[0] if detached_version.pre_release else None
         # show that it's a version different from the released one in stats
-        bump_patch = dv.patch + 1
+        bump_patch = detached_version.patch + 1
         # create something that is both https://semver.org and https://peps.python.org/pep-0440/
-        semver_and_pep0440 = f"{dv.major}.{dv.minor}.{bump_patch}+{new_commits}{datestamp}"
+        semver_and_pep0440 = f"{detached_version.major}.{detached_version.minor}.{bump_patch}+{new_commits}{datestamp}"
         # validate the semver
         SemVer.parse(semver_and_pep0440)
         return semver_and_pep0440
