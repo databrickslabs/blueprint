@@ -12,7 +12,7 @@ from databricks.labs.blueprint.tui import Prompts
 blueprint = App(__file__)
 logger = get_logger(__file__)
 
-main_py_file = '''from databricks.sdk import AccountClient, WorkspaceClient
+MAIN_PY_FILE = '''from databricks.sdk import AccountClient, WorkspaceClient
 from databricks.labs.blueprint.entrypoint import get_logger
 from databricks.labs.blueprint.cli import App
 
@@ -38,7 +38,7 @@ if "__main__" == __name__:
 
 '''
 
-labs_yml_file = """---
+LABS_YML_FILE = """---
 name: __app__
 description: Common libraries for Databricks Labs
 install:
@@ -92,10 +92,10 @@ def init_project(target):
             relative_file_name = current.as_posix().replace("blueprint", project_name)
             dst_file = dst_dir / relative_file_name
             dst_file.parent.mkdir(exist_ok=True, parents=True)
-            with current.open("r", encoding=sys.getdefaultencoding()) as r, dst_file.open("w") as w:
-                content = r.read().replace("blueprint", project_name)
+            with current.open("r", encoding=sys.getdefaultencoding()) as src, dst_file.open("w") as dst:
+                content = src.read().replace("blueprint", project_name)
                 content = content.replace("databricks-sdk", "databricks-labs-blueprint")
-                w.write(content)
+                dst.write(content)
             continue
         virtual_env_marker = current / "pyvenv.cfg"
         if virtual_env_marker.exists():
@@ -107,13 +107,13 @@ def init_project(target):
     inner_package_dir = dst_dir / "src" / "databricks" / "labs" / project_name
     inner_package_dir.mkdir(parents=True, exist_ok=True)
     with (inner_package_dir / "__main__.py").open("w") as f:
-        f.write(main_py_file.replace("__app__", project_name))
+        f.write(MAIN_PY_FILE.replace("__app__", project_name))
     with (inner_package_dir / "__init__.py").open("w") as f:
         f.write(f"from databricks.labs.{project_name}.__about__ import __version__")
     with (inner_package_dir / "__about__.py").open("w") as f:
         f.write('__version__ = "0.0.0"\n')
     with (dst_dir / "labs.yml").open("w") as f:
-        f.write(labs_yml_file.replace("__app__", project_name))
+        f.write(LABS_YML_FILE.replace("__app__", project_name))
     with (dst_dir / "CODEOWNERS").open("w") as f:
         f.write(f"* @nfx\n/src @databrickslabs/{project_name}-write\n/tests @databrickslabs/{project_name}-write\n")
     with (dst_dir / "CHANGELOG.md").open("w") as f:

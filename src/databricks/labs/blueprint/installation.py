@@ -406,10 +406,10 @@ class Installation:
     def __repr__(self):
         return self.install_folder()
 
-    def __eq__(self, o):
-        if not isinstance(o, Installation):
+    def __eq__(self, other):
+        if not isinstance(other, Installation):
             return False
-        return self.install_folder() == o.install_folder()
+        return self.install_folder() == other.install_folder()
 
     def __hash__(self):
         """The `__hash__` method is used to hash the `Installation` object.
@@ -473,22 +473,10 @@ class Installation:
     def _marshal(cls, type_ref: type, path: list[str], inst: Any) -> tuple[Any, bool]:
         """The `_marshal` method is a private method that is used to serialize an object of type `type_ref` to
         a dictionary. This method is called by the `save` method."""
-        # pylint: disable-next=import-outside-toplevel
-        from typing import (  # type: ignore[attr-defined]
-            _GenericAlias,
-            _UnionGenericAlias,
-        )
-
         if hasattr(inst, "as_dict"):
             return inst.as_dict(), True
         if dataclasses.is_dataclass(type_ref):
             return cls._marshal_dataclass(type_ref, path, inst)
-        if isinstance(type_ref, (types.UnionType, _UnionGenericAlias)):  # type: ignore[attr-defined]
-            return cls._marshal_union(type_ref, path, inst)
-        if isinstance(type_ref, (_GenericAlias, types.GenericAlias)):  # type: ignore[attr-defined]
-            if type_ref.__origin__ in (dict, list) or isinstance(type_ref, types.GenericAlias):
-                return cls._marshal_generic(type_ref, path, inst)
-            return cls._marshal_generic_alias(type_ref, inst)
         if isinstance(inst, databricks.sdk.core.Config):
             return inst.as_dict(), True
         if type_ref == list:
@@ -501,7 +489,22 @@ class Installation:
             return cls._marshal_databricks_config(inst)
         if type_ref in cls._PRIMITIVES:
             return inst, True
+        return cls._marshal_generic_types(type_ref, path, inst)
 
+    @classmethod
+    def _marshal_generic_types(cls, type_ref: type, path: list[str], inst: Any) -> tuple[Any, bool]:
+        # pylint: disable-next=import-outside-toplevel,import-private-name
+        from typing import (  # type: ignore[attr-defined]
+            _GenericAlias,
+            _UnionGenericAlias,
+        )
+
+        if isinstance(type_ref, (types.UnionType, _UnionGenericAlias)):  # type: ignore[attr-defined]
+            return cls._marshal_union(type_ref, path, inst)
+        if isinstance(type_ref, (_GenericAlias, types.GenericAlias)):  # type: ignore[attr-defined]
+            if type_ref.__origin__ in (dict, list) or isinstance(type_ref, types.GenericAlias):
+                return cls._marshal_generic(type_ref, path, inst)
+            return cls._marshal_generic_alias(type_ref, inst)
         raise SerdeError(f'{".".join(path)}: unknown: {inst}')
 
     @classmethod
@@ -612,18 +615,8 @@ class Installation:
     def _unmarshal(cls, inst: Any, path: list[str], type_ref: type[T]) -> T | None:
         """The `_unmarshal` method is a private method that is used to deserialize a dictionary to an object of type
         `type_ref`. This method is called by the `load` method."""
-        # pylint: disable-next=import-outside-toplevel
-        from typing import (  # type: ignore[attr-defined]
-            _GenericAlias,
-            _UnionGenericAlias,
-        )
-
         if dataclasses.is_dataclass(type_ref):
             return cls._unmarshal_dataclass(inst, path, type_ref)
-        if isinstance(type_ref, (types.UnionType, _UnionGenericAlias)):
-            return cls._unmarshal_union(inst, path, type_ref)
-        if isinstance(type_ref, (_GenericAlias, types.GenericAlias)):
-            return cls._unmarshal_generic(inst, path, type_ref)
         if isinstance(type_ref, enum.EnumMeta):
             if not inst:
                 return None
@@ -638,6 +631,20 @@ class Installation:
             return None
         if isinstance(type_ref, cls._FromDict):
             return type_ref.from_dict(inst)
+        return cls._unmarshal_generic_types(type_ref, path, inst)
+
+    @classmethod
+    def _unmarshal_generic_types(cls, type_ref, path, inst):
+        # pylint: disable-next=import-outside-toplevel,import-private-name
+        from typing import (  # type: ignore[attr-defined]
+            _GenericAlias,
+            _UnionGenericAlias,
+        )
+
+        if isinstance(type_ref, (types.UnionType, _UnionGenericAlias)):
+            return cls._unmarshal_union(inst, path, type_ref)
+        if isinstance(type_ref, (_GenericAlias, types.GenericAlias)):
+            return cls._unmarshal_generic(inst, path, type_ref)
         raise SerdeError(f'{".".join(path)}: unknown: {type_ref}: {inst}')
 
     @classmethod
@@ -683,7 +690,7 @@ class Installation:
     def _unmarshal_generic(cls, inst, path, type_ref):
         """The `_unmarshal_generic` method is a private method that is used to deserialize a dictionary to an object
         of type `type_ref`. This method is called by the `load` method."""
-        # pylint: disable-next=import-outside-toplevel
+        # pylint: disable-next=import-outside-toplevel,import-private-name
         from typing import _GenericAlias  # type: ignore[attr-defined]
 
         type_args = get_args(type_ref)
