@@ -220,17 +220,26 @@ class WheelsV2(AbstractContextManager):
         self._product_info = product_info
         self._verbose = verbose
 
-    def upload_to_dbfs(self) -> str:
+    def upload_to_dbfs(self, force_dependencies: bool = False) -> str:
         """Uploads the wheel to DBFS location of installation and returns the remote path."""
-        with self._local_wheel.open("rb") as f:
-            return self._installation.upload_dbfs(f"wheels/{self._local_wheel.name}", f)
+        for wheel in self._local_wheel:
+            if force_dependencies or self._product_info.product_name() in wheel.name:
+                with wheel.open("rb") as f:
+                    remote_wheel = self._installation.upload_dbfs(f"wheels/{wheel.name}", f)
+                    if self._product_info.product_name() in wheel.name:
+                        main_wheel_remote_path = remote_wheel
+        return main_wheel_remote_path
 
-    def upload_to_wsfs(self) -> str:
+    def upload_to_wsfs(self, force_dependencies: bool = False) -> str:
         """Uploads the wheel to WSFS location of installation and returns the remote path."""
-        with self._local_wheel.open("rb") as f:
-            remote_wheel = self._installation.upload(f"wheels/{self._local_wheel.name}", f.read())
-            self._installation.save(Version(self._product_info.version(), remote_wheel, self._now_iso()))
-            return remote_wheel
+        for wheel in self._local_wheel:
+            if force_dependencies or self._product_info.product_name() in wheel.name:
+                with wheel.open("rb") as f:
+                    remote_wheel = self._installation.upload(f"wheels/{wheel.name}", f.read())
+                    if self._product_info.product_name() in wheel.name:
+                        self._installation.save(Version(self._product_info.version(), remote_wheel, self._now_iso()))
+                        main_wheel_remote_path = remote_wheel
+        return main_wheel_remote_path
 
     @staticmethod
     def _now_iso():
@@ -268,13 +277,13 @@ class WheelsV2(AbstractContextManager):
             self._override_version_to_unreleased(checkout_root)
         logger.debug(f"Building wheel for {checkout_root} in {tmp_dir}")
         subprocess.run(
-            [sys.executable, "-m", "pip", "wheel", "--no-deps", "--wheel-dir", tmp_dir, checkout_root.as_posix()],
+            [sys.executable, "-m", "pip", "wheel", "--wheel-dir", tmp_dir, checkout_root.as_posix()],
             check=True,
             stdout=stdout,
             stderr=stderr,
         )
         # get wheel name as first file in the temp directory
-        return next(Path(tmp_dir).glob("*.whl"))
+        return list(Path(tmp_dir).glob("*.whl"))
 
     def _override_version_to_unreleased(self, tmp_dir_path: Path):
         """Overrides the version file to unreleased version."""

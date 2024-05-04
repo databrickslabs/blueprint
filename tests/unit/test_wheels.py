@@ -21,9 +21,10 @@ def test_build_and_upload_wheel():
 
     wheels = WheelsV2(installation, product_info)
     with wheels:
-        assert os.path.exists(wheels._local_wheel)
+        for wheel in wheels._local_wheel:
+            assert os.path.exists(wheel)
 
-        remote_on_wsfs = wheels.upload_to_wsfs()
+        remote_on_wsfs = wheels.upload_to_wsfs(force_dependencies=False)
         installation.assert_file_uploaded(re.compile("wheels/databricks_labs_blueprint-*"))
         installation.assert_file_written(
             "version.json",
@@ -34,9 +35,31 @@ def test_build_and_upload_wheel():
             },
         )
 
-        wheels.upload_to_dbfs()
+        wheels.upload_to_dbfs(force_dependencies=False)
         installation.assert_file_dbfs_uploaded(re.compile("wheels/databricks_labs_blueprint-*"))
-    assert not os.path.exists(wheels._local_wheel)
+    for wheel in wheels._local_wheel:
+        assert not os.path.exists(wheel)
+
+
+def test_build_and_upload_wheel_with_no_dependency():
+    installation = MockInstallation()
+    product_info = ProductInfo.from_class(MockInstallation)
+
+    wheels = WheelsV2(installation, product_info)
+    with wheels:
+        remote_on_wsfs = wheels.upload_to_wsfs(force_dependencies=True)
+        installation.assert_file_uploaded(re.compile("wheels/databricks_labs_blueprint-*"))
+        installation.assert_file_written(
+            "version.json",
+            {
+                "version": product_info.version(),
+                "wheel": remote_on_wsfs,
+                "date": ...,
+            },
+        )
+
+        wheels.upload_to_dbfs(force_dependencies=True)
+        installation.assert_file_dbfs_uploaded(re.compile("wheels/databricks_labs_blueprint-*"))
 
 
 def test_unreleased_version(tmp_path):
