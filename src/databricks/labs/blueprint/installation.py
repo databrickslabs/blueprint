@@ -903,20 +903,27 @@ class MockInstallation(Installation):
         actual = self._overwrites[filename]
         assert expected == actual, f"{filename} content missmatch"
 
-    def assert_file_uploaded(self, filename):
-        self._assert_upload(filename, self._uploads)
+    def assert_file_uploaded(self, filename, expected: bytes | None = None):
+        """Asserts that a file was uploaded with the expected content"""
+        self._assert_upload(filename, self._uploads, expected)
 
-    def assert_file_dbfs_uploaded(self, filename):
-        self._assert_upload(filename, self._dbfs)
+    def assert_file_dbfs_uploaded(self, filename, expected: bytes | None = None):
+        """Asserts that a file was uploaded to DBFS with the expected content"""
+        self._assert_upload(filename, self._dbfs, expected)
 
     def assert_removed(self):
         assert self._removed
 
     @staticmethod
-    def _assert_upload(filename: Any, loc: dict[str, bytes]):
+    def _assert_upload(filename: Any, loc: dict[str, bytes], expected: bytes | None = None):
         if isinstance(filename, re.Pattern):
             for name in loc.keys():
-                if filename.match(name):
-                    return
+                if not filename.match(name):
+                    continue
+                if expected:
+                    assert loc[name] == expected, f"{filename} content missmatch"
+                return
             raise AssertionError(f'Cannot find {filename.pattern} among {", ".join(loc.keys())}')
         assert filename in loc, f"{filename} had no writes"
+        if expected:
+            assert loc[filename] == expected, f"{filename} content missmatch"

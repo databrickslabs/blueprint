@@ -445,3 +445,9 @@ def test_load_empty_data_class():
     )
     load = installation.load(ComplexClass, filename="backups/complex-class.json")
     assert load == complex_class
+
+
+def test_assert_file_uploaded():
+    installation = MockInstallation()
+    installation.upload("foo", b"bar")
+    installation.assert_file_uploaded("foo", b"bar")
