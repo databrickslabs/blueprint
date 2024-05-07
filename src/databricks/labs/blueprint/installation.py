@@ -918,10 +918,11 @@ class MockInstallation(Installation):
     def _assert_upload(filename: Any, loc: dict[str, bytes], expected: bytes | None = None):
         if isinstance(filename, re.Pattern):
             for name in loc.keys():
-                if filename.match(name):
-                    if expected:
-                        assert loc[name] == expected, f"{filename} content missmatch"
-                    return
+                if not filename.match(name):
+                    continue
+                if expected:
+                    assert loc[name] == expected, f"{filename} content missmatch"
+                return
             raise AssertionError(f'Cannot find {filename.pattern} among {", ".join(loc.keys())}')
         assert filename in loc, f"{filename} had no writes"
         if expected:
