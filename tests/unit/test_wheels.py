@@ -15,16 +15,15 @@ from databricks.labs.blueprint.wheels import (
 )
 
 
-def test_build_and_upload_wheel():
+def test_build_and_upload_wheel():  # TODO: modify this test to consider different scenarios  (change to this test is inevitable if we go ahead with  _build_wheel -> list[Path])
     installation = MockInstallation()
     product_info = ProductInfo.from_class(MockInstallation)
 
     wheels = WheelsV2(installation, product_info)
     with wheels:
-        for wheel in wheels._local_wheel:
-            assert os.path.exists(wheel)
+        assert os.path.exists(wheels._local_wheel[0])
 
-        remote_on_wsfs = wheels.upload_to_wsfs(force_dependencies=False)
+        remote_on_wsfs = wheels.upload_to_wsfs()
         installation.assert_file_uploaded(re.compile("wheels/databricks_labs_blueprint-*"))
         installation.assert_file_written(
             "version.json",
@@ -35,31 +34,9 @@ def test_build_and_upload_wheel():
             },
         )
 
-        wheels.upload_to_dbfs(force_dependencies=False)
+        wheels.upload_to_dbfs()
         installation.assert_file_dbfs_uploaded(re.compile("wheels/databricks_labs_blueprint-*"))
-    for wheel in wheels._local_wheel:
-        assert not os.path.exists(wheel)
-
-
-def test_build_and_upload_wheel_with_no_dependency():
-    installation = MockInstallation()
-    product_info = ProductInfo.from_class(MockInstallation)
-
-    wheels = WheelsV2(installation, product_info)
-    with wheels:
-        remote_on_wsfs = wheels.upload_to_wsfs(force_dependencies=True)
-        installation.assert_file_uploaded(re.compile("wheels/databricks_labs_blueprint-*"))
-        installation.assert_file_written(
-            "version.json",
-            {
-                "version": product_info.version(),
-                "wheel": remote_on_wsfs,
-                "date": ...,
-            },
-        )
-
-        wheels.upload_to_dbfs(force_dependencies=True)
-        installation.assert_file_dbfs_uploaded(re.compile("wheels/databricks_labs_blueprint-*"))
+    assert not os.path.exists(wheels._local_wheel[0])
 
 
 def test_unreleased_version(tmp_path):

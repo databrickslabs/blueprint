@@ -215,31 +215,61 @@ class WheelsV2(AbstractContextManager):
 
     __version: str | None = None
 
-    def __init__(self, installation: Installation, product_info: ProductInfo, *, verbose: bool = False):
+    def __init__(
+        self, installation: Installation, product_info: ProductInfo, *, verbose: bool = False, no_deps: bool = True
+    ):
         self._installation = installation
         self._product_info = product_info
         self._verbose = verbose
+        self._no_deps = no_deps
 
-    def upload_to_dbfs(self, force_dependencies: bool = False) -> str:
+    def upload_to_dbfs(self) -> str:
         """Uploads the wheel to DBFS location of installation and returns the remote path."""
+        main_wheel = []
         for wheel in self._local_wheel:
-            if force_dependencies or self._product_info.product_name() in wheel.name:
-                with wheel.open("rb") as f:
-                    remote_wheel = self._installation.upload_dbfs(f"wheels/{wheel.name}", f)
-                    if self._product_info.product_name() in wheel.name:
-                        main_wheel_remote_path = remote_wheel
-        return main_wheel_remote_path
+            if self._product_info.product_name() in wheel.name:
+                main_wheel.append(wheel)
+        if len(main_wheel) == 1:
+            with main_wheel[0].open("rb") as f:
+                return self._installation.upload_dbfs(f"wheels/{main_wheel[0].name}", f)
+        raise ValueError(
+            f"Expected one wheel containing product name {self._product_info.product_name()}, got {main_wheel}"
+        )
 
-    def upload_to_wsfs(self, force_dependencies: bool = False) -> str:
+    def upload_to_wsfs(self) -> str:
         """Uploads the wheel to WSFS location of installation and returns the remote path."""
+        # TODO: This function should be modified as there is no guarantee that the main wheel.name contains product name in it - anyway the input is a list of wheels
+        main_wheel = []
         for wheel in self._local_wheel:
-            if force_dependencies or self._product_info.product_name() in wheel.name:
-                with wheel.open("rb") as f:
-                    remote_wheel = self._installation.upload(f"wheels/{wheel.name}", f.read())
-                    if self._product_info.product_name() in wheel.name:
-                        self._installation.save(Version(self._product_info.version(), remote_wheel, self._now_iso()))
-                        main_wheel_remote_path = remote_wheel
-        return main_wheel_remote_path
+            if self._product_info.product_name() in wheel.name:
+                main_wheel.append(wheel)
+        if len(main_wheel) == 1:
+            remote_wheel = self._installation.upload(f"wheels/{main_wheel[0].name}", main_wheel[0].read_bytes())
+            self._installation.save(Version(self._product_info.version(), remote_wheel, self._now_iso()))
+            return remote_wheel
+        raise ValueError(
+            f"Expected one wheel containing product name {self._product_info.product_name()}, got {main_wheel}"
+        )
+
+    def upload_upstream_dependencies_to_wsfs(self, prefixes: list[str] | None = None) -> list[str]:
+        """Uploads the wheel dependencies to WSFS location of installation and returns the remote paths.
+        :param prefixes (optional): A list of prefixes to match against the wheel names. If a prefix matches, the wheel is uploaded. If None, all wheels are uploaded. Defaults to None.
+        """
+        if prefixes is None:
+            prefixes = [wheel.name for wheel in self._local_wheel]
+        remote_paths = []
+        for wheel in self._local_wheel:
+            for prefix in prefixes:
+                # TODO: This function should be modified as there is no guarantee that the main wheel.name contains product name in it
+                # TODO: In the future the need of passing explicit prefixes should be removed
+                if (
+                    prefix in wheel.name
+                    and wheel.name.endswith("-none-any.whl")
+                    and self._product_info.product_name() not in wheel.name
+                ):
+                    remote_wheel = self._installation.upload(f"wheels/{wheel.name}", wheel.read_bytes())
+                    remote_paths.append(remote_wheel)
+        return remote_paths
 
     @staticmethod
     def _now_iso():
@@ -249,20 +279,20 @@ class WheelsV2(AbstractContextManager):
     def __enter__(self) -> "WheelsV2":
         """Builds the wheel and returns the instance. Use it as a context manager."""
         self._tmp_dir = tempfile.TemporaryDirectory()
-        self._local_wheel = self._build_wheel(self._tmp_dir.name, verbose=self._verbose)
+        self._local_wheel = self._build_wheel(self._tmp_dir.name, verbose=self._verbose, no_deps=self._no_deps)
         return self
 
     def __exit__(self, __exc_type, __exc_value, __traceback):
         """Cleans up the temporary directory. Use it as a context manager."""
         self._tmp_dir.cleanup()
 
-    def _build_wheel(self, tmp_dir: str, *, verbose: bool = False):
+    def _build_wheel(self, tmp_dir: str, *, verbose: bool = False, no_deps: bool = True) -> list[Path]:
         """Helper to build the wheel package
 
         :param tmp_dir: str:
         :param *:
         :param verbose: bool:  (Default value = False)
-
+        :param no_deps: bool:  (Default value = True)
         """
         stdout = subprocess.STDOUT
         stderr = subprocess.STDOUT
@@ -275,14 +305,23 @@ class WheelsV2(AbstractContextManager):
             checkout_root = self._copy_root_to(tmp_dir)
             # and override the version file
             self._override_version_to_unreleased(checkout_root)
-        logger.debug(f"Building wheel for {checkout_root} in {tmp_dir}")
-        subprocess.run(
-            [sys.executable, "-m", "pip", "wheel", "--wheel-dir", tmp_dir, checkout_root.as_posix()],
-            check=True,
-            stdout=stdout,
-            stderr=stderr,
-        )
-        # get wheel name as first file in the temp directory
+        if no_deps:
+            logger.debug(f"Building wheel for {checkout_root} in {tmp_dir} without dependencies")
+            subprocess.run(
+                [sys.executable, "-m", "pip", "wheel", "--no-deps", "--wheel-dir", tmp_dir, checkout_root.as_posix()],
+                check=True,
+                stdout=stdout,
+                stderr=stderr,
+            )
+        else:
+            logger.debug(f"Building wheel for {checkout_root} in {tmp_dir} with dependencies")
+            subprocess.run(
+                [sys.executable, "-m", "pip", "wheel", "--wheel-dir", tmp_dir, checkout_root.as_posix()],
+                check=True,
+                stdout=stdout,
+                stderr=stderr,
+            )
+        # get all the wheel names in the temp directory
         return list(Path(tmp_dir).glob("*.whl"))
 
     def _override_version_to_unreleased(self, tmp_dir_path: Path):
