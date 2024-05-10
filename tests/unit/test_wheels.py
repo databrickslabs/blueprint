@@ -15,13 +15,13 @@ from databricks.labs.blueprint.wheels import (
 )
 
 
-def test_build_and_upload_wheel():  # TODO: modify this test to consider different scenarios  (change to this test is inevitable if we go ahead with  _build_wheel -> list[Path])
+def test_build_and_upload_wheel():
     installation = MockInstallation()
     product_info = ProductInfo.from_class(MockInstallation)
 
     wheels = WheelsV2(installation, product_info)
     with wheels:
-        assert os.path.exists(wheels._local_wheel[0])
+        assert os.path.exists(wheels._local_wheel)
 
         remote_on_wsfs = wheels.upload_to_wsfs()
         installation.assert_file_uploaded(re.compile("wheels/databricks_labs_blueprint-*"))
@@ -36,7 +36,7 @@ def test_build_and_upload_wheel():  # TODO: modify this test to consider differe
 
         wheels.upload_to_dbfs()
         installation.assert_file_dbfs_uploaded(re.compile("wheels/databricks_labs_blueprint-*"))
-    assert not os.path.exists(wheels._local_wheel[0])
+    assert not os.path.exists(wheels._local_wheel)
 
 
 def test_unreleased_version(tmp_path):
