@@ -38,6 +38,7 @@ def test_build_and_upload_wheel():
         installation.assert_file_dbfs_uploaded(re.compile("wheels/databricks_labs_blueprint-*"))
     assert not os.path.exists(wheels._local_wheel)
 
+
 def test_build_and_dependencies_upload_wheel():
     installation = MockInstallation()
     product_info = ProductInfo.from_class(MockInstallation)

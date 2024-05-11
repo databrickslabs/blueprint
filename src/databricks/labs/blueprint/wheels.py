@@ -236,10 +236,10 @@ class WheelsV2(AbstractContextManager):
         """Uploads the wheel dependencies to WSFS location of installation and returns the remote paths.
         :param prefixes : A list of prefixes to match against the wheel names. If a prefix matches, the wheel is uploaded.
         """
-        # _tmp_dir_dependencies needs to be created here as _tmp_dir already exists and causes error when running _build_wheel
-        _tmp_dir_dependencies = tempfile.TemporaryDirectory()
         remote_paths = []
-        for wheel in list(self._build_wheel(_tmp_dir_dependencies.name, verbose=self._verbose, no_deps=False)):
+        for wheel in list(
+            self._build_wheel(self._tmp_dir.name, verbose=self._verbose, no_deps=False, dirs_exist_ok=True)
+        ):
             if not wheel.name.endswith("-none-any.whl"):
                 continue
             # main wheel is uploaded with upload_to_wsfs() method.
@@ -250,8 +250,6 @@ class WheelsV2(AbstractContextManager):
                     continue
                 remote_wheel = self._installation.upload(f"wheels/{wheel.name}", wheel.read_bytes())
                 remote_paths.append(remote_wheel)
-        # cleanup the temporary directory
-        _tmp_dir_dependencies.cleanup()
         return remote_paths
 
     @staticmethod
@@ -269,13 +267,14 @@ class WheelsV2(AbstractContextManager):
         """Cleans up the temporary directory. Use it as a context manager."""
         self._tmp_dir.cleanup()
 
-    def _build_wheel(self, tmp_dir: str, *, verbose: bool = False, no_deps: bool = True):
+    def _build_wheel(self, tmp_dir: str, *, verbose: bool = False, no_deps: bool = True, dirs_exist_ok: bool = False):
         """Helper to build the wheel package
 
         :param tmp_dir: str:
         :param *:
         :param verbose: bool:  (Default value = False)
         :param no_deps: bool:  (Default value = True)
+        :param dirs_exist_ok: bool:  (Default value = False)
         """
         stdout = subprocess.STDOUT
         stderr = subprocess.STDOUT
@@ -285,7 +284,7 @@ class WheelsV2(AbstractContextManager):
         checkout_root = self._product_info.checkout_root()
         if self._product_info.is_git_checkout() and self._product_info.is_unreleased_version():
             # working copy becomes project root for building a wheel
-            checkout_root = self._copy_root_to(tmp_dir)
+            checkout_root = self._copy_root_to(tmp_dir, dirs_exist_ok)
             # and override the version file
             self._override_version_to_unreleased(checkout_root)
         args = [sys.executable, "-m", "pip", "wheel", "--wheel-dir", tmp_dir, checkout_root.as_posix()]
@@ -310,7 +309,7 @@ class WheelsV2(AbstractContextManager):
         with version_file.open("w") as f:
             f.write(f'__version__ = "{self._product_info.version()}"')
 
-    def _copy_root_to(self, tmp_dir: str | Path):
+    def _copy_root_to(self, tmp_dir: str | Path, dirs_exist_ok: bool = False):
         """Copies the root to a temporary directory."""
         checkout_root = self._product_info.checkout_root()
         tmp_dir_path = Path(tmp_dir) / "working-copy"
@@ -325,7 +324,7 @@ class WheelsV2(AbstractContextManager):
                 ignored_names.append(name)
             return ignored_names
 
-        shutil.copytree(checkout_root, tmp_dir_path, ignore=copy_ignore)
+        shutil.copytree(checkout_root, tmp_dir_path, ignore=copy_ignore, dirs_exist_ok=dirs_exist_ok)
         return tmp_dir_path
 
 
