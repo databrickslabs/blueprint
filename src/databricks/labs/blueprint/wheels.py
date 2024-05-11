@@ -232,24 +232,26 @@ class WheelsV2(AbstractContextManager):
             self._installation.save(Version(self._product_info.version(), remote_wheel, self._now_iso()))
             return remote_wheel
 
-    def upload_wheel_dependencies(self, prefixes: list[str] | None = None) -> list[str]:
+    def upload_wheel_dependencies(self, prefixes: list[str]) -> list[str]:
         """Uploads the wheel dependencies to WSFS location of installation and returns the remote paths.
-        :param prefixes (optional): A list of prefixes to match against the wheel names. If a prefix matches, the wheel is uploaded. If None, all wheels are uploaded. Defaults to None.
+        :param prefixes : A list of prefixes to match against the wheel names. If a prefix matches, the wheel is uploaded.
         """
-        if prefixes is None:
-            prefixes = [wheel.name for wheel in self._local_wheel]
+        # _tmp_dir_dependencies needs to be created here as _tmp_dir already exists and causes error when running _build_wheel
+        _tmp_dir_dependencies = tempfile.TemporaryDirectory()
         remote_paths = []
-        for wheel in self._local_wheel:
+        for wheel in list(self._build_wheel(_tmp_dir_dependencies.name, verbose=self._verbose, no_deps=False)):
+            if not wheel.name.endswith("-none-any.whl"):
+                continue
+            # main wheel is uploaded with upload_to_wsfs() method.
+            if wheel.name == self._local_wheel.name:
+                continue
             for prefix in prefixes:
-                # TODO: This function should be modified as there is no guarantee that the main wheel.name contains product name in it
-                # TODO: In the future the need of passing explicit prefixes should be removed
-                if (
-                    prefix in wheel.name
-                    and wheel.name.endswith("-none-any.whl")
-                    and self._product_info.product_name() not in wheel.name
-                ):
-                    remote_wheel = self._installation.upload(f"wheels/{wheel.name}", wheel.read_bytes())
-                    remote_paths.append(remote_wheel)
+                if not wheel.name.startswith(prefix):
+                    continue
+                remote_wheel = self._installation.upload(f"wheels/{wheel.name}", wheel.read_bytes())
+                remote_paths.append(remote_wheel)
+        # cleanup the temporary directory
+        _tmp_dir_dependencies.cleanup()
         return remote_paths
 
     @staticmethod
@@ -286,11 +288,12 @@ class WheelsV2(AbstractContextManager):
             checkout_root = self._copy_root_to(tmp_dir)
             # and override the version file
             self._override_version_to_unreleased(checkout_root)
-        logger.debug(f"Building wheel for {checkout_root} in {tmp_dir}")
         args = [sys.executable, "-m", "pip", "wheel", "--wheel-dir", tmp_dir, checkout_root.as_posix()]
         if no_deps:
             logger.debug(f"Building wheel for {checkout_root} in {tmp_dir}")
             args.append("--no-deps")
+        else:
+            logger.debug(f"Building dependencies for {checkout_root} in {tmp_dir}")
         subprocess.run(
             args,
             check=True,
