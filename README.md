@@ -933,11 +933,11 @@ This will print something like:
 
 You can also do `wheels.upload_to_dbfs()`, though you're not able to set any access control over it.
 
-### Publishing the dependencies of the wheel to Databricks Workspace
+### Publishing upstream dependencies to Databricks Workspace without Public Internet access
 
-When you build a wheel, it may have dependencies that are not included in the wheel itself. These dependencies are usually other Python packages that your wheel relies on. To ensure that your wheel works correctly when it is installed, these dependencies also need to be available in the same environment.
+Python wheel may have dependencies that are not included in the wheel itself. These dependencies are usually other Python packages that your wheel relies on. During installation on regular Databricks Workspaces, these dependencies get automatically fetched from [Python Package Index](https://pypi.org/). 
 
-While in many instances, the required packages are readily available in Databricks Runtime (DBR) or PyPi, there may be situations where specific dependencies need to be manually uploaded to the Databricks Workspace. This ensures that all necessary packages are present, allowing your wheel to operate correctly in its intended environment.
+Some Databricks Workspaces are configured with extra layers of network security, that block all access to Public Internet, including [Python Package Index](https://pypi.org/). To ensure installations working on these kinds of workspaces, developers need to explicitly upload all upstream dependencies for their applications to work correctly.
 
 The `upload_wheel_dependencies(prefixes)` method can be used to upload these dependencies to Databricks Workspace. This method takes a list of prefixes as an argument. It will upload all the dependencies of the wheel that have names starting with any of the provided prefixes.
 
