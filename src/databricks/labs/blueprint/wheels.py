@@ -13,6 +13,7 @@ from collections.abc import Iterable
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from functools import cached_property
 from pathlib import Path
 
 from databricks.sdk import WorkspaceClient
@@ -229,7 +230,7 @@ class WheelsV2(AbstractContextManager):
         """Uploads the wheel to WSFS location of installation and returns the remote path."""
         with self._local_wheel.open("rb") as f:
             remote_wheel = self._installation.upload(f"wheels/{self._local_wheel.name}", f.read())
-            self._installation.save(Version(self._product_info.version(), remote_wheel, self._now_iso()))
+            self._installation.save(Version(self._current_version, remote_wheel, self._now_iso()))
             return remote_wheel
 
     def upload_wheel_dependencies(self, prefixes: list[str]) -> list[str]:
@@ -249,6 +250,11 @@ class WheelsV2(AbstractContextManager):
                 remote_wheel = self._installation.upload(f"wheels/{wheel.name}", wheel.read_bytes())
                 remote_paths.append(remote_wheel)
         return remote_paths
+
+    @cached_property
+    def _current_version(self):
+        # addresses double-uploaded bug for unreleased versions uploaded to airgapped workspaces
+        return self._product_info.version()
 
     @staticmethod
     def _now_iso():
@@ -303,7 +309,7 @@ class WheelsV2(AbstractContextManager):
         relative_version_file = self._product_info.version_file().relative_to(checkout_root)
         version_file = tmp_dir_path / relative_version_file
         with version_file.open("w") as f:
-            f.write(f'__version__ = "{self._product_info.version()}"')
+            f.write(f'__version__ = "{self._current_version}"')
 
     def _copy_root_to(self, tmp_dir: str | Path, dirs_exist_ok: bool = False):
         """Copies the root to a temporary directory."""
