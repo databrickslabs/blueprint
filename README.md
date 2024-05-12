@@ -23,7 +23,7 @@ Baseline for Databricks Labs projects written in Python. Sources are validated w
     * [Rendering on Dark Background](#rendering-on-dark-background)
     * [Rendering in Databricks Notebooks](#rendering-in-databricks-notebooks)
     * [Integration With Your App](#integration-with-your-app)
-    * [Integration with `console_script` Entrypoints](#integration-with-consolescript-entrypoints)
+    * [Integration with `console_script` Entrypoints](#integration-with-console_script-entrypoints)
   * [Parallel Task Execution](#parallel-task-execution)
     * [Collecting Results](#collecting-results)
     * [Collecting Errors from Background Tasks](#collecting-errors-from-background-tasks)
@@ -35,7 +35,7 @@ Baseline for Databricks Labs projects written in Python. Sources are validated w
     * [Saving `@dataclass` configuration](#saving-dataclass-configuration)
     * [Saving CSV files](#saving-csv-files)
     * [Loading `@dataclass` configuration](#loading-dataclass-configuration)
-    * [Brute-forcing `SerdeError` with `as_dict()` and `from_dict()`](#brute-forcing-serdeerror-with-asdict-and-fromdict)
+    * [Brute-forcing `SerdeError` with `as_dict()` and `from_dict()`](#brute-forcing-serdeerror-with-as_dict-and-from_dict)
     * [Configuration Format Evolution](#configuration-format-evolution)
     * [Uploading Untyped Files](#uploading-untyped-files)
     * [Listing All Files in the Install Folder](#listing-all-files-in-the-install-folder)
@@ -48,6 +48,7 @@ Baseline for Databricks Labs projects written in Python. Sources are validated w
     * [Application Name Detection](#application-name-detection)
     * [Using `ProductInfo` with integration tests](#using-productinfo-with-integration-tests)
     * [Publishing Wheels to Databricks Workspace](#publishing-wheels-to-databricks-workspace)
+    * [Publishing upstream dependencies to workspaces without Public Internet access](#publishing-upstream-dependencies-to-workspaces-without-public-internet-access)
   * [Databricks CLI's `databricks labs ...` Router](#databricks-clis-databricks-labs--router)
     * [Account-level Commands](#account-level-commands)
     * [Commands with interactive prompts](#commands-with-interactive-prompts)
@@ -933,7 +934,7 @@ This will print something like:
 
 You can also do `wheels.upload_to_dbfs()`, though you're not able to set any access control over it.
 
-### Publishing upstream dependencies to Databricks Workspace without Public Internet access
+### Publishing upstream dependencies to workspaces without Public Internet access
 
 Python wheel may have dependencies that are not included in the wheel itself. These dependencies are usually other Python packages that your wheel relies on. During installation on regular Databricks Workspaces, these dependencies get automatically fetched from [Python Package Index](https://pypi.org/). 
 

@@ -19,4 +19,16 @@ def test_upload_dbfs(ws, new_installation):
         ws.dbfs.get_status(remote_wheel)
 
 
-# TODO: to add an integration test for upload_wheel_dependencies (currently getting an access issue to the test environment)
+def test_upload_upstreams(ws, new_installation):
+    product_info = ProductInfo.from_class(WheelsV2)
+    with WheelsV2(new_installation, product_info) as whl:
+        whl.upload_wheel_dependencies(["databricks"])
+
+        installation_files = new_installation.files()
+        # only Databricks SDK has to be uploaded
+        assert len(installation_files) == 1
+
+        whl.upload_to_wsfs()
+        installation_files = new_installation.files()
+        # SDK, Blueprint and version.json metadata
+        assert len(installation_files) == 3
