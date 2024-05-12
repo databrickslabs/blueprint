@@ -933,6 +933,33 @@ This will print something like:
 
 You can also do `wheels.upload_to_dbfs()`, though you're not able to set any access control over it.
 
+### Publishing upstream dependencies to Databricks Workspace without Public Internet access
+
+Python wheel may have dependencies that are not included in the wheel itself. These dependencies are usually other Python packages that your wheel relies on. During installation on regular Databricks Workspaces, these dependencies get automatically fetched from [Python Package Index](https://pypi.org/). 
+
+Some Databricks Workspaces are configured with extra layers of network security, that block all access to Public Internet, including [Python Package Index](https://pypi.org/). To ensure installations working on these kinds of workspaces, developers need to explicitly upload all upstream dependencies for their applications to work correctly.
+
+The `upload_wheel_dependencies(prefixes)` method can be used to upload these dependencies to Databricks Workspace. This method takes a list of prefixes as an argument. It will upload all the dependencies of the wheel that have names starting with any of the provided prefixes.
+
+Here is an example of how you can use this method:
+
+```python
+from databricks.sdk import WorkspaceClient
+from databricks.labs.blueprint.wheels import ProductInfo
+
+ws = WorkspaceClient()
+product_info = ProductInfo(__file__)
+installation = product_info.current_installation(ws)
+
+with product_info.wheels(ws) as wheels:
+    wheel_paths = wheels.upload_wheel_dependencies(['databricks_sdk', 'pandas'])
+    for path in wheel_paths:
+        print(f'Uploaded dependency to {path}')
+```
+
+In this example, the `upload_wheel_dependencies(['databricks_sdk', 'pandas'])` call will upload all the dependencies of the wheel that have names starting with 'databricks_sdk' or 'pandas'. This method excludes any platform specific dependencies (i.e. ending with `-none-any.whl`). Also the main wheel file is not uploaded. The method returns a list of paths to the uploaded dependencies on WorkspaceFS.
+
+
 [[back to top](#databricks-labs-blueprint)]
 
 ## Databricks CLI's `databricks labs ...` Router

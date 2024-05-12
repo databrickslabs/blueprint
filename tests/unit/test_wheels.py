@@ -39,6 +39,17 @@ def test_build_and_upload_wheel():
     assert not os.path.exists(wheels._local_wheel)
 
 
+def test_build_and_dependencies_upload_wheel():
+    installation = MockInstallation()
+    product_info = ProductInfo.from_class(MockInstallation)
+
+    wheels = WheelsV2(installation, product_info)
+    with wheels:
+        wheel_paths = wheels.upload_wheel_dependencies(["databricks_sdk"])
+        assert len(wheel_paths) == 1
+        installation.assert_file_uploaded(re.compile("wheels/databricks_sdk-*"))
+
+
 def test_unreleased_version(tmp_path):
     if not is_in_debug():
         pytest.skip("fails without `git fetch --prune --unshallow` configured")
