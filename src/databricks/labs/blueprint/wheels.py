@@ -237,9 +237,7 @@ class WheelsV2(AbstractContextManager):
         :param prefixes : A list of prefixes to match against the wheel names. If a prefix matches, the wheel is uploaded.
         """
         remote_paths = []
-        for wheel in list(
-            self._build_wheel(self._tmp_dir.name, verbose=self._verbose, no_deps=False, dirs_exist_ok=True)
-        ):
+        for wheel in self._build_wheel(self._tmp_dir.name, verbose=self._verbose, no_deps=False, dirs_exist_ok=True):
             if not wheel.name.endswith("-none-any.whl"):
                 continue
             # main wheel is uploaded with upload_to_wsfs() method.
@@ -288,11 +286,9 @@ class WheelsV2(AbstractContextManager):
             # and override the version file
             self._override_version_to_unreleased(checkout_root)
         args = [sys.executable, "-m", "pip", "wheel", "--wheel-dir", tmp_dir, checkout_root.as_posix()]
+        logger.debug(f"Building wheel for {checkout_root} in {tmp_dir}")
         if no_deps:
-            logger.debug(f"Building wheel for {checkout_root} in {tmp_dir}")
             args.append("--no-deps")
-        else:
-            logger.debug(f"Building dependencies for {checkout_root} in {tmp_dir}")
         subprocess.run(
             args,
             check=True,

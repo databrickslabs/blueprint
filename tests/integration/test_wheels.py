@@ -17,3 +17,6 @@ def test_upload_dbfs(ws, new_installation):
     with WheelsV2(new_installation, product_info) as whl:
         remote_wheel = whl.upload_to_dbfs()
         ws.dbfs.get_status(remote_wheel)
+
+
+# TODO: to add an integration test for upload_wheel_dependencies (currently getting an access issue to the test environment)
