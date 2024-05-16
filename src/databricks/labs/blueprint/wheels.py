@@ -334,7 +334,12 @@ class Wheels(WheelsV2):
     """Wheel builder"""
 
     def __init__(
-        self, ws: WorkspaceClient, install_state: InstallState, product_info: ProductInfo, *, verbose: bool = False
+        self,
+        ws: WorkspaceClient,
+        install_state: InstallState,
+        product_info: ProductInfo,
+        *,
+        verbose: bool = False,
     ):
         warnings.warn("Wheels is deprecated, use WheelsV2 instead", DeprecationWarning)
         installation = Installation(ws, product_info.product_name(), install_folder=install_state.install_folder())
