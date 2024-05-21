@@ -1,5 +1,13 @@
 # Version changelog
 
+## 0.6.1
+
+* Made `ProductInfo.version` a `cached_property` to avoid failure when comparing wheel uploads in development ([#105](https://github.com/databrickslabs/blueprint/issues/105)). In this release, the `apply` method of a class has been updated to sort upgrade scripts in semantic versioning order before applying them, addressing potential issues with version comparison during development. The implementation of `ProductInfo.version` has been refactored to a `cached_property` called `_version`, which calculates and caches the project version, addressing a failure during wheel upload comparisons in development. The `Wheels` class constructor has also been updated to include explicit keyword-only arguments, and a deprecation warning has been added. These changes aim to improve the reliability and predictability of the upgrade process and the library as a whole.
+
+Dependency updates:
+
+ * Bump actions/checkout from 4.1.5 to 4.1.6 ([#106](https://github.com/databrickslabs/blueprint/pull/106)).
+
 ## 0.6.0
 
 * Added upstream wheel uploads for Databricks Workspaces without Public Internet access ([#99](https://github.com/databrickslabs/blueprint/issues/99)). This commit introduces a new feature for uploading upstream wheel dependencies to Databricks Workspaces without Public Internet access. A new flag has been added to upload functions, allowing users to include or exclude dependencies in the download list. The `WheelsV2` class has been updated with a new method, `upload_wheel_dependencies(prefixes)`, which checks if each wheel's name starts with any of the provided prefixes before uploading it to the Workspace File System (WSFS). This feature also includes two new tests to verify the functionality of uploading the main wheel package and dependent wheel packages, optimizing downloads based on specific use cases. This enables users to more easily use the package in offline environments with restricted internet access, particularly for Databricks Workspaces with extra layers of network security.
