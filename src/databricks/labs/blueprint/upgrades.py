@@ -78,7 +78,7 @@ class Upgrades:
             logger.warning(f"No upgrades folder: {upgrades_folder}")
             return
         applied = self._installation.load_or_default(AppliedUpgrades)
-        for script in self._diff(upgrades_folder):
+        for script in sorted(self._diff(upgrades_folder)):
             if script.name in applied.upgrades:
                 logger.info(f"Already applied: {script.name}")
                 continue

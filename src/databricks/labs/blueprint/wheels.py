@@ -74,16 +74,16 @@ class ProductInfo:
         See https://packaging.python.org/guides/single-sourcing-package-version/"""
         return self._version_file
 
-    def version(self):
+    @cached_property
+    def _version(self):
         """Returns current version of the project"""
-        if hasattr(self, "__version"):
-            return self.__version  # pylint: disable=access-member-before-definition
         if not self.is_git_checkout():
             # normal install, downloaded releases won't have the .git folder
-            self.__version = self.released_version()
-            return self.__version
-        self.__version = self.unreleased_version()
-        return self.__version
+            return self.released_version()
+        return self.unreleased_version()
+
+    def version(self):
+        return self._version
 
     def as_semver(self) -> SemVer:
         """Returns the version as SemVer object."""
@@ -334,7 +334,12 @@ class Wheels(WheelsV2):
     """Wheel builder"""
 
     def __init__(
-        self, ws: WorkspaceClient, install_state: InstallState, product_info: ProductInfo, *, verbose: bool = False
+        self,
+        ws: WorkspaceClient,
+        install_state: InstallState,
+        product_info: ProductInfo,
+        *,
+        verbose: bool = False,
     ):
         warnings.warn("Wheels is deprecated, use WheelsV2 instead", DeprecationWarning)
         installation = Installation(ws, product_info.product_name(), install_folder=install_state.install_folder())
