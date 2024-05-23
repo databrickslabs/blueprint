@@ -1,5 +1,10 @@
 # Version changelog
 
+## 0.6.2
+
+* Applied type casting & remove empty kwarg for Command ([#108](https://github.com/databrickslabs/blueprint/issues/108)). A new method, `get_argument_type`, has been added to the `Command` class in the `cli.py` file to determine the type of a given argument name based on the function's signature. The `_route` method has been updated to remove any empty keyword arguments from the `kwargs` dictionary, and apply type casting based on the argument type using the `get_argument_type` method. This ensures that the `kwargs` passed into `App.command` are correctly typed and eliminates any empty keyword arguments, which were previously passed as empty strings. In the test file for the command-line interface, the `foo` command's keyword arguments have been updated to include `age` (int), `salary` (float), `is_customer` (bool), and `address` (str) types, with the `name` argument remaining and a default value for `address`. The `test_commands` and `test_injects_prompts` functions have been updated accordingly. These changes aim to improve the input validation and type safety of the `App.command` method.
+
+
 ## 0.6.1
 
 * Made `ProductInfo.version` a `cached_property` to avoid failure when comparing wheel uploads in development ([#105](https://github.com/databrickslabs/blueprint/issues/105)). In this release, the `apply` method of a class has been updated to sort upgrade scripts in semantic versioning order before applying them, addressing potential issues with version comparison during development. The implementation of `ProductInfo.version` has been refactored to a `cached_property` called `_version`, which calculates and caches the project version, addressing a failure during wheel upload comparisons in development. The `Wheels` class constructor has also been updated to include explicit keyword-only arguments, and a deprecation warning has been added. These changes aim to improve the reliability and predictability of the upgrade process and the library as a whole.
