@@ -41,12 +41,12 @@ def test_injects_prompts():
     app = App(inspect.getfile(App))
 
     @app.command(is_unauthenticated=True)
-    def foo(name: str, prompts: Prompts):
+    def foo(name: str, age: int, salary: float, is_customer: bool, prompts: Prompts, address: str = "default"):
         """Some comment"""
         assert isinstance(prompts, Prompts)
-        some(name)
+        some(name, age, salary, is_customer, address)
 
     with mock.patch.object(sys, "argv", [..., FOO_COMMAND]):
         app()
 
-    some.assert_called_with("y")
+    some.assert_called_with("y", 100, 100.5, True, "default")
