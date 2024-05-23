@@ -4,6 +4,7 @@ import functools
 import inspect
 import json
 import logging
+from inspect import Signature
 from collections.abc import Callable
 from dataclasses import dataclass
 
@@ -35,6 +36,10 @@ class Command:
             if param.annotation is Prompts:
                 return param.name
         return None
+
+    def get_argument_type(self, argument_name: str) -> type:
+        sig = inspect.signature(self.fn)
+        return sig.parameters[argument_name].annotation
 
 
 class App:
@@ -87,6 +92,19 @@ class App:
             prompts_argument = cmd.prompts_argument_name()
             if prompts_argument:
                 kwargs[prompts_argument] = Prompts()
+            # modify kwargs to match the type of the argument
+            for kwarg in list(kwargs.keys()):
+                # remove empty strings
+                if kwargs[kwarg] == "":
+                    del kwargs[kwarg]
+                    continue
+                match cmd.get_argument_type(kwarg).__name__:
+                    case "int":
+                        kwargs[kwarg] = int(kwargs[kwarg])
+                    case "bool":
+                        kwargs[kwarg] = kwargs[kwarg].lower() == "true"
+                    case "float":
+                        kwargs[kwarg] = float(kwargs[kwarg])
             cmd.fn(**kwargs)
         except Exception as err:  # pylint: disable=broad-exception-caught
             logger = self._logger.getChild(command)
