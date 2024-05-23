@@ -36,6 +36,12 @@ class Command:
                 return param.name
         return None
 
+    def get_argument_type(self, argument_name: str) -> str | None:
+        sig = inspect.signature(self.fn)
+        if argument_name not in sig.parameters:
+            return None
+        return sig.parameters[argument_name].annotation.__name__
+
 
 class App:
     def __init__(self, __file: str):
@@ -77,9 +83,18 @@ class App:
             log_level = "info"
         databricks_logger = logging.getLogger("databricks")
         databricks_logger.setLevel(log_level.upper())
-        kwargs = {k.replace("-", "_"): v for k, v in flags.items()}
+        kwargs = {k.replace("-", "_"): v for k, v in flags.items() if v != ""}
+        cmd = self._mapping[command]
+        # modify kwargs to match the type of the argument
+        for kwarg in list(kwargs.keys()):
+            match cmd.get_argument_type(kwarg):
+                case "int":
+                    kwargs[kwarg] = int(kwargs[kwarg])
+                case "bool":
+                    kwargs[kwarg] = kwargs[kwarg].lower() == "true"
+                case "float":
+                    kwargs[kwarg] = float(kwargs[kwarg])
         try:
-            cmd = self._mapping[command]
             if cmd.needs_workspace_client():
                 kwargs["w"] = self._workspace_client()
             elif cmd.is_account:
