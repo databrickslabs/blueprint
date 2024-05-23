@@ -36,9 +36,11 @@ class Command:
                 return param.name
         return None
 
-    def get_argument_type(self, argument_name: str) -> type:
+    def get_argument_type(self, argument_name: str) -> str | None:
         sig = inspect.signature(self.fn)
-        return sig.parameters[argument_name].annotation
+        if argument_name not in sig.parameters:
+            return None
+        return sig.parameters[argument_name].annotation.__name__
 
 
 class App:
@@ -85,7 +87,7 @@ class App:
         cmd = self._mapping[command]
         # modify kwargs to match the type of the argument
         for kwarg in list(kwargs.keys()):
-            match cmd.get_argument_type(kwarg).__name__:
+            match cmd.get_argument_type(kwarg):
                 case "int":
                     kwargs[kwarg] = int(kwargs[kwarg])
                 case "bool":
