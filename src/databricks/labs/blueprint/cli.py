@@ -4,7 +4,6 @@ import functools
 import inspect
 import json
 import logging
-from inspect import Signature
 from collections.abc import Callable
 from dataclasses import dataclass
 
@@ -82,9 +81,18 @@ class App:
             log_level = "info"
         databricks_logger = logging.getLogger("databricks")
         databricks_logger.setLevel(log_level.upper())
-        kwargs = {k.replace("-", "_"): v for k, v in flags.items()}
+        kwargs = {k.replace("-", "_"): v for k, v in flags.items() if v != ""}
+        cmd = self._mapping[command]
+        # modify kwargs to match the type of the argument
+        for kwarg in list(kwargs.keys()):
+            match cmd.get_argument_type(kwarg).__name__:
+                case "int":
+                    kwargs[kwarg] = int(kwargs[kwarg])
+                case "bool":
+                    kwargs[kwarg] = kwargs[kwarg].lower() == "true"
+                case "float":
+                    kwargs[kwarg] = float(kwargs[kwarg])
         try:
-            cmd = self._mapping[command]
             if cmd.needs_workspace_client():
                 kwargs["w"] = self._workspace_client()
             elif cmd.is_account:
@@ -92,19 +100,6 @@ class App:
             prompts_argument = cmd.prompts_argument_name()
             if prompts_argument:
                 kwargs[prompts_argument] = Prompts()
-            # modify kwargs to match the type of the argument
-            for kwarg in list(kwargs.keys()):
-                # remove empty strings
-                if kwargs[kwarg] == "":
-                    del kwargs[kwarg]
-                    continue
-                match cmd.get_argument_type(kwarg).__name__:
-                    case "int":
-                        kwargs[kwarg] = int(kwargs[kwarg])
-                    case "bool":
-                        kwargs[kwarg] = kwargs[kwarg].lower() == "true"
-                    case "float":
-                        kwargs[kwarg] = float(kwargs[kwarg])
             cmd.fn(**kwargs)
         except Exception as err:  # pylint: disable=broad-exception-caught
             logger = self._logger.getChild(command)
