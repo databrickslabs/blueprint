@@ -4,6 +4,7 @@ import functools
 import inspect
 import json
 import logging
+import types
 from collections.abc import Callable
 from dataclasses import dataclass
 
@@ -40,7 +41,10 @@ class Command:
         sig = inspect.signature(self.fn)
         if argument_name not in sig.parameters:
             return None
-        return sig.parameters[argument_name].annotation.__name__
+        annotation = sig.parameters[argument_name].annotation
+        if isinstance(annotation, types.UnionType):
+            return str(annotation)
+        return annotation.__name__
 
 
 class App:
