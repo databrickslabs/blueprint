@@ -4,7 +4,7 @@ import sys
 from unittest import mock
 from unittest.mock import create_autospec
 
-from databricks.sdk import AccountClient
+from databricks.sdk import AccountClient, WorkspaceClient
 
 from databricks.labs.blueprint.cli import App
 from databricks.labs.blueprint.tui import Prompts
@@ -71,7 +71,7 @@ def test_injects_prompts():
     some.assert_called_with("y", 100, 100.5, True, "default", "optional")
 
 
-def test_collection_commands(mocker):
+def test_collection_commands_account(mocker):
     some = mock.Mock()
     app = App(inspect.getfile(App))
     acc_client = create_autospec(AccountClient)
@@ -95,3 +95,28 @@ def test_collection_commands(mocker):
         app()
 
     some.assert_called_with("y", 100, 100.5, True, 1234, "default", "optional", acc_client)
+
+
+def test_collection_commands_workspace(mocker):
+    some = mock.Mock()
+    app = App(inspect.getfile(App))
+    ws = create_autospec(WorkspaceClient)
+    mocker.patch("databricks.sdk.WorkspaceClient.__new__", mock.Mock(return_value=ws))
+
+    @app.command(is_unauthenticated=False, is_collection=True)
+    def foo(
+            name: str,
+            age: int,
+            salary: float,
+            is_customer: bool,
+            w: WorkspaceClient,
+            address: str = "default",
+            optional_arg: str | None = None,
+    ):
+        """Some comment"""
+        some(name, age, salary, is_customer, address, optional_arg, w)
+
+    with mock.patch.object(sys, "argv", [..., FOO_COMMAND]):
+        app()
+
+    some.assert_called_with("y", 100, 100.5, True, "default", "optional", ws)
