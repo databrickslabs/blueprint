@@ -105,13 +105,13 @@ def test_collection_commands_workspace(mocker):
 
     @app.command(is_unauthenticated=False, is_collection=True)
     def foo(
-            name: str,
-            age: int,
-            salary: float,
-            is_customer: bool,
-            w: WorkspaceClient,
-            address: str = "default",
-            optional_arg: str | None = None,
+        name: str,
+        age: int,
+        salary: float,
+        is_customer: bool,
+        w: WorkspaceClient,
+        address: str = "default",
+        optional_arg: str | None = None,
     ):
         """Some comment"""
         some(name, age, salary, is_customer, address, optional_arg, w)
