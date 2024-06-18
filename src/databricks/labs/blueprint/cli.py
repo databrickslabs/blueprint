@@ -32,6 +32,11 @@ class Command:
         return True
 
     def run_as_collection(self) -> bool:
+        # A Method can be run as standalone workspace cmd or as a collection. To mark a method as collection method
+        # we need to add is_collection flag to True
+        # In addition if the collection_workspace_id is passed then return True else return False
+        # if collection_workspace_id is passed, the cmd should be run under account client else
+        # as workspace client.
         if not self.is_collection:
             return False
         sig = inspect.signature(self.fn)
@@ -111,8 +116,12 @@ class App:
                     kwargs[kwarg] = float(kwargs[kwarg])
         try:
             if cmd.needs_workspace_client() and not cmd.run_as_collection():
+                # if is_account is not set and cmd is either not a collection or
+                # is a collection but collection_workspace_id not passed
                 kwargs["w"] = self._workspace_client()
             elif cmd.is_account or cmd.run_as_collection():
+                # if is_account is  set or cmd is a collection
+                # and collection_workspace_id is passed
                 kwargs["a"] = self._account_client()
             prompts_argument = cmd.prompts_argument_name()
             if prompts_argument:
