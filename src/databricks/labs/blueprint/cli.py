@@ -21,6 +21,7 @@ class Command:
     description: str
     fn: Callable[..., None]
     is_account: bool = False
+    is_collection: bool = False
     is_unauthenticated: bool = False
 
     def needs_workspace_client(self):
@@ -29,6 +30,20 @@ class Command:
         if self.is_account:
             return False
         return True
+
+    def run_as_collection(self) -> bool:
+        # A Method can be run as standalone workspace cmd or as a collection. To mark a method as collection method
+        # we need to add is_collection flag to True
+        # In addition if the collection_workspace_id is passed then return True else return False
+        # if collection_workspace_id is passed, the cmd should be run under account client else
+        # as workspace client.
+        if not self.is_collection:
+            return False
+        sig = inspect.signature(self.fn)
+        for param in sig.parameters.values():
+            if param.name == "collection_workspace_id":
+                return True
+        return False
 
     def prompts_argument_name(self) -> str | None:
         sig = inspect.signature(self.fn)
@@ -53,7 +68,7 @@ class App:
         self._logger = get_logger(__file)
         self._product_info = ProductInfo(__file)
 
-    def command(self, fn=None, is_account: bool = False, is_unauthenticated: bool = False):
+    def command(self, fn=None, is_account: bool = False, is_unauthenticated: bool = False, is_collection=False):
         """Decorator to register a function as a command."""
 
         def register(func):
@@ -66,6 +81,7 @@ class App:
                 fn=func,
                 is_account=is_account,
                 is_unauthenticated=is_unauthenticated,
+                is_collection=is_collection,
             )
             return func
 
@@ -99,9 +115,13 @@ class App:
                 case "float":
                     kwargs[kwarg] = float(kwargs[kwarg])
         try:
-            if cmd.needs_workspace_client():
+            if cmd.needs_workspace_client() and not cmd.run_as_collection():
+                # if is_account is not set and cmd is either not a collection or
+                # is a collection but collection_workspace_id not passed
                 kwargs["w"] = self._workspace_client()
-            elif cmd.is_account:
+            elif cmd.is_account or cmd.run_as_collection():
+                # if is_account is  set or cmd is a collection
+                # and collection_workspace_id is passed
                 kwargs["a"] = self._account_client()
             prompts_argument = cmd.prompts_argument_name()
             if prompts_argument:
