@@ -9,6 +9,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from databricks.sdk import AccountClient, WorkspaceClient
+from databricks.sdk.config import with_user_agent_extra
 
 from databricks.labs.blueprint.entrypoint import get_logger, run_main
 from databricks.labs.blueprint.tui import Prompts
@@ -81,6 +82,9 @@ class App:
         if command not in self._mapping:
             msg = f"cannot find command: {command}"
             raise KeyError(msg)
+        # user agent is set consistently with the Databricks CLI:
+        # see https://github.com/databricks/cli/blob/main/cmd/root/user_agent_command.go#L35-L37
+        with_user_agent_extra("cmd", command)
         flags = payload["flags"]
         log_level = flags.pop("log_level")
         if log_level == "disabled":
