@@ -28,7 +28,7 @@ def test_mkdirs(ws, make_random):
 
     assert with_user.is_absolute()
     assert with_user.absolute() == with_user
-    assert with_user.as_fuse() == Path("/Workspace") / with_user.as_posix()
+    assert Path(f"/Workspace/{with_user.as_posix()}") == with_user.as_fuse()
 
     user_name = ws.current_user.me().user_name
     browser_uri = f'{ws.config.host}#workspace/Users/{user_name.replace("@", "%40")}/{name}/foo/bar/baz'

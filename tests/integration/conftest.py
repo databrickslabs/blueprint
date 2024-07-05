@@ -1,12 +1,15 @@
+import io
 import json
 import logging
 import os
 import pathlib
 import string
 import sys
-from typing import MutableMapping
+from typing import BinaryIO, MutableMapping
 
 from databricks.sdk import WorkspaceClient
+from databricks.sdk.errors import DatabricksError
+from databricks.sdk.service.workspace import ImportFormat, Language
 from pytest import fixture
 
 from databricks.labs.blueprint.__about__ import __version__
@@ -15,6 +18,7 @@ from databricks.labs.blueprint.logger import install_logger
 
 install_logger()
 logging.getLogger("databricks").setLevel("DEBUG")
+logger = logging.getLogger("databricks.labs.blueprint.tests")
 
 
 def _is_in_debug() -> bool:
@@ -63,6 +67,60 @@ def make_random():
         return "".join(random.choices(charset, k=int(k)))
 
     return inner
+
+
+def factory(name, create, remove):
+    cleanup = []
+
+    def inner(**kwargs):
+        x = create(**kwargs)
+        logger.debug(f"added {name} fixture: {x}")
+        cleanup.append(x)
+        return x
+
+    yield inner
+    logger.debug(f"clearing {len(cleanup)} {name} fixtures")
+    for x in cleanup:
+        try:
+            logger.debug(f"removing {name} fixture: {x}")
+            remove(x)
+        except DatabricksError as e:
+            # TODO: fix on the databricks-labs-pytester level
+            logger.debug(f"ignoring error while {name} {x} teardown: {e}")
+
+
+@fixture
+def make_directory(ws, make_random):
+    def create(*, path: str | None = None):
+        if path is None:
+            path = f"/Users/{ws.current_user.me().user_name}/sdk-{make_random(4)}"
+        ws.workspace.mkdirs(path)
+        return path
+
+    yield from factory("directory", create, lambda x: ws.workspace.delete(x, recursive=True))
+
+
+@fixture
+def make_notebook(ws, make_random):
+    def create(
+        *,
+        path: str | pathlib.Path | None = None,
+        content: BinaryIO | None = None,
+        language: Language = Language.PYTHON,
+        format: ImportFormat = ImportFormat.SOURCE,  # pylint:  disable=redefined-builtin
+        overwrite: bool = False,
+    ) -> str:
+        if path is None:
+            path = f"/Users/{ws.current_user.me().user_name}/sdk-{make_random(4)}"
+        elif isinstance(path, pathlib.Path):
+            path = str(path)
+        if content is None:
+            content = io.BytesIO(b"print(1)")
+        path = str(path)
+        ws.workspace.upload(path, content, language=language, format=format, overwrite=overwrite)
+        return path
+
+    yield from factory("notebook", create, lambda x: ws.workspace.delete(x))
 
 
 @fixture
