@@ -173,10 +173,6 @@ class _DatabricksAccessor:
     def __init__(self, ws: WorkspaceClient):
         self._ws = ws
 
-    def expanduser(self, path):
-        home = f"/Users/{self._ws.current_user.me().user_name}"
-        return path.replace("~", home)
-
     def __repr__(self):
         return f"<{self.__class__.__name__} for {self._ws}>"
 
@@ -419,6 +415,23 @@ class WorkspacePath(Path):
             return self._object_info.object_type == ObjectType.FILE
         except DatabricksError:
             return False
+
+    def expanduser(self):
+        # Expand ~ (but NOT ~user) constructs.
+        if not (self._drv or self._root) and self._parts:
+            match self._parts:
+                case ["~"]:
+                    user_name = self._ws.current_user.me().user_name
+                case ["~", *other_user]:
+                    msg = f"Cannot determine home directory for: {other_user}"
+                    raise RuntimeError(msg)
+                case _:
+                    return self
+            if user_name is None:
+                raise RuntimeError("Could not determine home directory.")
+            homedir = f"/Users/{user_name}"
+            return self._from_parts([homedir, *self._parts[1:]])
+        return self
 
     def is_notebook(self):
         """Return True if the path points to a notebook in Databricks Workspace."""
