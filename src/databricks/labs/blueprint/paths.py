@@ -423,15 +423,14 @@ class WorkspacePath(Path):
 
     def expanduser(self):
         # Expand ~ (but NOT ~user) constructs.
-        if not (self._drv or self._root) and self._parts:
-            match self._parts:
-                case ["~"]:
-                    user_name = self._ws.current_user.me().user_name
-                case ["~", *other_user]:
-                    msg = f"Cannot determine home directory for: {other_user}"
-                    raise RuntimeError(msg)
-                case _:
-                    return self
+        if (not (self._drv or self._root) and
+                self._parts and self._parts[0][:1] == "~"):
+            if self._parts[0] == "~":
+                user_name = self._ws.current_user.me().user_name
+            else:
+                other_user = self._parts[0][1:]
+                msg = f"Cannot determine home directory for: {other_user}"
+                raise RuntimeError(msg)
             if user_name is None:
                 raise RuntimeError("Could not determine home directory.")
             homedir = f"/Users/{user_name}"
