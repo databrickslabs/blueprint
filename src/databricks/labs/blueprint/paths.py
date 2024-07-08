@@ -124,10 +124,12 @@ class _ScandirItem:
     def __fspath__(self):
         return self._object_info.path
 
-    def is_dir(self):
+    def is_dir(self, follow_symlinks=False):  # pylint: disable=unused-argument
+        # follow_symlinks is for compatibility with Python 3.11
         return self._object_info.object_type == ObjectType.DIRECTORY
 
-    def is_file(self):
+    def is_file(self, follow_symlinks=False):  # pylint: disable=unused-argument
+        # follow_symlinks is for compatibility with Python 3.11
         # TODO: check if we want to show notebooks as files
         return self._object_info.object_type == ObjectType.FILE
 
