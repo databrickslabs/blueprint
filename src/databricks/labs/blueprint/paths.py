@@ -124,10 +124,12 @@ class _ScandirItem:
     def __fspath__(self):
         return self._object_info.path
 
-    def is_dir(self):
+    def is_dir(self, follow_symlinks=False):  # pylint: disable=unused-argument
+        # follow_symlinks is for compatibility with Python 3.11
         return self._object_info.object_type == ObjectType.DIRECTORY
 
-    def is_file(self):
+    def is_file(self, follow_symlinks=False):  # pylint: disable=unused-argument
+        # follow_symlinks is for compatibility with Python 3.11
         # TODO: check if we want to show notebooks as files
         return self._object_info.object_type == ObjectType.FILE
 
@@ -172,10 +174,6 @@ class _DatabricksAccessor:
 
     def __init__(self, ws: WorkspaceClient):
         self._ws = ws
-
-    def expanduser(self, path):
-        home = f"/Users/{self._ws.current_user.me().user_name}"
-        return path.replace("~", home)
 
     def __repr__(self):
         return f"<{self.__class__.__name__} for {self._ws}>"
@@ -419,6 +417,26 @@ class WorkspacePath(Path):
             return self._object_info.object_type == ObjectType.FILE
         except DatabricksError:
             return False
+
+    def _scandir(self):
+        # Python 3.10: Accesses _accessor.scandir() directly.
+        # Python 3.11: Instead invokes this (which normally dispatches to os.scandir())
+        return self._accessor.scandir(self)
+
+    def expanduser(self):
+        # Expand ~ (but NOT ~user) constructs.
+        if not (self._drv or self._root) and self._parts and self._parts[0][:1] == "~":
+            if self._parts[0] == "~":
+                user_name = self._ws.current_user.me().user_name
+            else:
+                other_user = self._parts[0][1:]
+                msg = f"Cannot determine home directory for: {other_user}"
+                raise RuntimeError(msg)
+            if user_name is None:
+                raise RuntimeError("Could not determine home directory.")
+            homedir = f"/Users/{user_name}"
+            return self._from_parts([homedir, *self._parts[1:]])
+        return self
 
     def is_notebook(self):
         """Return True if the path points to a notebook in Databricks Workspace."""
