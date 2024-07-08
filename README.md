@@ -8,6 +8,7 @@ Databricks Labs Blueprint
 
 Baseline for Databricks Labs projects written in Python. Sources are validated with `mypy` and `pylint`. See [Contributing instructions](CONTRIBUTING.md) if you would like to improve this project.
 
+
 <!-- TOC -->
 * [Databricks Labs Blueprint](#databricks-labs-blueprint)
 * [Installation](#installation)
