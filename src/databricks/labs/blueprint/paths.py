@@ -423,8 +423,7 @@ class WorkspacePath(Path):
 
     def expanduser(self):
         # Expand ~ (but NOT ~user) constructs.
-        if (not (self._drv or self._root) and
-                self._parts and self._parts[0][:1] == "~"):
+        if not (self._drv or self._root) and self._parts and self._parts[0][:1] == "~":
             if self._parts[0] == "~":
                 user_name = self._ws.current_user.me().user_name
             else:
