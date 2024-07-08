@@ -416,6 +416,11 @@ class WorkspacePath(Path):
         except DatabricksError:
             return False
 
+    def _scandir(self):
+        # Python 3.10: Accesses _accessor.scandir() directly.
+        # Python 3.11: Instead invokes this (which normally dispatches to os.scandir())
+        return self._accessor.scandir(self)
+
     def expanduser(self):
         # Expand ~ (but NOT ~user) constructs.
         if not (self._drv or self._root) and self._parts:
