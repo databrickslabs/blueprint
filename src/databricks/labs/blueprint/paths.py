@@ -213,7 +213,7 @@ class _TextUploadIO(_UploadIO, StringIO):  # type: ignore
         StringIO.__init__(self)
 
 
-class WorkspacePath(Path):
+class WorkspacePath(Path):  # pylint: disable=too-many-public-methods
     """Experimental implementation of pathlib.Path for Databricks Workspace."""
 
     # Implementation notes:
@@ -235,7 +235,7 @@ class WorkspacePath(Path):
     #     3. Python 3.12 introduces some new API elements. Because these are source-compatible with earlier versions
     #        these are forward-ported and implemented.
     #
-    __slots__ = (
+    __slots__ = (  # pylint: disable=redefined-slots-in-subclass
         # For us this is always the empty string. Consistent with the superclass attribute for Python 3.10-3.13b.
         "_drv",
         # The (normalized) root property for the path. Consistent with the superclass attribute for Python 3.10-3.13b.
@@ -281,7 +281,9 @@ class WorkspacePath(Path):
         # Force all initialisation to go via __init__() irrespective of the (Python-specific) base version.
         return object.__new__(cls)
 
-    def __init__(self, ws: WorkspaceClient, *args) -> None:
+    def __init__(self, ws: WorkspaceClient, *args) -> None:  # pylint: disable=super-init-not-called,useless-suppression
+        # We deliberately do _not_ call the super initializer because we're taking over complete responsibility for the
+        # implementation of the public API.
         raw_paths: list[str] = []
         for arg in args:
             if isinstance(arg, PurePath):
@@ -499,10 +501,10 @@ class WorkspacePath(Path):
     def _stack(self):
         return self.anchor, list(reversed(self._path_parts))
 
-    def relative_to(self, other, *more_other, walk_up=False):
+    def relative_to(self, other, *more_other, walk_up=False):  # pylint: disable=arguments-differ
         other = self.with_segments(other, *more_other)
         anchor0, parts0 = self._stack
-        anchor1, parts1 = other._stack
+        anchor1, parts1 = other._stack  # pylint: disable=protected-access
         if anchor0 != anchor1:
             msg = f"{str(self)!r} and {str(other)!r} have different anchors"
             raise ValueError(msg)
@@ -518,12 +520,12 @@ class WorkspacePath(Path):
             parts0.append("..")
         return self.with_segments("", *reversed(parts0))
 
-    def is_relative_to(self, other, *more_other):
+    def is_relative_to(self, other, *more_other):  # pylint: disable=arguments-differ
         other = self.with_segments(other, *more_other)
         if self.anchor != other.anchor:
             return False
         parts0 = list(reversed(self._path_parts))
-        parts1 = list(reversed(other._path_parts))
+        parts1 = list(reversed(other._path_parts))  # pylint: disable=protected-access
         while parts0 and parts1 and parts0[-1] == parts1[-1]:
             parts0.pop()
             parts1.pop()
