@@ -253,6 +253,7 @@ class WorkspacePath(Path):
         # The cached _object_info value for the instance.
         "_cached_object_info",
     )
+    _cached_object_info: ObjectInfo
 
     _SUFFIXES = {Language.PYTHON: ".py", Language.SQL: ".sql", Language.SCALA: ".scala", Language.R: ".R"}
 
@@ -442,10 +443,8 @@ class WorkspacePath(Path):
     @property
     def parts(self):
         if self.drive or self.root:
-            parts = (self.drive + self.root, *self._path_parts)
-        else:
-            parts = self._path_parts
-        return parts
+            return self.drive + self.root, *self._path_parts
+        return self._path_parts
 
     @property
     def suffix(self):
@@ -491,11 +490,10 @@ class WorkspacePath(Path):
         if not stem:
             msg = f"{self!r} has an empty name"
             raise ValueError(msg)
-        elif suffix and not suffix.startswith("."):
+        if suffix and not suffix.startswith("."):
             msg = f"{self!r} invalid suffix: {suffix}"
             raise ValueError(msg)
-        else:
-            return self.with_name(stem + suffix)
+        return self.with_name(stem + suffix)
 
     @property
     def _stack(self):
@@ -515,10 +513,9 @@ class WorkspacePath(Path):
             if not walk_up:
                 msg = f"{str(self)!r} is not in the subpath of {str(other)!r}"
                 raise ValueError(msg)
-            elif part == "..":
+            if part == "..":
                 raise ValueError(f"'..' segment in {str(other)!r} cannot be walked")
-            else:
-                parts0.append("..")
+            parts0.append("..")
         return self.with_segments("", *reversed(parts0))
 
     def is_relative_to(self, other, *more_other):
@@ -665,8 +662,7 @@ class WorkspacePath(Path):
             self._cached_object_info = self._ws.workspace.get_status(self.as_posix())
             return self._object_info
 
-    @staticmethod
-    def _return_false() -> bool:
+    def _return_false(self) -> bool:
         return False
 
     is_symlink = _return_false
@@ -696,9 +692,9 @@ class WorkspacePath(Path):
             return False
 
     def _scandir(self):
-        # Python 3.10: Accesses _accessor.scandir() directly.
-        # Python 3.11: Instead invokes this (which normally dispatches to os.scandir())
-        return self._accessor.scandir(self)
+        # TODO: Not yet invoked; work-in-progress.
+        objects = self._ws.workspace.list(self.as_posix())
+        return _ScandirIterator(objects)
 
     def expanduser(self):
         # Expand ~ (but NOT ~user) constructs.
