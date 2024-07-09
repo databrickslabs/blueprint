@@ -368,6 +368,7 @@ class WorkspacePath(Path):  # pylint: disable=too-many-public-methods
 
     def __bytes__(self):
         # Super implementations are fine.
+        # TODO: Decide before PR merge whether to: a) remove; b) allow as marker that we checked it; c) inline to be independent.
         return super().__bytes__()
 
     def __repr__(self):
@@ -483,8 +484,9 @@ class WorkspacePath(Path):  # pylint: disable=too-many-public-methods
         path_parts[-1] = name
         return type(self)(self._ws, self.anchor, *path_parts)
 
-    def with_stem(self, stem):
+    def with_stem(self, stem):  # pylint: disable=useless-parent-delegation
         # Super implementations are all fine.
+        # TODO: Decide before PR merge whether to: a) remove; b) allow as marker that we checked it; c) inline to be independent.
         return super().with_stem(stem)
 
     def with_suffix(self, suffix):
