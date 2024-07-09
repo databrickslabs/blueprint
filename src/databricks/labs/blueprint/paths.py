@@ -232,7 +232,7 @@ class WorkspacePath(Path):
     # This implementation for Workspace paths does the following:
     #     1. Flavour is basically posix-style, with the caveat that we don't bother with the special //-prefix handling.
     #     2. The Accessor is delegated to existing routines available via the workspace client.
-    #     3. Python 3.12 introduces some new API elements. Because these are sourec-compatible with earlier versions
+    #     3. Python 3.12 introduces some new API elements. Because these are source-compatible with earlier versions
     #        these are forward-ported and implemented.
     #
     __slots__ = (
