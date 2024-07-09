@@ -5,13 +5,12 @@ import fnmatch
 import locale
 import logging
 import os
-import pathlib
 import posixpath
 import re
 import sys
-from functools import cached_property
 from io import BytesIO, StringIO
-from pathlib import Path
+from pathlib import Path, PurePath
+from typing import NoReturn
 from urllib.parse import quote_from_bytes as urlquote_from_bytes
 
 from databricks.sdk import WorkspaceClient
@@ -217,11 +216,51 @@ class _TextUploadIO(_UploadIO, StringIO):  # type: ignore
 class WorkspacePath(Path):
     """Experimental implementation of pathlib.Path for Databricks Workspace."""
 
-    _SUFFIXES = {".py": Language.PYTHON, ".sql": Language.SQL, ".scala": Language.SCALA, ".R": Language.R}
+    # Implementation notes:
+    #  - The builtin Path classes are not designed for extension, which in turn makes everything a little cumbersome.
+    #  - The internals of the builtin pathlib have changed dramatically across supported Python versions (3.10-3.12 at
+    #    the time of writing) so relying on those details is brittle. (Python 3.13 also includes a significant
+    #    refactoring.)
+    #  - Until 3.11 the implementation was decomposed and delegated to two internal interfaces:
+    #     1. Flavour (scope=class) which encapsulates the path style and manipulation.
+    #     2. Accessor (scope=instance) to which I/O-related calls are delegated.
+    #    These interfaces are internal/protected.
+    #  - Since 3.12 the implementation of these interfaces have been removed:
+    #     1. Flavour has been replaced with posixpath and ntpath (normally imported as os.path). Still class-scoped.
+    #     2. Accessor has been replaced with inline implementations based directly on the 'os' module.
+    #
+    # This implementation for Workspace paths does the following:
+    #     1. Flavour is basically posix-style, with the caveat that we don't bother with the special //-prefix handling.
+    #     2. The Accessor is delegated to existing routines available via the workspace client.
+    #     3. Python 3.12 introduces some new API elements. Because these are sourec-compatible with earlier versions
+    #        these are forward-ported and implemented.
+    #
+    __slots__ = (
+        # For us this is always the empty string. Consistent with the superclass attribute for Python 3.10-3.13b.
+        "_drv",
+        # The (normalized) root property for the path. Consistent with the superclass attribute for Python 3.10-3.13b.
+        "_root",
+        # The (normalized) path components (relative to the root) for the path.
+        #  - For python <=3.11 this supersedes _parts
+        #  - For python 3.12+ this supersedes _raw_paths
+        "_path_parts",
+        # The cached str() value of the instance. Consistent with the superclass attribute for Python 3.10-3.13b.
+        "_str",
+        # The cached hash() value for the instance. Consistent with the superclass attribute for Python 3.10-3.13b.
+        "_hash",
+        # The workspace client that we use to perform I/O operations on the path.
+        "_ws",
+        # The cached _object_info value for the instance.
+        "_cached_object_info",
+    )
 
-    _ws: WorkspaceClient
-    _flavour: _DatabricksFlavour
-    _accessor: _DatabricksAccessor
+    _SUFFIXES = {Language.PYTHON: ".py", Language.SQL: ".sql", Language.SCALA: ".scala", Language.R: ".R"}
+
+    # Path semantics are posix-like.
+    parser = posixpath
+
+    # Compatibility attribute, for when superclass implementations get invoked on python <= 3.11.
+    _flavour = object()
 
     cwd = _na("cwd")
     stat = _na("stat")
@@ -237,66 +276,320 @@ class WorkspacePath(Path):
     link_to = _na("link_to")
     samefile = _na("samefile")
 
-    def __new__(cls, ws: WorkspaceClient, path: str | Path):
-        this = object.__new__(cls)
-        # pathlib does a lot of clever performance tricks, and it's not designed to be subclassed,
-        # so we need to set the attributes directly, bypassing the most of a common sense.
-        this._flavour = _DatabricksFlavour(ws)
-        drv, root, parts = this._parse_args([path])
-        return this.__from_raw_parts(this, ws, this._flavour, drv, root, parts)
+    def __new__(cls, *args, **kwargs) -> WorkspacePath:
+        # Force all initialisation to go via __init__() irrespective of the (Python-specific) base version.
+        return object.__new__(cls)
 
-    @staticmethod
-    def __from_raw_parts(this, ws: WorkspaceClient, flavour: _DatabricksFlavour, drv, root, parts) -> WorkspacePath:
-        # pylint: disable=protected-access
-        this._accessor = _DatabricksAccessor(ws)
-        this._flavour = flavour
-        this._drv = drv
-        this._root = root
-        this._parts = parts
-        this._ws = ws
-        return this
+    def __init__(self, ws: WorkspaceClient, *args) -> None:
+        raw_paths: list[str] = []
+        for arg in args:
+            if isinstance(arg, PurePath):
+                raw_paths.extend(arg.parts)
+            else:
+                try:
+                    path = os.fspath(arg)
+                except TypeError:
+                    path = arg
+                if not isinstance(path, str):
+                    msg = (
+                        f"argument should be a str or an os.PathLib object where __fspath__ returns a str, "
+                        f"not {type(path).__name__!r}"
+                    )
+                    raise TypeError(msg)
+                raw_paths.append(path)
 
-    def _make_child_relpath(self, part):
-        # used in dir walking
-        path = self._flavour.join(self._parts + [part])
-        # self._flavour.join duplicates leading '/' (possibly a python bug)
-        # but we can't override join in _DatabricksFlavour because it's built-in
-        # and if we remove the leading '/' part then we don't get any
-        # so let's just do a slow but safe sanity check afterward
-        if os.sep == path[0] == path[1]:
-            path = path[1:]
-        return WorkspacePath(self._ws, path)
+        # Normalise the paths that we have.
+        root, path_parts = self._parse_and_normalize(raw_paths)
 
-    def _parse_args(self, args):  # pylint: disable=arguments-differ
-        # instance method adapted from pathlib.Path
-        parts = []
-        for a in args:
-            if isinstance(a, pathlib.PurePath):
-                parts += a._parts  # pylint: disable=protected-access
-                continue
-            parts.append(str(a))
-        return self._flavour.parse_parts(parts)
+        self._drv = ""
+        self._root = root
+        self._path_parts = path_parts
+        self._ws = ws
 
-    def _format_parsed_parts(self, drv, root, parts):  # pylint: disable=arguments-differ
-        # instance method adapted from pathlib.Path
-        if drv or root:
-            return drv + root + self._flavour.join(parts[1:])
-        return self._flavour.join(parts)
+    @classmethod
+    def _parse_and_normalize(cls, parts: list[str]) -> tuple[str, tuple[str, ...]]:
+        """Parse and normalize a list of path components.
 
-    def _from_parsed_parts(self, drv, root, parts):  # pylint: disable=arguments-differ
-        # instance method adapted from pathlib.Path
-        this = object.__new__(self.__class__)
-        return self.__from_raw_parts(this, self._ws, self._flavour, drv, root, parts)
+        Args:
+            parts: a list of path components to parse and normalize.
+        Returns:
+            A tuple containing:
+              - The normalized drive (always '')
+              - The normalized root for this path, or '' if there isn't any.
+              - The normalized path components, if any, (relative) to the root.
+        """
+        match parts:
+            case []:
+                path = ""
+            case [part]:
+                path = part
+            case [*parts]:
+                path = cls.parser.join(*parts)
+        if path:
+            root, rel = cls._splitroot(path, sep=cls.parser.sep)
+            # No need to split drv because we don't support it.
+            parsed = tuple(str(x) for x in rel.split(cls.parser.sep) if x and x != ".")
+        else:
+            root, parsed = "", ()
+        return root, parsed
 
-    def _from_parts(self, args):  # pylint: disable=arguments-differ
-        # instance method adapted from pathlib.Path
-        drv, root, parts = self._parse_args(args)
-        return self._from_parsed_parts(drv, root, parts)
+    @classmethod
+    def _splitroot(cls, part: str, sep: str) -> tuple[str, str]:
+        # Based on the upstream implementation, with the '//'-specific bit elided because we don't need to
+        # bother with Posix semantics.
+        if part and part[0] == sep:
+            root, path = sep, part.lstrip(sep)
+        else:
+            root, path = "", part
+        return root, path
 
-    def relative_to(self, *other) -> pathlib.PurePath:  # type: ignore
-        """Databricks Workspace works only with absolute paths, so we make sure to
-        return pathlib.Path instead of WorkspacePath to avoid confusion."""
-        return pathlib.PurePath(super().relative_to(*other))
+    def __reduce__(self) -> NoReturn:
+        # Cannot support pickling because we can't pickle the workspace client.
+        msg = "Pickling Workspace paths is not supported."
+        raise NotImplementedError(msg)
+
+    def __fspath__(self):
+        # Cannot support this: Workspace objects aren't accessible via the filesystem.
+        msg = f"Workspace paths are not path-like: {self}"
+        raise NotImplementedError(msg)
+
+    def as_posix(self):
+        return str(self)
+
+    def __str__(self):
+        try:
+            return self._str
+        except AttributeError:
+            self._str = (self._root + self.parser.sep.join(self._path_parts)) or "."
+            return self._str
+
+    def __bytes__(self):
+        # Super implementations are fine.
+        return super(self).__bytes__()
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}({str(self)!r})"
+
+    def as_uri(
+        self,
+    ) -> str:
+        return self._ws.config.host + "#workspace" + urlquote_from_bytes(bytes(self))
+
+    def __eq__(self, other):
+        if not isinstance(other, type(self)):
+            return NotImplemented
+        return str(self) == str(other)
+
+    def __hash__(self):
+        try:
+            return self._hash
+        except AttributeError:
+            self._hash = hash(str(self))
+            return self._hash
+
+    def _parts(self) -> tuple[str, ...]:
+        """Return a tuple that has the same natural ordering as paths of this type."""
+        return self._root, *self._path_parts
+
+    @property
+    def _cparts(self):
+        # Compatibility property (python <= 3.11), accessed via reverse equality comparison. This can't be avoided.
+        return self._parts()
+
+    @property
+    def _str_normcase(self):
+        # Compatibility property (python 3.12+), accessed via equality comparison. This can't be avoided.
+        return str(self)
+
+    def __lt__(self, other):
+        if not isinstance(other, type(self)):
+            return NotImplemented
+        return self._path_parts < other._path_parts
+
+    def __le__(self, other):
+        if not isinstance(other, type(self)):
+            return NotImplemented
+        return self._path_parts <= other._path_parts
+
+    def __gt__(self, other):
+        if not isinstance(other, type(self)):
+            return NotImplemented
+        return self._path_parts > other._path_parts
+
+    def __ge__(self, other):
+        if not isinstance(other, type(self)):
+            return NotImplemented
+        return self._path_parts >= other._path_parts
+
+    def with_segments(self, *pathsegments):
+        return type(self)(self._ws, *pathsegments)
+
+    @property
+    def drive(self) -> str:
+        return self._drv
+
+    @property
+    def root(self):
+        return self._root
+
+    @property
+    def anchor(self):
+        return self.drive + self.root
+
+    @property
+    def name(self):
+        path_parts = self._path_parts
+        return path_parts[-1] if path_parts else ""
+
+    @property
+    def parts(self):
+        if self.drive or self.root:
+            parts = (self.drive + self.root, *self._path_parts)
+        else:
+            parts = self._path_parts
+        return parts
+
+    @property
+    def suffix(self):
+        # Super implementations are mostly fine...
+        suffix = super().suffix
+        # ...but if there is no suffix and this path is for a notebook then infer the extension based on the notebook
+        # language.
+        if not suffix and self.is_notebook():
+            try:
+                suffix = self._SUFFIXES.get(self._object_info.language, "")
+            except DatabricksError:
+                pass
+        return suffix
+
+    @property
+    def suffixes(self):
+        # Super implementations are all fine.
+        # TODO: Make this consistent with .suffix for notebooks.
+        return super().suffixes
+
+    @property
+    def stem(self):
+        # Super implementations are all fine.
+        return super().stem
+
+    def with_name(self, name):
+        parser = self.parser
+        if not name or parser.sep in name or name == ".":
+            msg = f"Invalid name: {name!r}"
+            raise ValueError(msg)
+        path_parts = list(self._path_parts)
+        if not path_parts:
+            raise ValueError(f"{self!r} has an empty name")
+        path_parts[-1] = name
+        return type(self)(self._ws, self.anchor, *path_parts)
+
+    def with_stem(self, stem):
+        # Super implementations are all fine.
+        return super().with_stem(stem)
+
+    def with_suffix(self, suffix):
+        stem = self.stem
+        if not stem:
+            msg = f"{self!r} has an empty name"
+            raise ValueError(msg)
+        elif suffix and not suffix.startswith("."):
+            msg = f"{self!r} invalid suffix: {suffix}"
+            raise ValueError(msg)
+        else:
+            return self.with_name(stem + suffix)
+
+    @property
+    def _stack(self):
+        return self.anchor, list(reversed(self._path_parts))
+
+    def relative_to(self, other, *more_other, walk_up=False):
+        other = self.with_segments(other, *more_other)
+        anchor0, parts0 = self._stack
+        anchor1, parts1 = other._stack
+        if anchor0 != anchor1:
+            msg = f"{str(self)!r} and {str(other)!r} have different anchors"
+            raise ValueError(msg)
+        while parts0 and parts1 and parts0[-1] == parts1[-1]:
+            parts0.pop()
+            parts1.pop()
+        for part in parts1:
+            if not walk_up:
+                msg = f"{str(self)!r} is not in the subpath of {str(other)!r}"
+                raise ValueError(msg)
+            elif part == "..":
+                raise ValueError(f"'..' segment in {str(other)!r} cannot be walked")
+            else:
+                parts0.append("..")
+        return self.with_segments("", *reversed(parts0))
+
+    def is_relative_to(self, other, *more_other):
+        other = self.with_segments(other, *more_other)
+        if self.anchor != other.anchor:
+            return False
+        parts0 = list(reversed(self._path_parts))
+        parts1 = list(reversed(other._path_parts))
+        while parts0 and parts1 and parts0[-1] == parts1[-1]:
+            parts0.pop()
+            parts1.pop()
+        for part in parts1:
+            if part and part != ".":
+                return False
+        return True
+
+    @property
+    def parent(self):
+        rel_path = self._path_parts
+        return self.with_segments(self.anchor, *rel_path[:-1]) if rel_path else self
+
+    @property
+    def parents(self):
+        parents = []
+        path = self
+        parent = path.parent
+        while path != parent:
+            parents.append(parent)
+            path = parent
+            parent = path.parent
+        return tuple(parents)
+
+    def is_absolute(self):
+        return bool(self.anchor)
+
+    def is_reserved(self):
+        return False
+
+    def joinpath(self, *pathsegments):
+        return self.with_segments(self, *pathsegments)
+
+    @classmethod
+    def _compile_pattern(cls, pattern: str, case_sensitive: bool) -> re.Pattern:
+        flags = 0 if case_sensitive else re.IGNORECASE
+        regex = fnmatch.translate(pattern)
+        return re.compile(regex, flags=flags)
+
+    def match(self, path_pattern, *, case_sensitive=None):
+        # Convert the pattern to a fake path (with globs) to help with matching parts.
+        if not isinstance(path_pattern, PurePath):
+            path_pattern = self.with_segments(path_pattern)
+        # Default to false if not specified.
+        if case_sensitive is None:
+            case_sensitive = True
+        # Reverse the parts.
+        path_parts = self.parts
+        pattern_parts = path_pattern.parts
+        # Error
+        if not pattern_parts:
+            raise ValueError("empty pattern")
+        # Impossible matches.
+        if len(path_parts) < len(pattern_parts) or len(path_parts) > len(pattern_parts) and path_pattern.anchor:
+            return False
+        # Check each part.
+        for path_part, pattern_part in zip(reversed(path_parts), reversed(pattern_parts)):
+            pattern = self._compile_pattern(pattern_part, case_sensitive=case_sensitive)
+            if not pattern.match(path_part):
+                return False
+        return True
 
     def as_fuse(self):
         """Return FUSE-mounted path in Databricks Runtime."""
@@ -365,33 +658,17 @@ class WorkspacePath(Path):
         raise ValueError(f"invalid mode: {mode}")
 
     @property
-    def suffix(self):
-        """Return the file extension. If the file is a notebook, return the suffix based on the language."""
-        suffix = super().suffix
-        if suffix:
-            return suffix
-        if not self.is_notebook():
-            return ""
-        for sfx, lang in self._SUFFIXES.items():
-            try:
-                if self._object_info.language == lang:
-                    return sfx
-            except DatabricksError:
-                return ""
-        return ""
-
-    def __lt__(self, other: pathlib.PurePath):
-        if not isinstance(other, pathlib.PurePath):
-            return NotImplemented
-        return self.as_posix() < other.as_posix()
-
-    @cached_property
     def _object_info(self) -> ObjectInfo:
         # this method is cached because it is used in multiple is_* methods.
         # DO NOT use this method in methods, where fresh result is required.
-        return self._ws.workspace.get_status(self.as_posix())
+        try:
+            return self._cached_object_info
+        except AttributeError:
+            self._cached_object_info = self._ws.workspace.get_status(self.as_posix())
+            return self._object_info
 
-    def _return_false(self) -> bool:
+    @staticmethod
+    def _return_false() -> bool:
         return False
 
     is_symlink = _return_false
@@ -427,17 +704,17 @@ class WorkspacePath(Path):
 
     def expanduser(self):
         # Expand ~ (but NOT ~user) constructs.
-        if not (self._drv or self._root) and self._parts and self._parts[0][:1] == "~":
-            if self._parts[0] == "~":
+        if not (self._drv or self._root) and self._path_parts and self._path_parts[0][:1] == "~":
+            if self._path_parts[0] == "~":
                 user_name = self._ws.current_user.me().user_name
             else:
-                other_user = self._parts[0][1:]
+                other_user = self._path_parts[0][1:]
                 msg = f"Cannot determine home directory for: {other_user}"
                 raise RuntimeError(msg)
             if user_name is None:
                 raise RuntimeError("Could not determine home directory.")
             homedir = f"/Users/{user_name}"
-            return self._from_parts([homedir, *self._parts[1:]])
+            return self.with_segments(homedir, *self._path_parts[1:])
         return self
 
     def is_notebook(self):
@@ -446,9 +723,3 @@ class WorkspacePath(Path):
             return self._object_info.object_type == ObjectType.NOTEBOOK
         except DatabricksError:
             return False
-
-    def __eq__(self, other):
-        return isinstance(other, Path) and self.as_posix() == other.as_posix()
-
-    def __hash__(self):
-        return Path.__hash__(self)
