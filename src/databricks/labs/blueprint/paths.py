@@ -370,9 +370,7 @@ class WorkspacePath(Path):
     def __repr__(self):
         return f"{self.__class__.__name__}({str(self)!r})"
 
-    def as_uri(
-        self,
-    ) -> str:
+    def as_uri(self) -> str:
         return self._ws.config.host + "#workspace" + urlquote_from_bytes(bytes(self))
 
     def __eq__(self, other):
