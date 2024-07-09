@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import abc
 import fnmatch
 import locale
@@ -244,7 +246,7 @@ class WorkspacePath(Path):
         return this.__from_raw_parts(this, ws, this._flavour, drv, root, parts)
 
     @staticmethod
-    def __from_raw_parts(this, ws: WorkspaceClient, flavour: _DatabricksFlavour, drv, root, parts) -> "WorkspacePath":
+    def __from_raw_parts(this, ws: WorkspaceClient, flavour: _DatabricksFlavour, drv, root, parts) -> WorkspacePath:
         # pylint: disable=protected-access
         this._accessor = _DatabricksAccessor(ws)
         this._flavour = flavour
