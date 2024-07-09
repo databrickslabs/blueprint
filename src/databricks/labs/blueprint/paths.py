@@ -365,7 +365,7 @@ class WorkspacePath(Path):
 
     def __bytes__(self):
         # Super implementations are fine.
-        return super(self).__bytes__()
+        return super().__bytes__()
 
     def __repr__(self):
         return f"{self.__class__.__name__}({str(self)!r})"
