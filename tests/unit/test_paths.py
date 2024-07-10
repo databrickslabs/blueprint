@@ -260,30 +260,6 @@ def test_with_suffix() -> None:
         _ = WorkspacePath(ws, "/").with_suffix(".txt")
 
 
-def test_relative_to() -> None:
-    """Test that it is possible to get the relative path between two paths."""
-    ws = create_autospec(WorkspaceClient)
-
-    # Basics.
-    assert WorkspacePath(ws, "/home/bob").relative_to("/") == WorkspacePath(ws, "home/bob")
-    assert WorkspacePath(ws, "/home/bob").relative_to("/home") == WorkspacePath(ws, "bob")
-    assert WorkspacePath(ws, "/home/bob").relative_to("/./home") == WorkspacePath(ws, "bob")
-    assert WorkspacePath(ws, "foo/bar/baz").relative_to("foo") == WorkspacePath(ws, "bar/baz")
-    assert WorkspacePath(ws, "foo/bar/baz").relative_to("foo/bar") == WorkspacePath(ws, "baz")
-    assert WorkspacePath(ws, "foo/bar/baz").relative_to("foo/./bar") == WorkspacePath(ws, "baz")
-
-    # Walk-up (3.12+) behaviour.
-    assert WorkspacePath(ws, "/home/bob").relative_to("/usr", walk_up=True) == WorkspacePath(ws, "../home/bob")
-
-    # Check some errors.
-    with pytest.raises(ValueError, match="different anchors"):
-        _ = WorkspacePath(ws, "/home/bob").relative_to("home")
-    with pytest.raises(ValueError, match="not in the subpath"):
-        _ = WorkspacePath(ws, "/home/bob").relative_to("/usr")
-    with pytest.raises(ValueError, match="cannot be walked"):
-        _ = WorkspacePath(ws, "/home/bob").relative_to("/home/../usr", walk_up=True)
-
-
 @pytest.mark.parametrize(
     ("path", "parent"),
     [
@@ -601,6 +577,30 @@ def test_unlink_non_existing_file():
     ws.workspace.get_status.side_effect = NotFound("Simulated NotFound")
     with pytest.raises(FileNotFoundError):
         workspace_path.unlink()
+
+
+def test_relative_to() -> None:
+    """Test that it is possible to get the relative path between two paths."""
+    ws = create_autospec(WorkspaceClient)
+
+    # Basics.
+    assert WorkspacePath(ws, "/home/bob").relative_to("/") == WorkspacePath(ws, "home/bob")
+    assert WorkspacePath(ws, "/home/bob").relative_to("/home") == WorkspacePath(ws, "bob")
+    assert WorkspacePath(ws, "/home/bob").relative_to("/./home") == WorkspacePath(ws, "bob")
+    assert WorkspacePath(ws, "foo/bar/baz").relative_to("foo") == WorkspacePath(ws, "bar/baz")
+    assert WorkspacePath(ws, "foo/bar/baz").relative_to("foo/bar") == WorkspacePath(ws, "baz")
+    assert WorkspacePath(ws, "foo/bar/baz").relative_to("foo/./bar") == WorkspacePath(ws, "baz")
+
+    # Walk-up (3.12+) behaviour.
+    assert WorkspacePath(ws, "/home/bob").relative_to("/usr", walk_up=True) == WorkspacePath(ws, "../home/bob")
+
+    # Check some errors.
+    with pytest.raises(ValueError, match="different anchors"):
+        _ = WorkspacePath(ws, "/home/bob").relative_to("home")
+    with pytest.raises(ValueError, match="not in the subpath"):
+        _ = WorkspacePath(ws, "/home/bob").relative_to("/usr")
+    with pytest.raises(ValueError, match="cannot be walked"):
+        _ = WorkspacePath(ws, "/home/bob").relative_to("/home/../usr", walk_up=True)
 
 
 def test_as_fuse_in_databricks_runtime():
