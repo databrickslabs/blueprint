@@ -514,42 +514,36 @@ class WorkspacePath(Path):  # pylint: disable=too-many-public-methods
             raise ValueError(msg)
         return self.with_name(stem + suffix)
 
-    @property
-    def _stack(self):
-        return self.anchor, list(reversed(self._path_parts))
-
     def relative_to(self, other, *more_other, walk_up=False):  # pylint: disable=arguments-differ
         other = self.with_segments(other, *more_other)
-        anchor0, parts0 = self._stack
-        anchor1, parts1 = other._stack  # pylint: disable=protected-access
-        if anchor0 != anchor1:
+        if self.anchor != other.anchor:
             msg = f"{str(self)!r} and {str(other)!r} have different anchors"
             raise ValueError(msg)
-        while parts0 and parts1 and parts0[-1] == parts1[-1]:
-            parts0.pop()
-            parts1.pop()
-        for part in parts1:
+        path_parts0 = self._path_parts
+        path_parts1 = other._path_parts  # pylint: disable=protected-access
+        # Find the length of the common prefix.
+        i = 0
+        while i < len(path_parts0) and i < len(path_parts1) and path_parts0[i] == path_parts1[i]:
+            i += 1
+        relative_parts = path_parts0[i:]
+        # Handle walking up.
+        if i < len(path_parts1):
             if not walk_up:
                 msg = f"{str(self)!r} is not in the subpath of {str(other)!r}"
                 raise ValueError(msg)
-            if part == "..":
+            if ".." in path_parts1[i:]:
                 raise ValueError(f"'..' segment in {str(other)!r} cannot be walked")
-            parts0.append("..")
-        return self.with_segments("", *reversed(parts0))
+            walkup_parts = [".."] * (len(path_parts1) - i)
+            relative_parts = (*walkup_parts, *relative_parts)
+        return self.with_segments("", *relative_parts)
 
     def is_relative_to(self, other, *more_other):  # pylint: disable=arguments-differ
         other = self.with_segments(other, *more_other)
         if self.anchor != other.anchor:
             return False
-        parts0 = list(reversed(self._path_parts))
-        parts1 = list(reversed(other._path_parts))  # pylint: disable=protected-access
-        while parts0 and parts1 and parts0[-1] == parts1[-1]:
-            parts0.pop()
-            parts1.pop()
-        for part in parts1:
-            if part and part != ".":
-                return False
-        return True
+        path_parts0 = self._path_parts
+        path_parts1 = other._path_parts  # pylint: disable=protected-access
+        return path_parts0[: len(path_parts1)] == path_parts1
 
     @property
     def parent(self):
