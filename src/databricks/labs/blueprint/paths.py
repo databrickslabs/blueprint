@@ -346,10 +346,8 @@ class WorkspacePath(Path):  # pylint: disable=too-many-public-methods
         # Based on the upstream implementation, with the '//'-specific bit elided because we don't need to
         # bother with Posix semantics.
         if part and part[0] == sep:
-            root, path = sep, part.lstrip(sep)
-        else:
-            root, path = "", part
-        return root, path
+            return sep, part.lstrip(sep)
+        return "", part
 
     def __reduce__(self) -> NoReturn:
         # Cannot support pickling because we can't pickle the workspace client.
