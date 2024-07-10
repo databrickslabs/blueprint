@@ -255,7 +255,7 @@ class WorkspacePath(Path):  # pylint: disable=too-many-public-methods
     )
     _cached_object_info: ObjectInfo
 
-    _SUFFIXES = {Language.PYTHON: ".py", Language.SQL: ".sql", Language.SCALA: ".scala", Language.R: ".R"}
+    _SUFFIXES = {".py": Language.PYTHON, ".sql": Language.SQL, ".scala": Language.SCALA, ".R": Language.R}
 
     # Path semantics are posix-like.
     parser = posixpath
@@ -460,19 +460,6 @@ class WorkspacePath(Path):  # pylint: disable=too-many-public-methods
             return self.drive + self.root, *self._path_parts
         return self._path_parts
 
-    @property
-    def suffix(self):
-        # Super implementations are mostly fine...
-        suffix = super().suffix
-        # ...but if there is no suffix and this path is for a notebook then infer the extension based on the notebook
-        # language.
-        if not suffix and self.is_notebook():
-            try:
-                suffix = self._SUFFIXES.get(self._object_info.language, "")
-            except DatabricksError:
-                pass
-        return suffix
-
     def with_name(self, name):
         parser = self.parser
         if not name or parser.sep in name or name == ".":
@@ -663,6 +650,22 @@ class WorkspacePath(Path):  # pylint: disable=too-many-public-methods
         if "w" in mode:
             return _TextUploadIO(self._ws, self.as_posix())
         raise ValueError(f"invalid mode: {mode}")
+
+    @property
+    def suffix(self):
+        """Return the file extension. If the file is a notebook, return the suffix based on the language."""
+        suffix = super().suffix
+        if suffix:
+            return suffix
+        if not self.is_notebook():
+            return ""
+        for sfx, lang in self._SUFFIXES.items():
+            try:
+                if self._object_info.language == lang:
+                    return sfx
+            except DatabricksError:
+                return ""
+        return ""
 
     @property
     def _object_info(self) -> ObjectInfo:
