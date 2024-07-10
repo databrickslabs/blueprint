@@ -334,12 +334,11 @@ class WorkspacePath(Path):  # pylint: disable=too-many-public-methods
                 path = part
             case [*parts]:
                 path = cls.parser.join(*parts)
-        if path:
-            root, rel = cls._splitroot(path, sep=cls.parser.sep)
-            # No need to split drv because we don't support it.
-            parsed = tuple(str(x) for x in rel.split(cls.parser.sep) if x and x != ".")
-        else:
-            root, parsed = "", ()
+        if not path:
+            return "", ()
+        root, rel = cls._splitroot(path, sep=cls.parser.sep)
+        # No need to split drv because we don't support it.
+        parsed = tuple(str(x) for x in rel.split(cls.parser.sep) if x and x != ".")
         return root, parsed
 
     @classmethod
