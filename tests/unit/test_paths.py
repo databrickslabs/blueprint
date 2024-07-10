@@ -513,10 +513,10 @@ def test_suffix_when_file_is_notebook_and_language_does_not_match():
 
 def test_suffix_when_file_is_not_notebook():
     ws = create_autospec(WorkspaceClient)
+    ws.workspace.get_status.return_value = ObjectInfo(language=Language.PYTHON, object_type=ObjectType.FILE)
+
     workspace_path = WorkspacePath(ws, "/test/path")
-    with patch("databricks.labs.blueprint.paths.WorkspacePath.is_notebook") as mock_is_notebook:
-        mock_is_notebook.return_value = False
-        assert workspace_path.suffix == ""
+    assert workspace_path.suffix == ""
 
 
 def test_mkdir_creates_directory_with_valid_mode():
