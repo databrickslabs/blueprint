@@ -364,6 +364,31 @@ def test_joinpath() -> None:
     assert WorkspacePath(ws, "home").joinpath("jane") == WorkspacePath(ws, "home/jane")
 
 
+def test_join_dsl() -> None:
+    """Test that the /-based DSL can be used to build new paths."""
+    ws = create_autospec(WorkspaceClient)
+
+    # First the forward style options.
+    assert WorkspacePath(ws, "/home/bob") / "data" == WorkspacePath(ws, "/home/bob/data")
+    assert WorkspacePath(ws, "/home/bob") / "data" / "base" == WorkspacePath(ws, "/home/bob/data/base")
+    assert WorkspacePath(ws, "/home/bob") / "data/base" == WorkspacePath(ws, "/home/bob/data/base")
+    assert WorkspacePath(ws, "home") / "bob" == WorkspacePath(ws, "home/bob")
+    # New root
+    assert WorkspacePath(ws, "whatever") / "/home" == WorkspacePath(ws, "/home")
+    # Mix types: eventual type is less-associative
+    assert WorkspacePath(ws, "/home/bob") / PurePosixPath("data") == WorkspacePath(ws, "/home/bob/data")
+
+    # Building from the other direction; same as above.
+    assert "/home/bob" / WorkspacePath(ws, "data") == WorkspacePath(ws, "/home/bob/data")
+    assert "/home/bob" / WorkspacePath(ws, "data") / "base" == WorkspacePath(ws, "/home/bob/data/base")
+    assert "/home/bob" / WorkspacePath(ws, "data/base") == WorkspacePath(ws, "/home/bob/data/base")
+    assert "home" / WorkspacePath(ws, "bob") == WorkspacePath(ws, "home/bob")
+    # New root
+    assert "whatever" / WorkspacePath(ws, "/home") == WorkspacePath(ws, "/home")
+    # Mix types: eventual type is less-associative
+    assert PurePosixPath("/home/bob") / WorkspacePath(ws, "data") == PurePosixPath("/home/bob/data")
+
+
 def test_match() -> None:
     """Test that glob matching works."""
     ws = create_autospec(WorkspaceClient)

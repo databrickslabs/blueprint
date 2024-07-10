@@ -408,6 +408,18 @@ class WorkspacePath(Path):  # pylint: disable=too-many-public-methods
         # Compatibility property (python 3.12+), accessed via equality comparison. This can't be avoided.
         return str(self)
 
+    @classmethod
+    def _from_parts(cls, *args) -> NoReturn:
+        # Compatibility method (python <= 3.11), accessed via reverse /-style building. This can't be avoided.
+        # See __rtruediv__ for more information.
+        raise TypeError("trigger NotImplemented")
+
+    @property
+    def _raw_paths(self) -> NoReturn:
+        # Compatibility method (python 3.12+), accessed via reverse /-style building. This can't be avoided.
+        # See __rtruediv__ for more information.
+        raise TypeError("trigger NotImplemented")
+
     def __lt__(self, other):
         if not isinstance(other, type(self)):
             return NotImplemented
@@ -565,6 +577,25 @@ class WorkspacePath(Path):  # pylint: disable=too-many-public-methods
 
     def joinpath(self, *pathsegments):
         return self.with_segments(self, *pathsegments)
+
+    def __truediv__(self, other):
+        try:
+            return self.with_segments(*self._parts(), other)
+        except TypeError:
+            return NotImplemented
+
+    def __rtruediv__(self, other):
+        # Note: this is only invoked if __truediv__ has already returned NotImplemented.
+        # For the case of Path / WorkspacePath this means the underlying __truediv__ is invoked.
+        # The base-class implementations all access internals but yield NotImplemented if TypeError is raised. As
+        # such we stub those internals (_from_parts and _raw_path) to trigger the NotImplemented path and ensure that
+        # control ends up here.
+        try:
+            if isinstance(other, PurePath):
+                return type(other)(other, *self._parts())
+            return self.with_segments(other, *self._parts())
+        except TypeError:
+            return NotImplemented
 
     @classmethod
     def _compile_pattern(cls, pattern: str, case_sensitive: bool) -> re.Pattern:
