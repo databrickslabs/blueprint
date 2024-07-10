@@ -37,7 +37,6 @@ path = "src/databricks/labs/blueprint/__about__.py"
 [tool.hatch.envs.default]
 dependencies = [
     "databricks-labs-blueprint[yaml]",
-    "black~=24.4.2",
     "coverage[toml]~=7.4.4",
     "mypy~=1.9.0",
     "pylint~=3.1.0",
@@ -65,9 +64,9 @@ fmt         = ["isort .",
                "ruff check . --fix",
                "mypy .",
                "pylint --output-format=colorized -j 0 src"]
-verify      = ["black --check .",
-               "isort . --check-only",
-               "ruff .",
+verify      = ["isort . --check-only",
+               "ruff format --check --diff",
+               "ruff check .",
                "mypy .",
                "pylint --output-format=colorized -j 0 src"]
 
