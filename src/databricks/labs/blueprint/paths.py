@@ -284,6 +284,7 @@ class WorkspacePath(Path):  # pylint: disable=too-many-public-methods
     def __init__(self, ws: WorkspaceClient, *args) -> None:  # pylint: disable=super-init-not-called,useless-suppression
         # We deliberately do _not_ call the super initializer because we're taking over complete responsibility for the
         # implementation of the public API.
+
         # Convert the arguments into string-based path segments, irrespective of their type.
         raw_paths = self._to_raw_paths(*args)
 
