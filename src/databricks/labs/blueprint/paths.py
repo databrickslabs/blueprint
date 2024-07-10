@@ -357,6 +357,15 @@ class WorkspacePath(Path):  # pylint: disable=too-many-public-methods
 
     def __fspath__(self):
         # Cannot support this: Workspace objects aren't accessible via the filesystem.
+        #
+        # This method is part of the os.PathLike protocol. Functions which accept a PathLike argument use os.fsname()
+        # to convert (via this method) the object into a file system path that can be used with the low-level os.*
+        # methods.
+        #
+        # Relevant online documentation:
+        #  - PEP 519 (https://peps.python.org/pep-0519/)
+        #  - os.fspath (https://docs.python.org/3/library/os.html#os.fspath)
+        # TODO: Allow this to work when within an appropriate Databricks Runtime that mounts Workspace paths via FUSE.
         msg = f"Workspace paths are not path-like: {self}"
         raise NotImplementedError(msg)
 
