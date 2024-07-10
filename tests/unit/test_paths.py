@@ -499,15 +499,17 @@ def test_suffix_when_file_has_extension():
 
 def test_suffix_when_file_is_notebook_and_language_matches():
     ws = create_autospec(WorkspaceClient)
+    ws.workspace.get_status.return_value = ObjectInfo(language=Language.PYTHON, object_type=ObjectType.NOTEBOOK)
+
     workspace_path = WorkspacePath(ws, "/test/path")
-    workspace_path._cached_object_info = ObjectInfo(language=Language.PYTHON, object_type=ObjectType.NOTEBOOK)
     assert workspace_path.suffix == ".py"
 
 
 def test_suffix_when_file_is_notebook_and_language_does_not_match():
     ws = create_autospec(WorkspaceClient)
+    ws.workspace.get_status.return_value = ObjectInfo(language=None, object_type=ObjectType.NOTEBOOK)
+
     workspace_path = WorkspacePath(ws, "/test/path")
-    workspace_path._object_info.language = None
     assert workspace_path.suffix == ""
 
 
