@@ -386,6 +386,28 @@ def test_match() -> None:
     assert not WorkspacePath(ws, "/foo/bar/file.txt").match("/**/*.txt")
 
 
+def test_iterdir() -> None:
+    """Test that iterating through a directory works."""
+    ws = create_autospec(WorkspaceClient)
+    ws.workspace.list.return_value = iter(
+        (
+            ObjectInfo(path="/home/bob"),
+            ObjectInfo(path="/home/jane"),
+            ObjectInfo(path="/home/ted"),
+            ObjectInfo(path="/home/fred"),
+        )
+    )
+
+    children = set(WorkspacePath(ws, "/home").iterdir())
+
+    assert children == {
+        WorkspacePath(ws, "/home/bob"),
+        WorkspacePath(ws, "/home/jane"),
+        WorkspacePath(ws, "/home/ted"),
+        WorkspacePath(ws, "/home/fred"),
+    }
+
+
 def test_exists_when_path_exists():
     ws = create_autospec(WorkspaceClient)
     workspace_path = WorkspacePath(ws, "/test/path")
