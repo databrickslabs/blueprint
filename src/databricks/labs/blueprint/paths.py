@@ -578,16 +578,15 @@ class WorkspacePath(Path):  # pylint: disable=too-many-public-methods
         # Default to false if not specified.
         if case_sensitive is None:
             case_sensitive = True
-        # Reverse the parts.
-        path_parts = self.parts
+
         pattern_parts = path_pattern.parts
-        # Error
         if not pattern_parts:
             raise ValueError("empty pattern")
-        # Impossible matches.
+        # Short-circuit on situations where a match is logically impossible.
+        path_parts = self.parts
         if len(path_parts) < len(pattern_parts) or len(path_parts) > len(pattern_parts) and path_pattern.anchor:
             return False
-        # Check each part.
+        # Check each part, starting from the end.
         for path_part, pattern_part in zip(reversed(path_parts), reversed(pattern_parts)):
             pattern = self._compile_pattern(pattern_part, case_sensitive=case_sensitive)
             if not pattern.match(path_part):
