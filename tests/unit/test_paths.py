@@ -640,6 +640,17 @@ def test_home_directory():
     assert str(result) == "/Users/test_user"
 
 
+def test_absolute() -> None:
+    """This is only supported for absolute paths.
+
+    Otherwise it depends on the current working directory which isn't supported."""
+    ws = create_autospec(WorkspaceClient)
+
+    assert WorkspacePath(ws, "/absolute/path").absolute() == WorkspacePath(ws, "/absolute/path")
+    with pytest.raises(NotImplementedError):
+        _ = WorkspacePath(ws, "relative/path").absolute()
+
+
 def test_is_dir_when_object_type_is_directory():
     ws = create_autospec(WorkspaceClient)
     workspace_path = WorkspacePath(ws, "/test/path")

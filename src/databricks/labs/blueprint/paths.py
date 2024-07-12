@@ -704,6 +704,11 @@ class WorkspacePath(Path):  # pylint: disable=too-many-public-methods
         """Return the absolute path of the file or directory in Databricks Workspace."""
         return self
 
+    def absolute(self):
+        if self.is_absolute():
+            return self
+        return self.with_segments(self.cwd(), self)
+
     def is_dir(self):
         """Return True if the path points to a directory in Databricks Workspace."""
         try:
