@@ -296,6 +296,16 @@ class WorkspacePath(Path):  # pylint: disable=too-many-public-methods
         self._path_parts = path_parts
         self._ws = ws
 
+    @classmethod
+    def _from_object_info(cls, ws: WorkspaceClient, object_info: ObjectInfo):
+        """Special (internal-only) constructor that creates an instance based on ObjectInfo."""
+        if not object_info.path:
+            msg = f"Cannot initialise within object path: {object_info}"
+            raise ValueError(msg)
+        path = cls(ws, object_info.path)
+        path._cached_object_info = object_info
+        return path
+
     @staticmethod
     def _to_raw_paths(*args) -> list[str]:
         raw_paths: list[str] = []
@@ -740,3 +750,7 @@ class WorkspacePath(Path):  # pylint: disable=too-many-public-methods
             return self._object_info.object_type == ObjectType.NOTEBOOK
         except DatabricksError:
             return False
+
+    def iterdir(self):
+        for child in self._ws.workspace.list(self.as_posix()):
+            yield self._from_object_info(self._ws, child)
