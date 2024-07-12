@@ -617,12 +617,16 @@ class WorkspacePath(Path):  # pylint: disable=too-many-public-methods
 
     def glob(self, pattern, *, case_sensitive=None):
         pattern_parts = self._prepare_pattern(pattern)
-        selector = _Selector.parse(pattern_parts, case_sensitive=case_sensitive if case_sensitive is not None else True)
+        if case_sensitive is None:
+            case_sensitive = True
+        selector = _Selector.parse(pattern_parts, case_sensitive=case_sensitive)
         yield from selector(self)
 
     def rglob(self, pattern, *, case_sensitive=None):
         pattern_parts = ("**", *self._prepare_pattern(pattern))
-        selector = _Selector.parse(pattern_parts, case_sensitive=case_sensitive if case_sensitive is not None else True)
+        if case_sensitive is None:
+            case_sensitive = True
+        selector = _Selector.parse(pattern_parts, case_sensitive=case_sensitive)
         yield from selector(self)
 
 
