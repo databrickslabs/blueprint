@@ -237,11 +237,14 @@ class WorkspacePath(Path):  # pylint: disable=too-many-public-methods
             self._str = (self._root + self.parser.sep.join(self._path_parts)) or "."
             return self._str
 
+    def __bytes__(self):
+        return str(self).encode("utf-8")
+
     def __repr__(self):
         return f"{self.__class__.__name__}({str(self)!r})"
 
     def as_uri(self) -> str:
-        return self._ws.config.host + "#workspace" + urlquote_from_bytes(bytes(self))
+        return f"{self._ws.config.host}#workspace{urlquote_from_bytes(bytes(self))}"
 
     def __eq__(self, other):
         if not isinstance(other, type(self)):
@@ -552,6 +555,11 @@ class WorkspacePath(Path):  # pylint: disable=too-many-public-methods
         """Return the absolute path of the file or directory in Databricks Workspace."""
         return self
 
+    def absolute(self):
+        if self.is_absolute():
+            return self
+        return self.with_segments(self.cwd(), self)
+
     def is_dir(self):
         """Return True if the path points to a directory in Databricks Workspace."""
         try:
@@ -609,12 +617,16 @@ class WorkspacePath(Path):  # pylint: disable=too-many-public-methods
 
     def glob(self, pattern, *, case_sensitive=None):
         pattern_parts = self._prepare_pattern(pattern)
-        selector = _Selector.parse(pattern_parts, case_sensitive=case_sensitive if case_sensitive is not None else True)
+        if case_sensitive is None:
+            case_sensitive = True
+        selector = _Selector.parse(pattern_parts, case_sensitive=case_sensitive)
         yield from selector(self)
 
     def rglob(self, pattern, *, case_sensitive=None):
         pattern_parts = ("**", *self._prepare_pattern(pattern))
-        selector = _Selector.parse(pattern_parts, case_sensitive=case_sensitive if case_sensitive is not None else True)
+        if case_sensitive is None:
+            case_sensitive = True
+        selector = _Selector.parse(pattern_parts, case_sensitive=case_sensitive)
         yield from selector(self)
 
 
