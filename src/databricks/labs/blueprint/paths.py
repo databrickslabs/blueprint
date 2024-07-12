@@ -237,11 +237,14 @@ class WorkspacePath(Path):  # pylint: disable=too-many-public-methods
             self._str = (self._root + self.parser.sep.join(self._path_parts)) or "."
             return self._str
 
+    def __bytes__(self):
+        return str(self).encode("utf-8")
+
     def __repr__(self):
         return f"{self.__class__.__name__}({str(self)!r})"
 
     def as_uri(self) -> str:
-        return self._ws.config.host + "#workspace" + urlquote_from_bytes(bytes(self))
+        return f"{self._ws.config.host}#workspace{urlquote_from_bytes(bytes(self))}"
 
     def __eq__(self, other):
         if not isinstance(other, type(self)):
