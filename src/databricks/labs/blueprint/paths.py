@@ -7,10 +7,11 @@ import logging
 import os
 import posixpath
 import re
-import sys
+from abc import abstractmethod
+from collections.abc import Iterable, Sequence
 from io import BytesIO, StringIO
 from pathlib import Path, PurePath
-from typing import NoReturn
+from typing import NoReturn, TypeVar
 from urllib.parse import quote_from_bytes as urlquote_from_bytes
 
 from databricks.sdk import WorkspaceClient
@@ -26,165 +27,12 @@ from databricks.sdk.service.workspace import (
 logger = logging.getLogger(__name__)
 
 
-class _DatabricksFlavour:
-    # adapted from pathlib._Flavour, where we ignore support for drives, as we
-    # don't have that concept in Databricks. We also ignore support for Windows
-    # paths, as we only support POSIX paths in Databricks.
-
-    sep = "/"
-    altsep = ""
-    has_drv = False
-    pathmod = posixpath
-    is_supported = True
-
-    def __init__(self, ws: WorkspaceClient):
-        self.join = self.sep.join
-        self._ws = ws
-
-    def parse_parts(self, parts: list[str]) -> tuple[str, str, list[str]]:
-        # adapted from pathlib._Flavour.parse_parts,
-        # where we ignore support for drives, as we
-        # don't have that concept in Databricks
-        parsed = []
-        drv = root = ""
-        for part in reversed(parts):
-            if not part:
-                continue
-            drv, root, rel = self.splitroot(part)
-            if self.sep not in rel:
-                if rel and rel != ".":
-                    parsed.append(sys.intern(rel))
-                continue
-            for part_ in reversed(rel.split(self.sep)):
-                if part_ and part_ != ".":
-                    parsed.append(sys.intern(part_))
-        if drv or root:
-            parsed.append(drv + root)
-        parsed.reverse()
-        return drv, root, parsed
-
-    @staticmethod
-    def join_parsed_parts(
-        drv: str,
-        root: str,
-        parts: list[str],
-        _,
-        root2: str,
-        parts2: list[str],
-    ) -> tuple[str, str, list[str]]:
-        # adapted from pathlib.PurePosixPath, where we ignore support for drives,
-        # as we don't have that concept in Databricks
-        if root2:
-            return drv, root2, [drv + root2] + parts2[1:]
-        return drv, root, parts + parts2
-
-    @staticmethod
-    def splitroot(part, sep=sep) -> tuple[str, str, str]:
-        if part and part[0] == sep:
-            stripped_part = part.lstrip(sep)
-            if len(part) - len(stripped_part) == 2:
-                return "", sep * 2, stripped_part
-            return "", sep, stripped_part
-        return "", "", part
-
-    @staticmethod
-    def casefold(value: str) -> str:
-        return value
-
-    @staticmethod
-    def casefold_parts(parts: list[str]) -> list[str]:
-        return parts
-
-    @staticmethod
-    def compile_pattern(pattern: str):
-        return re.compile(fnmatch.translate(pattern)).fullmatch
-
-    @staticmethod
-    def is_reserved(_) -> bool:
-        return False
-
-    def make_uri(self, path) -> str:
-        return self._ws.config.host + "#workspace" + urlquote_from_bytes(bytes(path))
-
-    def __repr__(self):
-        return f"<{self.__class__.__name__} for {self._ws}>"
-
-
 def _na(fn: str):
     def _inner(*_, **__):
         __tracebackhide__ = True  # pylint: disable=unused-variable
         raise NotImplementedError(f"{fn}() is not available for Databricks Workspace")
 
     return _inner
-
-
-class _ScandirItem:
-    def __init__(self, object_info):
-        self._object_info = object_info
-
-    def __fspath__(self):
-        return self._object_info.path
-
-    def is_dir(self, follow_symlinks=False):  # pylint: disable=unused-argument
-        # follow_symlinks is for compatibility with Python 3.11
-        return self._object_info.object_type == ObjectType.DIRECTORY
-
-    def is_file(self, follow_symlinks=False):  # pylint: disable=unused-argument
-        # follow_symlinks is for compatibility with Python 3.11
-        # TODO: check if we want to show notebooks as files
-        return self._object_info.object_type == ObjectType.FILE
-
-    def is_symlink(self):
-        return False
-
-    @property
-    def name(self):
-        return os.path.basename(self._object_info.path)
-
-
-class _ScandirIterator:
-    def __init__(self, objects):
-        self._it = objects
-
-    def __iter__(self):
-        for object_info in self._it:
-            yield _ScandirItem(object_info)
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *args):
-        pass
-
-
-class _DatabricksAccessor:
-    chmod = _na("accessor.chmod")
-    getcwd = _na("accessor.getcwd")
-    group = _na("accessor.group")
-    link = _na("accessor.link")
-    mkdir = _na("accessor.mkdir")
-    owner = _na("accessor.owner")
-    readlink = _na("accessor.readlink")
-    realpath = _na("accessor.realpath")
-    rename = _na("accessor.rename")
-    replace = _na("accessor.replace")
-    rmdir = _na("accessor.rmdir")
-    stat = _na("accessor.stat")
-    symlink = _na("accessor.symlink")
-    unlink = _na("accessor.unlink")
-
-    def __init__(self, ws: WorkspaceClient):
-        self._ws = ws
-
-    def __repr__(self):
-        return f"<{self.__class__.__name__} for {self._ws}>"
-
-    def scandir(self, path):
-        objects = self._ws.workspace.list(path)
-        return _ScandirIterator(objects)
-
-    def listdir(self, path):
-        return [item.name for item in self.scandir(path)]
 
 
 class _UploadIO(abc.ABC):
@@ -295,6 +143,16 @@ class WorkspacePath(Path):  # pylint: disable=too-many-public-methods
         self._root = root
         self._path_parts = path_parts
         self._ws = ws
+
+    @classmethod
+    def _from_object_info(cls, ws: WorkspaceClient, object_info: ObjectInfo):
+        """Special (internal-only) constructor that creates an instance based on ObjectInfo."""
+        if not object_info.path:
+            msg = f"Cannot initialise within object path: {object_info}"
+            raise ValueError(msg)
+        path = cls(ws, object_info.path)
+        path._cached_object_info = object_info
+        return path
 
     @staticmethod
     def _to_raw_paths(*args) -> list[str]:
@@ -565,12 +423,6 @@ class WorkspacePath(Path):  # pylint: disable=too-many-public-methods
         except TypeError:
             return NotImplemented
 
-    @classmethod
-    def _compile_pattern(cls, pattern: str, case_sensitive: bool) -> re.Pattern:
-        flags = 0 if case_sensitive else re.IGNORECASE
-        regex = fnmatch.translate(pattern)
-        return re.compile(regex, flags=flags)
-
     def match(self, path_pattern, *, case_sensitive=None):
         # Convert the pattern to a fake path (with globs) to help with matching parts.
         if not isinstance(path_pattern, PurePath):
@@ -578,18 +430,17 @@ class WorkspacePath(Path):  # pylint: disable=too-many-public-methods
         # Default to false if not specified.
         if case_sensitive is None:
             case_sensitive = True
-        # Reverse the parts.
-        path_parts = self.parts
+
         pattern_parts = path_pattern.parts
-        # Error
         if not pattern_parts:
             raise ValueError("empty pattern")
-        # Impossible matches.
+        # Short-circuit on situations where a match is logically impossible.
+        path_parts = self.parts
         if len(path_parts) < len(pattern_parts) or len(path_parts) > len(pattern_parts) and path_pattern.anchor:
             return False
-        # Check each part.
+        # Check each part, starting from the end.
         for path_part, pattern_part in zip(reversed(path_parts), reversed(pattern_parts)):
-            pattern = self._compile_pattern(pattern_part, case_sensitive=case_sensitive)
+            pattern = _PatternSelector.compile_pattern(pattern_part, case_sensitive=case_sensitive)
             if not pattern.match(path_part):
                 return False
         return True
@@ -715,11 +566,6 @@ class WorkspacePath(Path):  # pylint: disable=too-many-public-methods
         except DatabricksError:
             return False
 
-    def _scandir(self):
-        # TODO: Not yet invoked; work-in-progress.
-        objects = self._ws.workspace.list(self.as_posix())
-        return _ScandirIterator(objects)
-
     def expanduser(self):
         # Expand ~ (but NOT ~user) constructs.
         if not (self._drv or self._root) and self._path_parts and self._path_parts[0][:1] == "~":
@@ -741,3 +587,163 @@ class WorkspacePath(Path):  # pylint: disable=too-many-public-methods
             return self._object_info.object_type == ObjectType.NOTEBOOK
         except DatabricksError:
             return False
+
+    def iterdir(self):
+        for child in self._ws.workspace.list(self.as_posix()):
+            yield self._from_object_info(self._ws, child)
+
+    def _prepare_pattern(self, pattern) -> Sequence[str]:
+        if not pattern:
+            raise ValueError("Glob pattern must not be empty.")
+        parsed_pattern = self.with_segments(pattern)
+        if parsed_pattern.anchor:
+            msg = f"Non-relative patterns are unsupported: {pattern}"
+            raise NotImplementedError(msg)
+        pattern_parts = parsed_pattern._path_parts  # pylint: disable=protected-access
+        if ".." in pattern_parts:
+            msg = f"Parent traversal is not supported: {pattern}"
+            raise ValueError(msg)
+        if pattern[-1] == self.parser.sep:
+            pattern_parts = (*pattern_parts, "")
+        return pattern_parts
+
+    def glob(self, pattern, *, case_sensitive=None):
+        pattern_parts = self._prepare_pattern(pattern)
+        selector = _Selector.parse(pattern_parts, case_sensitive=case_sensitive if case_sensitive is not None else True)
+        yield from selector(self)
+
+    def rglob(self, pattern, *, case_sensitive=None):
+        pattern_parts = ("**", *self._prepare_pattern(pattern))
+        selector = _Selector.parse(pattern_parts, case_sensitive=case_sensitive if case_sensitive is not None else True)
+        yield from selector(self)
+
+
+T = TypeVar("T", bound="Path")
+
+
+class _Selector(abc.ABC):
+    @classmethod
+    def parse(cls, pattern_parts: Sequence[str], *, case_sensitive: bool) -> _Selector:
+        # The pattern language is:
+        #  - '**' matches any number (including zero) of file or directory segments. Must be the entire segment.
+        #  - '*' match any number of characters within a single segment.
+        #  - '?' match a single character within a segment.
+        #  - '[seq]' match a single character against the class (within a segment).
+        #  - '[!seq]' negative match for a single character against the class (within a segment).
+        #  - A trailing '/' (which presents here as a trailing empty segment) matches only directories.
+        # There is no explicit escaping mechanism; literal matches against special characters above are possible as
+        # character classes, for example: [*]
+        #
+        # Some sharp edges:
+        #  - Multiple '**' segments are allowed.
+        #  - Normally the '..' segment is allowed. (This can be used to match against siblings, for
+        #    example: /home/bob/../jane/) However WorspacePath (and DBFS) do not support '..' traversal in paths.
+        #  - Normally '.' is allowed, but eliminated before we reach this method.
+        match pattern_parts:
+            case ["**", *tail]:
+                return _RecursivePatternSelector(tail, case_sensitive=case_sensitive)
+            case [head, *tail] if case_sensitive and not _PatternSelector.needs_pattern(head):
+                return _LiteralSelector(head, tail, case_sensitive=case_sensitive)
+            case [head, *tail]:
+                if "**" in head:
+                    raise ValueError("Invalid pattern: '**' can only be a complete path component")
+                return _PatternSelector(head, tail, case_sensitive=case_sensitive)
+            case []:
+                return _TerminalSelector()
+        raise ValueError(f"Glob pattern unsupported: {pattern_parts}")
+
+    @abstractmethod
+    def __call__(self, path: T) -> Iterable[T]:
+        raise NotImplementedError()
+
+
+class _TerminalSelector(_Selector):
+    def __call__(self, path: T) -> Iterable[T]:
+        yield path
+
+
+class _NonTerminalSelector(_Selector):
+    __slots__ = (
+        "_dir_only",
+        "_child_selector",
+    )
+
+    def __init__(self, child_pattern_parts: Sequence[str], *, case_sensitive: bool) -> None:
+        super().__init__()
+        if child_pattern_parts:
+            self._child_selector = self.parse(child_pattern_parts, case_sensitive=case_sensitive)
+            self._dir_only = True
+        else:
+            self._child_selector = _TerminalSelector()
+            self._dir_only = False
+
+    def __call__(self, path: T) -> Iterable[T]:
+        if path.is_dir():
+            yield from self._select_children(path)
+
+    @abstractmethod
+    def _select_children(self, path: T) -> Iterable[T]:
+        raise NotImplementedError()
+
+
+class _LiteralSelector(_NonTerminalSelector):
+    __slots__ = ("_literal_path",)
+
+    def __init__(self, path: str, child_pattern_parts: Sequence[str], case_sensitive: bool) -> None:
+        super().__init__(child_pattern_parts, case_sensitive=case_sensitive)
+        self._literal_path = path
+
+    def _select_children(self, path: T) -> Iterable[T]:
+        candidate = path / self._literal_path
+        if self._dir_only and candidate.is_dir() or candidate.exists():
+            yield from self._child_selector(candidate)
+
+
+class _PatternSelector(_NonTerminalSelector):
+    __slots__ = ("_pattern",)
+
+    # The special set of characters that indicate a glob pattern isn't a trivial literal.
+    # Ref: https://docs.python.org/3/library/fnmatch.html#module-fnmatch
+    _glob_specials = re.compile("[*?\\[\\]]")
+
+    @classmethod
+    def needs_pattern(cls, pattern: str) -> bool:
+        return cls._glob_specials.search(pattern) is not None
+
+    @classmethod
+    def compile_pattern(cls, pattern: str, case_sensitive: bool) -> re.Pattern:
+        flags = 0 if case_sensitive else re.IGNORECASE
+        regex = fnmatch.translate(pattern)
+        return re.compile(regex, flags=flags)
+
+    def __init__(self, pattern: str, child_pattern_parts: Sequence[str], case_sensitive: bool) -> None:
+        super().__init__(child_pattern_parts, case_sensitive=case_sensitive)
+        self._pattern = self.compile_pattern(pattern, case_sensitive=case_sensitive)
+
+    def _select_children(self, path: T) -> Iterable[T]:
+        candidates = list(path.iterdir())
+        for candidate in candidates:
+            if self._dir_only and not candidate.is_dir():
+                continue
+            if self._pattern.match(candidate.name):
+                yield from self._child_selector(candidate)
+
+
+class _RecursivePatternSelector(_NonTerminalSelector):
+    def __init__(self, child_pattern_parts: Sequence[str], case_sensitive: bool) -> None:
+        super().__init__(child_pattern_parts, case_sensitive=case_sensitive)
+
+    def _all_directories(self, path: T) -> Iterable[T]:
+        # Depth-first traversal of directory tree, visiting this node first.
+        yield path
+        children = [child for child in path.iterdir() if child.is_dir()]
+        for child in children:
+            yield from self._all_directories(child)
+
+    def _select_children(self, path: T) -> Iterable[T]:
+        yielded = set()
+        for starting_point in self._all_directories(path):
+            for candidate in self._child_selector(starting_point):
+                if candidate not in yielded:
+                    yielded.add(candidate)
+                    yield candidate
