@@ -260,6 +260,17 @@ def test_with_suffix() -> None:
         _ = WorkspacePath(ws, "/").with_suffix(".txt")
 
 
+def test_as_uri() -> None:
+    """Verify that the URI that corresponds to a path can be generated."""
+    ws = create_autospec(WorkspaceClient)
+    ws.config.host = "https://example.com/instance"
+
+    ws_path = "/tmp/file with spaces.md"
+    expected_url = "https://example.com/instance#workspace/tmp/file%20with%20spaces.md"
+
+    assert WorkspacePath(ws, ws_path).as_uri() == expected_url
+
+
 @pytest.mark.parametrize(
     ("path", "parent"),
     [
