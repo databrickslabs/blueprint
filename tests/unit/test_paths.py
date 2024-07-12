@@ -1,10 +1,12 @@
 import os
+from collections.abc import Iterator
 from pathlib import Path, PurePath, PurePosixPath, PureWindowsPath
 from unittest.mock import create_autospec, patch
 
 import pytest
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.errors import NotFound
+from databricks.sdk.mixins.workspace import WorkspaceExt
 from databricks.sdk.service.workspace import (
     ImportFormat,
     Language,
@@ -714,7 +716,214 @@ def test_is_notebook_when_databricks_error_occurs():
     assert workspace_path.is_notebook() is False
 
 
-@pytest.mark.xfail(reason="Implementation pending.")
+class StubWorkspaceFilesystem:
+    """Stub the basic Workspace filesystem operations."""
+
+    __slots__ = ("_paths",)
+
+    def __init__(self, *known_paths: str | ObjectInfo) -> None:
+        """Initialize a virtual filesystem with a set of known paths.
+
+        Each known path can either be a string or a complete ObjectInfo instance; if a string then the path is
+        treated as a directory if it has a trailing-/ or a file otherwise.
+        """
+        fs_entries = [self._normalize_path(p) for p in known_paths]
+        keyed_entries = {o.path: o for o in fs_entries if o.path is not None}
+        self._normalize_paths(keyed_entries)
+        self._paths = keyed_entries
+
+    @classmethod
+    def _normalize_path(cls, path: str | ObjectInfo) -> ObjectInfo:
+        if isinstance(path, ObjectInfo):
+            return path
+        return ObjectInfo(
+            path=path.rstrip("/") if path != "/" else path,
+            object_type=ObjectType.DIRECTORY if path.endswith("/") else ObjectType.FILE,
+        )
+
+    @classmethod
+    def _normalize_paths(cls, paths: dict[str, ObjectInfo]) -> None:
+        """Validate entries are absolute and that intermediate directories are both present and typed correctly."""
+        for p in list(paths):
+            for parent in PurePath(p).parents:
+                path = str(parent)
+                paths.setdefault(path, ObjectInfo(path=path, object_type=ObjectType.DIRECTORY))
+
+    def _stub_get_status(self, path: str) -> ObjectInfo:
+        object_info = self._paths.get(path)
+        if object_info is None:
+            msg = f"Simulated path not found: {path}"
+            raise NotFound(msg)
+        return object_info
+
+    def _stub_list(
+        self, path: str, *, notebooks_modified_after: int | None = None, recursive: bool | None = False, **kwargs
+    ) -> Iterator[ObjectInfo]:
+        path = path.rstrip("/")
+        path_len = len(path)
+        for candidate, object_info in self._paths.items():
+            # Only direct children, and excluding the path itself.
+            if (
+                len(candidate) > (path_len + 1)
+                and candidate[:path_len] == path
+                and candidate[path_len] == "/"
+                and "/" not in candidate[path_len + 1 :]
+            ):
+                yield object_info
+
+    def mock(self) -> WorkspaceExt:
+        m = create_autospec(WorkspaceExt)
+        m.get_status.side_effect = self._stub_get_status
+        m.list.side_effect = self._stub_list
+        return m
+
+
+def test_globbing_literals() -> None:
+    """Verify that trivial (literal) globs for one or more path segments match (or doesn't)."""
+    ws = create_autospec(WorkspaceClient)
+    ws.workspace = StubWorkspaceFilesystem("/home/bob/bin/labs", "/etc/passwd").mock()
+
+    assert set(WorkspacePath(ws, "/home").glob("jane")) == set()
+    assert set(WorkspacePath(ws, "/home").glob("bob")) == {WorkspacePath(ws, "/home/bob")}
+    assert set(WorkspacePath(ws, "/home").glob("bob/")) == {WorkspacePath(ws, "/home/bob")}
+    assert set(WorkspacePath(ws, "/home").glob("bob/bin")) == {WorkspacePath(ws, "/home/bob/bin")}
+    assert set(WorkspacePath(ws, "/home").glob("bob/bin/labs/")) == set()
+    assert set(WorkspacePath(ws, "/etc").glob("passwd")) == {WorkspacePath(ws, "/etc/passwd")}
+
+
+def test_globbing_empty_error() -> None:
+    """Verify that an empty glob triggers an immediate error."""
+    ws = create_autospec(WorkspaceClient)
+
+    with pytest.raises(ValueError, match="must not be empty"):
+        _ = set(WorkspacePath(ws, "/etc/passwd").glob(""))
+
+
+def test_globbing_absolute_error() -> None:
+    """Verify that absolute-path globs triggers an immediate error."""
+    ws = create_autospec(WorkspaceClient)
+
+    with pytest.raises(NotImplementedError, match="Non-relative patterns are unsupported"):
+        _ = set(WorkspacePath(ws, "/").glob("/tmp/*"))
+
+
+def test_globbing_patterns() -> None:
+    """Verify that globbing with globs works as expected, including across multiple path segments."""
+    ws = create_autospec(WorkspaceClient)
+    ws.workspace = StubWorkspaceFilesystem(
+        "/home/bob/bin/labs",
+        "/home/bob/bin/databricks",
+        "/home/bot/",
+        "/home/bat/",
+        "/etc/passwd",
+    ).mock()
+
+    assert set(WorkspacePath(ws, "/home").glob("*")) == {
+        WorkspacePath(ws, "/home/bob"),
+        WorkspacePath(ws, "/home/bot"),
+        WorkspacePath(ws, "/home/bat"),
+    }
+    assert set(WorkspacePath(ws, "/home/bob/bin").glob("*")) == {
+        WorkspacePath(ws, "/home/bob/bin/databricks"),
+        WorkspacePath(ws, "/home/bob/bin/labs"),
+    }
+    assert set(WorkspacePath(ws, "/home/bob").glob("*/*")) == {
+        WorkspacePath(ws, "/home/bob/bin/databricks"),
+        WorkspacePath(ws, "/home/bob/bin/labs"),
+    }
+    assert set(WorkspacePath(ws, "/home/bob/bin").glob("*a*")) == {
+        WorkspacePath(ws, "/home/bob/bin/databricks"),
+        WorkspacePath(ws, "/home/bob/bin/labs"),
+    }
+    assert set(WorkspacePath(ws, "/home").glob("bo[bt]")) == {
+        WorkspacePath(ws, "/home/bob"),
+        WorkspacePath(ws, "/home/bot"),
+    }
+    assert set(WorkspacePath(ws, "/home").glob("b[!o]t")) == {WorkspacePath(ws, "/home/bat")}
+
+
+def test_glob_trailing_slash() -> None:
+    """Verify that globs with a trailing slash only match directories."""
+    ws = create_autospec(WorkspaceClient)
+    ws.workspace = StubWorkspaceFilesystem(
+        "/home/bob/bin/labs",
+        "/home/bob/bin/databricks",
+        "/home/bob/.profile",
+    ).mock()
+
+    assert set(WorkspacePath(ws, "/home/bob").glob("*/")) == {WorkspacePath(ws, "/home/bob/bin")}
+    assert set(WorkspacePath(ws, "/home").glob("bob/*/")) == {WorkspacePath(ws, "/home/bob/bin")}
+    # Negative test.
+    assert WorkspacePath(ws, "/home/bob/.profile") in set(WorkspacePath(ws, "/home").glob("bob/*"))
+
+
+def test_glob_parent_path_traversal_error() -> None:
+    """Globs are normally allowed to include /../ segments to traverse directories; these aren't supported though."""
+    ws = create_autospec(WorkspaceClient)
+
+    with pytest.raises(ValueError, match="Parent traversal is not supported"):
+        _ = set(WorkspacePath(ws, "/usr").glob("sbin/../bin"))
+
+
+def test_recursive_glob() -> None:
+    """Verify that recursive globs work properly."""
+    ws = create_autospec(WorkspaceClient)
+    ws.workspace = StubWorkspaceFilesystem(
+        "/home/bob/bin/labs",
+        "/usr/local/bin/labs",
+        "/usr/local/sbin/labs",
+    ).mock()
+
+    assert set(WorkspacePath(ws, "/").glob("**/bin/labs")) == {
+        WorkspacePath(ws, "/home/bob/bin/labs"),
+        WorkspacePath(ws, "/usr/local/bin/labs"),
+    }
+    assert set(WorkspacePath(ws, "/").glob("usr/**/labs")) == {
+        WorkspacePath(ws, "/usr/local/bin/labs"),
+        WorkspacePath(ws, "/usr/local/sbin/labs"),
+    }
+    assert set(WorkspacePath(ws, "/").glob("usr/**")) == {
+        WorkspacePath(ws, "/usr"),
+        WorkspacePath(ws, "/usr/local"),
+        WorkspacePath(ws, "/usr/local/bin"),
+        WorkspacePath(ws, "/usr/local/sbin"),
+    }
+
+
+def test_double_recursive_glob() -> None:
+    """Verify that double-recursive globs work as expected without duplicate results."""
+    ws = create_autospec(WorkspaceClient)
+    ws.workspace = StubWorkspaceFilesystem(
+        "/some/long/path/with/repeated/path/segments/present",
+    ).mock()
+
+    assert tuple(WorkspacePath(ws, "/").glob("**/path/**/present")) == (
+        WorkspacePath(ws, "/some/long/path/with/repeated/path/segments/present"),
+    )
+
+
+def test_glob_case_insensitive() -> None:
+    """As of python 3.12, globbing is allowed to be case-insensitive irrespective of the underlying filesystem. Check this."""
+    ws = create_autospec(WorkspaceClient)
+    ws.workspace = StubWorkspaceFilesystem(
+        "/home/bob/bin/labs",
+        "/home/bob/bin/databricks",
+        "/home/bot/",
+        "/home/bat/",
+        "/etc/passwd",
+    ).mock()
+
+    assert set(WorkspacePath(ws, "/home").glob("B*t", case_sensitive=False)) == {
+        WorkspacePath(ws, "/home/bot"),
+        WorkspacePath(ws, "/home/bat"),
+    }
+    assert set(WorkspacePath(ws, "/home").glob("bO[TB]", case_sensitive=False)) == {
+        WorkspacePath(ws, "/home/bot"),
+        WorkspacePath(ws, "/home/bob"),
+    }
+    assert set(WorkspacePath(ws, "/etc").glob("PasSWd", case_sensitive=False)) == {WorkspacePath(ws, "/etc/passwd")}
+
+
 def test_globbing_when_nested_json_files_exist():
     ws = create_autospec(WorkspaceClient)
     workspace_path = WorkspacePath(ws, "/test/path")
@@ -733,3 +942,16 @@ def test_globbing_when_nested_json_files_exist():
     ]
     result = [str(p) for p in workspace_path.glob("*/*.json")]
     assert result == ["/test/path/dir1/file1.json", "/test/path/dir2/file2.json"]
+
+
+def test_rglob() -> None:
+    ws = create_autospec(WorkspaceClient)
+    ws.workspace = StubWorkspaceFilesystem(
+        "/test/path/dir1/file1.json",
+        "/test/path/dir2/file2.json",
+    ).mock()
+
+    assert set(WorkspacePath(ws, "/test").rglob("*.json")) == {
+        WorkspacePath(ws, "/test/path/dir1/file1.json"),
+        WorkspacePath(ws, "/test/path/dir2/file2.json"),
+    }
