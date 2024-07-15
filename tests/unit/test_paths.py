@@ -664,6 +664,24 @@ def test_home_directory() -> None:
     assert str(result) == "/Users/test_user"
 
 
+def test_resolve() -> None:
+    """This is only supported for absolute paths.
+
+    Otherwise it depends on the current working directory which isn't supported."""
+    ws = create_autospec(WorkspaceClient)
+    ws.workspace.get_status.side_effect = (
+        ObjectInfo(path="/path/that/exists", object_type=ObjectType.FILE),
+        NotFound("Simulated NotFound"),
+    )
+
+    assert WorkspacePath(ws, "/absolute/path").resolve() == WorkspacePath(ws, "/absolute/path")
+    assert WorkspacePath(ws, "/path/that/exists").resolve(strict=True) == WorkspacePath(ws, "/path/that/exists")
+    with pytest.raises(FileNotFoundError):
+        _ = WorkspacePath(ws, "/path/that/does/not/exist").resolve(strict=True)
+    with pytest.raises(NotImplementedError):
+        _ = WorkspacePath(ws, "relative/path").resolve()
+
+
 def test_absolute() -> None:
     """This is only supported for absolute paths.
 
