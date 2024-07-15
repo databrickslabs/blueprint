@@ -513,6 +513,9 @@ class _DatabricksPath(Path, abc.ABC):  # pylint: disable=too-many-public-methods
     def as_uri(self) -> str: ...
 
     @abstractmethod
+    def as_fuse(self) -> Path: ...
+
+    @abstractmethod
     def exists(self, *, follow_symlinks: bool = True) -> bool: ...
 
     @abstractmethod
