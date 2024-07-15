@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import abc
+import builtins
 import fnmatch
+import io
 import locale
 import logging
 import os
 import posixpath
 import re
+import shutil
 from abc import abstractmethod
 from collections.abc import Generator, Iterable, Sequence
 from io import BytesIO, StringIO
@@ -16,6 +19,7 @@ from urllib.parse import quote_from_bytes as urlquote_from_bytes
 
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.errors import DatabricksError, NotFound
+from databricks.sdk.service.files import FileInfo
 from databricks.sdk.service.workspace import (
     ExportFormat,
     ImportFormat,
@@ -548,6 +552,152 @@ class _DatabricksPath(Path, abc.ABC):  # pylint: disable=too-many-public-methods
 
     @abstractmethod
     def iterdir(self: P) -> Generator[P, None, None]: ...
+
+
+class DBFSPath(_DatabricksPath):
+    """Experimental implementation of pathlib.Path for DBFS paths."""
+
+    __slots__ = (
+        # The cached _file_info value for the instance.
+        "_cached_file_info",
+    )
+    _cached_file_info: FileInfo
+
+    @classmethod
+    def _from_file_info(cls, ws: WorkspaceClient, file_info: FileInfo) -> DBFSPath:
+        """Special (internal-only) constructor that creates an instance based on FileInfo."""
+        if not file_info.path:
+            msg = f"Cannot initialise without file path: {file_info}"
+            raise ValueError(msg)
+        path = cls(ws, file_info.path)
+        path._cached_file_info = file_info
+        return path
+
+    as_uri = _na("as_uri")
+
+    def as_fuse(self) -> Path:
+        """Return FUSE-mounted path in Databricks Runtime."""
+        if "DATABRICKS_RUNTIME_VERSION" not in os.environ:
+            logger.warning("This method is only available in Databricks Runtime")
+        return Path("/dbfs", self.as_posix().lstrip("/"))
+
+    def exists(self, *, follow_symlinks: bool = True) -> bool:
+        """Return True if the path points to an existing file, directory, or notebook"""
+        if not follow_symlinks:
+            raise NotImplementedError("follow_symlinks=False is not supported for DBFS")
+        try:
+            self._ws.dbfs.get_status(self.as_posix())
+            return True
+        except NotFound:
+            return False
+
+    def mkdir(self, mode: int = 0o600, parents: bool = True, exist_ok: bool = True) -> None:
+        """Create a directory in DBFS. Only mode 0o600 is supported."""
+        if not exist_ok:
+            raise ValueError("exist_ok must be True for Databricks Workspace")
+        if not parents:
+            raise ValueError("parents must be True for Databricks Workspace")
+        if mode != 0o600:
+            raise ValueError("other modes than 0o600 are not yet supported")
+        self._ws.dbfs.mkdirs(self.as_posix())
+
+    def rmdir(self, recursive: bool = False) -> None:
+        """Remove a DBFS directory"""
+        self._ws.dbfs.delete(self.as_posix(), recursive=recursive)
+
+    def _rename(self: P, target: str | bytes | os.PathLike, overwrite: bool) -> P:
+        dst = self.with_segments(target)
+        if overwrite:
+            with dst.open(mode="wb") as writer, self.open(mode="rb") as reader:
+                shutil.copyfileobj(reader, writer, length=1024 * 1024)
+            self.unlink()
+        else:
+            self._ws.dbfs.move(self.as_posix(), dst.as_posix())
+        return dst
+
+    def unlink(self, missing_ok: bool = False) -> None:
+        """Remove a file in Databricks Workspace."""
+        if not missing_ok and not self.exists():
+            raise FileNotFoundError(f"{self.as_posix()} does not exist")
+        self._ws.dbfs.delete(self.as_posix())
+
+    def open(
+        self,
+        mode: str = "r",
+        buffering: int = -1,
+        encoding: str | None = None,
+        errors: str | None = None,
+        newline: str | None = None,
+    ):
+        """Open a DBFS file.
+
+        Only text and binary I/O are supported in basic read or write mode, along with 'x' to avoid overwriting."""
+        is_write = "w" in mode
+        is_read = "r" in mode or not is_write
+        if is_read and is_write:
+            msg = f"Unsupported mode: {mode} (simultaneous read and write)"
+            raise ValueError(msg)
+        is_binary = "b" in mode
+        is_text = "t" in mode or not is_binary
+        if is_binary and is_text:
+            msg = f"Unsupported mode: {mode} (binary and text I/O)"
+            raise ValueError(msg)
+        is_overwrite = is_write and "x" not in mode
+        binary_io = self._ws.dbfs.open(self.as_posix(), read=is_read, write=is_write, overwrite=is_overwrite)
+        if is_text:
+            return io.TextIOWrapper(binary_io, encoding=encoding, errors=errors, newline=newline)
+        return binary_io
+
+    def write_bytes(self, data):
+        """Write the (binary) data to this path."""
+        # The DBFS BinaryIO implementation only accepts bytes and rejects the (other) byte-like builtins.
+        match data:
+            case builtins.bytes | builtins.bytearray:
+                binary_data = bytes(data)
+            case _:
+                binary_data = bytes(memoryview(data))
+        with self.open("wb") as f:
+            return f.write(binary_data)
+
+    @property
+    def _file_info(self) -> FileInfo:
+        # this method is cached because it is used in multiple is_* methods.
+        # DO NOT use this method in methods, where fresh result is required.
+        try:
+            return self._cached_file_info
+        except AttributeError:
+            self._cached_file_info = self._ws.dbfs.get_status(self.as_posix())
+            return self._cached_file_info
+
+    def is_dir(self) -> bool:
+        """Return True if the path points to a DBFS directory."""
+        try:
+            return bool(self._file_info.is_dir)
+        except DatabricksError:
+            return False
+
+    def is_file(self) -> bool:
+        """Return True if the path points to a file in Databricks Workspace."""
+        return not self.is_dir()
+
+    def expanduser(self: P) -> P:
+        # Expand ~ (but NOT ~user) constructs.
+        if not (self._drv or self._root) and self._path_parts and self._path_parts[0][:1] == "~":
+            if self._path_parts[0] == "~":
+                user_name = self._ws.current_user.me().user_name
+            else:
+                other_user = self._path_parts[0][1:]
+                msg = f"Cannot determine home directory for: {other_user}"
+                raise RuntimeError(msg)
+            if user_name is None:
+                raise RuntimeError("Could not determine home directory.")
+            homedir = f"/Users/{user_name}"
+            return self.with_segments(homedir, *self._path_parts[1:])
+        return self
+
+    def iterdir(self) -> Generator[DBFSPath, None, None]:
+        for child in self._ws.dbfs.list(self.as_posix()):
+            yield self._from_file_info(self._ws, child)
 
 
 class WorkspacePath(_DatabricksPath):
