@@ -8,7 +8,7 @@ import os
 import posixpath
 import re
 from abc import abstractmethod
-from collections.abc import Iterable, Sequence
+from collections.abc import Generator, Iterable, Sequence
 from io import BytesIO, StringIO
 from pathlib import Path, PurePath
 from typing import NoReturn, TypeVar
@@ -61,8 +61,11 @@ class _TextUploadIO(_UploadIO, StringIO):  # type: ignore
         StringIO.__init__(self)
 
 
-class WorkspacePath(Path):  # pylint: disable=too-many-public-methods
-    """Experimental implementation of pathlib.Path for Databricks Workspace."""
+DBPath = TypeVar("DBPath", bound="_DatabricksPath")
+
+
+class _DatabricksPath(Path, abc.ABC):  # pylint: disable=too-many-public-methods
+    """Base-class for experimental pathlib.Path implementations covering Databricks Workspace paths and DBFS."""
 
     # Implementation notes:
     #  - The builtin Path classes are not designed for extension, which in turn makes everything a little cumbersome.
@@ -77,11 +80,13 @@ class WorkspacePath(Path):  # pylint: disable=too-many-public-methods
     #     1. Flavour has been replaced with posixpath and ntpath (normally imported as os.path). Still class-scoped.
     #     2. Accessor has been replaced with inline implementations based directly on the 'os' module.
     #
-    # This implementation for Workspace paths does the following:
+    # This implementation for Databricks-style paths does the following:
     #     1. Flavour is basically posix-style, with the caveat that we don't bother with the special //-prefix handling.
-    #     2. The Accessor is delegated to existing routines available via the workspace client.
+    #     2. The Accessor is replaced by delegation to existing routines available via the workspace client.
     #     3. Python 3.12 introduces some new API elements. Because these are source-compatible with earlier versions
     #        these are forward-ported and implemented.
+    #
+    # The current class hierarchy implements behaviour (and differentiation) by inheritance rather than composition.
     #
     __slots__ = (  # pylint: disable=redefined-slots-in-subclass
         # For us this is always the empty string. Consistent with the superclass attribute for Python 3.10-3.13b.
@@ -98,12 +103,9 @@ class WorkspacePath(Path):  # pylint: disable=too-many-public-methods
         "_hash",
         # The workspace client that we use to perform I/O operations on the path.
         "_ws",
-        # The cached _object_info value for the instance.
-        "_cached_object_info",
     )
-    _cached_object_info: ObjectInfo
-
-    _SUFFIXES = {".py": Language.PYTHON, ".sql": Language.SQL, ".scala": Language.SCALA, ".R": Language.R}
+    _str: str
+    _hash: int
 
     # Path semantics are posix-like.
     parser = posixpath
@@ -111,6 +113,7 @@ class WorkspacePath(Path):  # pylint: disable=too-many-public-methods
     # Compatibility attribute, for when superclass implementations get invoked on python <= 3.11.
     _flavour = object()
 
+    # Public APIs that we don't support.
     cwd = _na("cwd")
     stat = _na("stat")
     chmod = _na("chmod")
@@ -125,11 +128,11 @@ class WorkspacePath(Path):  # pylint: disable=too-many-public-methods
     link_to = _na("link_to")
     samefile = _na("samefile")
 
-    def __new__(cls, *args, **kwargs) -> WorkspacePath:
+    def __new__(cls, *args, **kwargs):
         # Force all initialisation to go via __init__() irrespective of the (Python-specific) base version.
         return object.__new__(cls)
 
-    def __init__(self, ws: WorkspaceClient, *args) -> None:  # pylint: disable=super-init-not-called,useless-suppression
+    def __init__(self, ws: WorkspaceClient, *args: str | bytes | os.PathLike) -> None:  # pylint: disable=super-init-not-called,useless-suppression
         # We deliberately do _not_ call the super initializer because we're taking over complete responsibility for the
         # implementation of the public API.
 
@@ -138,24 +141,13 @@ class WorkspacePath(Path):  # pylint: disable=too-many-public-methods
 
         # Normalise the paths that we have.
         root, path_parts = self._parse_and_normalize(raw_paths)
-
         self._drv = ""
         self._root = root
         self._path_parts = path_parts
         self._ws = ws
 
-    @classmethod
-    def _from_object_info(cls, ws: WorkspaceClient, object_info: ObjectInfo):
-        """Special (internal-only) constructor that creates an instance based on ObjectInfo."""
-        if not object_info.path:
-            msg = f"Cannot initialise within object path: {object_info}"
-            raise ValueError(msg)
-        path = cls(ws, object_info.path)
-        path._cached_object_info = object_info
-        return path
-
     @staticmethod
-    def _to_raw_paths(*args) -> list[str]:
+    def _to_raw_paths(*args: str | bytes | os.PathLike) -> list[str]:
         raw_paths: list[str] = []
         for arg in args:
             if isinstance(arg, PurePath):
@@ -210,7 +202,7 @@ class WorkspacePath(Path):  # pylint: disable=too-many-public-methods
 
     def __reduce__(self) -> NoReturn:
         # Cannot support pickling because we can't pickle the workspace client.
-        msg = "Pickling Workspace paths is not supported."
+        msg = f"Pickling {self.__class__.__qualname__} paths is not supported."
         raise NotImplementedError(msg)
 
     def __fspath__(self):
@@ -224,34 +216,31 @@ class WorkspacePath(Path):  # pylint: disable=too-many-public-methods
         #  - PEP 519 (https://peps.python.org/pep-0519/)
         #  - os.fspath (https://docs.python.org/3/library/os.html#os.fspath)
         # TODO: Allow this to work when within an appropriate Databricks Runtime that mounts Workspace paths via FUSE.
-        msg = f"Workspace paths are not path-like: {self}"
+        msg = f"{self.__class__.__qualname__} paths are not path-like: {self}"
         raise NotImplementedError(msg)
 
-    def as_posix(self):
+    def as_posix(self) -> str:
         return str(self)
 
-    def __str__(self):
+    def __str__(self) -> str:
         try:
             return self._str
         except AttributeError:
             self._str = (self._root + self.parser.sep.join(self._path_parts)) or "."
             return self._str
 
-    def __bytes__(self):
+    def __bytes__(self) -> bytes:
         return str(self).encode("utf-8")
 
-    def __repr__(self):
-        return f"{self.__class__.__name__}({str(self)!r})"
+    def __repr__(self) -> str:
+        return f"{self.__class__.__qualname__}({str(self)!r})"
 
-    def as_uri(self) -> str:
-        return f"{self._ws.config.host}#workspace{urlquote_from_bytes(bytes(self))}"
-
-    def __eq__(self, other):
+    def __eq__(self, other) -> bool:
         if not isinstance(other, type(self)):
             return NotImplemented
         return str(self) == str(other)
 
-    def __hash__(self):
+    def __hash__(self) -> int:
         try:
             return self._hash
         except AttributeError:
@@ -284,53 +273,53 @@ class WorkspacePath(Path):  # pylint: disable=too-many-public-methods
         # See __rtruediv__ for more information.
         raise TypeError("trigger NotImplemented")
 
-    def __lt__(self, other):
+    def __lt__(self, other) -> bool:
         if not isinstance(other, type(self)):
             return NotImplemented
         return self._path_parts < other._path_parts
 
-    def __le__(self, other):
+    def __le__(self, other) -> bool:
         if not isinstance(other, type(self)):
             return NotImplemented
         return self._path_parts <= other._path_parts
 
-    def __gt__(self, other):
+    def __gt__(self, other) -> bool:
         if not isinstance(other, type(self)):
             return NotImplemented
         return self._path_parts > other._path_parts
 
-    def __ge__(self, other):
+    def __ge__(self, other) -> bool:
         if not isinstance(other, type(self)):
             return NotImplemented
         return self._path_parts >= other._path_parts
 
-    def with_segments(self, *pathsegments):
-        return type(self)(self._ws, *pathsegments)
+    def with_segments(self: DBPath, *path_segments: bytes | str | os.PathLike) -> DBPath:
+        return type(self)(self._ws, *path_segments)
 
     @property
     def drive(self) -> str:
         return self._drv
 
     @property
-    def root(self):
+    def root(self) -> str:
         return self._root
 
     @property
-    def anchor(self):
+    def anchor(self) -> str:
         return self.drive + self.root
 
     @property
-    def name(self):
+    def name(self) -> str:
         path_parts = self._path_parts
         return path_parts[-1] if path_parts else ""
 
     @property
-    def parts(self):
+    def parts(self) -> tuple[str, ...]:
         if self.drive or self.root:
             return self.drive + self.root, *self._path_parts
         return self._path_parts
 
-    def with_name(self, name):
+    def with_name(self: DBPath, name: str) -> DBPath:
         parser = self.parser
         if not name or parser.sep in name or name == ".":
             msg = f"Invalid name: {name!r}"
@@ -341,7 +330,7 @@ class WorkspacePath(Path):  # pylint: disable=too-many-public-methods
         path_parts[-1] = name
         return type(self)(self._ws, self.anchor, *path_parts)
 
-    def with_suffix(self, suffix):
+    def with_suffix(self: DBPath, suffix: str) -> DBPath:
         stem = self.stem
         if not stem:
             msg = f"{self!r} has an empty name"
@@ -351,13 +340,13 @@ class WorkspacePath(Path):  # pylint: disable=too-many-public-methods
             raise ValueError(msg)
         return self.with_name(stem + suffix)
 
-    def relative_to(self, other, *more_other, walk_up=False):  # pylint: disable=arguments-differ
-        other = self.with_segments(other, *more_other)
-        if self.anchor != other.anchor:
-            msg = f"{str(self)!r} and {str(other)!r} have different anchors"
+    def relative_to(self: DBPath, *other: str | bytes | os.PathLike, walk_up: bool = False) -> DBPath:  # pylint: disable=arguments-differ,useless-suppression
+        normalized = self.with_segments(*other)
+        if self.anchor != normalized.anchor:
+            msg = f"{str(self)!r} and {str(normalized)!r} have different anchors"
             raise ValueError(msg)
         path_parts0 = self._path_parts
-        path_parts1 = other._path_parts  # pylint: disable=protected-access
+        path_parts1 = normalized._path_parts  # pylint: disable=protected-access
         # Find the length of the common prefix.
         i = 0
         while i < len(path_parts0) and i < len(path_parts1) and path_parts0[i] == path_parts1[i]:
@@ -366,29 +355,29 @@ class WorkspacePath(Path):  # pylint: disable=too-many-public-methods
         # Handle walking up.
         if i < len(path_parts1):
             if not walk_up:
-                msg = f"{str(self)!r} is not in the subpath of {str(other)!r}"
+                msg = f"{str(self)!r} is not in the subpath of {str(normalized)!r}"
                 raise ValueError(msg)
             if ".." in path_parts1[i:]:
-                raise ValueError(f"'..' segment in {str(other)!r} cannot be walked")
+                raise ValueError(f"'..' segment in {str(normalized)!r} cannot be walked")
             walkup_parts = [".."] * (len(path_parts1) - i)
             relative_parts = (*walkup_parts, *relative_parts)
         return self.with_segments("", *relative_parts)
 
-    def is_relative_to(self, other, *more_other):  # pylint: disable=arguments-differ
-        other = self.with_segments(other, *more_other)
-        if self.anchor != other.anchor:
+    def is_relative_to(self, *other: str | bytes | os.PathLike) -> bool:  # pylint: disable=arguments-differ,useless-suppression
+        normalized = self.with_segments(*other)
+        if self.anchor != normalized.anchor:
             return False
         path_parts0 = self._path_parts
-        path_parts1 = other._path_parts  # pylint: disable=protected-access
+        path_parts1 = normalized._path_parts  # pylint: disable=protected-access
         return path_parts0[: len(path_parts1)] == path_parts1
 
     @property
-    def parent(self):
+    def parent(self: DBPath) -> DBPath:
         rel_path = self._path_parts
         return self.with_segments(self.anchor, *rel_path[:-1]) if rel_path else self
 
     @property
-    def parents(self):
+    def parents(self: DBPath) -> tuple[DBPath, ...]:
         parents = []
         path = self
         parent = path.parent
@@ -398,16 +387,16 @@ class WorkspacePath(Path):  # pylint: disable=too-many-public-methods
             parent = path.parent
         return tuple(parents)
 
-    def is_absolute(self):
+    def is_absolute(self) -> bool:
         return bool(self.anchor)
 
-    def is_reserved(self):
+    def is_reserved(self) -> bool:
         return False
 
-    def joinpath(self, *pathsegments):
-        return self.with_segments(self, *pathsegments)
+    def joinpath(self: DBPath, *path_segments) -> DBPath:
+        return self.with_segments(self, *path_segments)
 
-    def __truediv__(self, other):
+    def __truediv__(self: DBPath, other: str | bytes | os.PathLike) -> DBPath:
         try:
             return self.with_segments(*self._parts(), other)
         except TypeError:
@@ -415,7 +404,7 @@ class WorkspacePath(Path):  # pylint: disable=too-many-public-methods
 
     def __rtruediv__(self, other):
         # Note: this is only invoked if __truediv__ has already returned NotImplemented.
-        # For the case of Path / WorkspacePath this means the underlying __truediv__ is invoked.
+        # For the case of Path / _DatabricksPath this means the underlying __truediv__ is invoked.
         # The base-class implementations all access internals but yield NotImplemented if TypeError is raised. As
         # such we stub those internals (_from_parts and _raw_path) to trigger the NotImplemented path and ensure that
         # control ends up here.
@@ -426,7 +415,7 @@ class WorkspacePath(Path):  # pylint: disable=too-many-public-methods
         except TypeError:
             return NotImplemented
 
-    def match(self, path_pattern, *, case_sensitive=None):
+    def match(self, path_pattern: str | bytes | os.PathLike, *, case_sensitive: bool | None = None) -> bool:
         # Convert the pattern to a fake path (with globs) to help with matching parts.
         if not isinstance(path_pattern, PurePath):
             path_pattern = self.with_segments(path_pattern)
@@ -448,15 +437,145 @@ class WorkspacePath(Path):  # pylint: disable=too-many-public-methods
                 return False
         return True
 
-    def as_fuse(self):
+    def home(self):  # pylint: disable=arguments-differ
+        """Return the user's home directory. Adapted from pathlib.Path"""
+        return type(self)(self._ws, "~").expanduser()
+
+    @abstractmethod
+    def _rename(self: DBPath, target: str | bytes | os.PathLike, overwrite: bool) -> DBPath: ...
+
+    def rename(self: DBPath, target: str | bytes | os.PathLike) -> DBPath:
+        """Rename this path as the target, unless the target already exists."""
+        return self._rename(target, overwrite=False)
+
+    def replace(self: DBPath, target: str | bytes | os.PathLike) -> DBPath:
+        """Rename this path, overwriting the target if it exists and can be overwritten."""
+        return self._rename(target, overwrite=True)
+
+    def _return_false(self) -> bool:
+        return False
+
+    is_symlink = _return_false
+    is_block_device = _return_false
+    is_char_device = _return_false
+    is_fifo = _return_false
+    is_socket = _return_false
+    is_mount = _return_false
+    is_junction = _return_false
+
+    def resolve(self: DBPath, strict: bool = False) -> DBPath:
+        """Return the absolute path of the file or directory in Databricks Workspace."""
+        absolute = self.absolute()
+        if strict and not absolute.exists():
+            msg = f"Path does not exist: {self}"
+            raise FileNotFoundError(msg)
+        return absolute
+
+    def absolute(self: DBPath) -> DBPath:
+        if self.is_absolute():
+            return self
+        return self.with_segments(self.cwd(), self)
+
+    def _prepare_pattern(self, pattern: str | bytes | os.PathLike) -> Sequence[str]:
+        if not pattern:
+            raise ValueError("Glob pattern must not be empty.")
+        parsed_pattern = self.with_segments(pattern)
+        if parsed_pattern.anchor:
+            msg = f"Non-relative patterns are unsupported: {pattern!s}"
+            raise NotImplementedError(msg)
+        pattern_parts = parsed_pattern._path_parts  # pylint: disable=protected-access
+        if ".." in pattern_parts:
+            msg = f"Parent traversal is not supported: {pattern!s}"
+            raise ValueError(msg)
+        if os.fspath(pattern)[-1] == self.parser.sep:
+            pattern_parts = (*pattern_parts, "")
+        return pattern_parts
+
+    def glob(
+        self: DBPath, pattern: str | bytes | os.PathLike, *, case_sensitive: bool | None = None
+    ) -> Generator[DBPath, None, None]:
+        pattern_parts = self._prepare_pattern(pattern)
+        if case_sensitive is None:
+            case_sensitive = True
+        selector = _Selector.parse(pattern_parts, case_sensitive=case_sensitive)
+        yield from selector(self)
+
+    def rglob(
+        self: DBPath, pattern: str | bytes | os.PathLike, *, case_sensitive: bool | None = None
+    ) -> Generator[DBPath, None, None]:
+        pattern_parts = ("**", *self._prepare_pattern(pattern))
+        if case_sensitive is None:
+            case_sensitive = True
+        selector = _Selector.parse(pattern_parts, case_sensitive=case_sensitive)
+        yield from selector(self)
+
+    @abstractmethod
+    def as_uri(self) -> str: ...
+
+    @abstractmethod
+    def exists(self, *, follow_symlinks: bool = True) -> bool: ...
+
+    @abstractmethod
+    def mkdir(self, mode: int = 0o600, parents: bool = True, exist_ok: bool = True) -> None: ...
+
+    @abstractmethod
+    def rmdir(self, recursive: bool = False) -> None: ...
+
+    @abstractmethod
+    def unlink(self, missing_ok: bool = False) -> None: ...
+
+    @abstractmethod
+    def open(
+        self,
+        mode: str = "r",
+        buffering: int = -1,
+        encoding: str | None = None,
+        errors: str | None = None,
+        newline: str | None = None,
+    ): ...
+
+    @abstractmethod
+    def is_dir(self) -> bool: ...
+
+    @abstractmethod
+    def is_file(self) -> bool: ...
+
+    @abstractmethod
+    def expanduser(self: DBPath) -> DBPath: ...
+
+    @abstractmethod
+    def iterdir(self: DBPath) -> Generator[DBPath, None, None]: ...
+
+
+class WorkspacePath(_DatabricksPath):
+    """Experimental implementation of pathlib.Path for Databricks Workspace."""
+
+    __slots__ = (
+        # The cached _object_info value for the instance.
+        "_cached_object_info",
+    )
+    _cached_object_info: ObjectInfo
+
+    _SUFFIXES = {".py": Language.PYTHON, ".sql": Language.SQL, ".scala": Language.SCALA, ".R": Language.R}
+
+    @classmethod
+    def _from_object_info(cls, ws: WorkspaceClient, object_info: ObjectInfo) -> WorkspacePath:
+        """Special (internal-only) constructor that creates an instance based on ObjectInfo."""
+        if not object_info.path:
+            msg = f"Cannot initialise without object path: {object_info}"
+            raise ValueError(msg)
+        path = cls(ws, object_info.path)
+        path._cached_object_info = object_info
+        return path
+
+    def as_uri(self) -> str:
+        return f"{self._ws.config.host}#workspace{urlquote_from_bytes(bytes(self))}"
+
+    def as_fuse(self) -> Path:
         """Return FUSE-mounted path in Databricks Runtime."""
         if "DATABRICKS_RUNTIME_VERSION" not in os.environ:
             logger.warning("This method is only available in Databricks Runtime")
         return Path("/Workspace", self.as_posix().lstrip("/"))
-
-    def home(self):  # pylint: disable=arguments-differ
-        """Return the user's home directory. Adapted from pathlib.Path"""
-        return WorkspacePath(self._ws, "~").expanduser()
 
     def exists(self, *, follow_symlinks=True):
         """Return True if the path points to an existing file, directory, or notebook"""
@@ -482,16 +601,13 @@ class WorkspacePath(Path):  # pylint: disable=too-many-public-methods
         """Remove a directory in Databricks Workspace"""
         self._ws.workspace.delete(self.as_posix(), recursive=recursive)
 
-    def rename(self, target, overwrite=False):
+    def _rename(self: DBPath, target: str | bytes | os.PathLike, overwrite: bool) -> DBPath:
         """Rename a file or directory in Databricks Workspace"""
-        dst = WorkspacePath(self._ws, target)
+        dst = self.with_segments(target)
         with self._ws.workspace.download(self.as_posix(), format=ExportFormat.AUTO) as f:
             self._ws.workspace.upload(dst.as_posix(), f.read(), format=ImportFormat.AUTO, overwrite=overwrite)
         self.unlink()
-
-    def replace(self, target):
-        """Rename a file or directory in Databricks Workspace, overwriting the target if it exists."""
-        return self.rename(target, overwrite=True)
+        return dst
 
     def unlink(self, missing_ok=False):
         """Remove a file in Databricks Workspace."""
@@ -540,26 +656,6 @@ class WorkspacePath(Path):  # pylint: disable=too-many-public-methods
             self._cached_object_info = self._ws.workspace.get_status(self.as_posix())
             return self._object_info
 
-    def _return_false(self) -> bool:
-        return False
-
-    is_symlink = _return_false
-    is_block_device = _return_false
-    is_char_device = _return_false
-    is_fifo = _return_false
-    is_socket = _return_false
-    is_mount = _return_false
-    is_junction = _return_false
-
-    def resolve(self, strict=False):
-        """Return the absolute path of the file or directory in Databricks Workspace."""
-        return self
-
-    def absolute(self):
-        if self.is_absolute():
-            return self
-        return self.with_segments(self.cwd(), self)
-
     def is_dir(self):
         """Return True if the path points to a directory in Databricks Workspace."""
         try:
@@ -600,35 +696,6 @@ class WorkspacePath(Path):  # pylint: disable=too-many-public-methods
         for child in self._ws.workspace.list(self.as_posix()):
             yield self._from_object_info(self._ws, child)
 
-    def _prepare_pattern(self, pattern) -> Sequence[str]:
-        if not pattern:
-            raise ValueError("Glob pattern must not be empty.")
-        parsed_pattern = self.with_segments(pattern)
-        if parsed_pattern.anchor:
-            msg = f"Non-relative patterns are unsupported: {pattern}"
-            raise NotImplementedError(msg)
-        pattern_parts = parsed_pattern._path_parts  # pylint: disable=protected-access
-        if ".." in pattern_parts:
-            msg = f"Parent traversal is not supported: {pattern}"
-            raise ValueError(msg)
-        if pattern[-1] == self.parser.sep:
-            pattern_parts = (*pattern_parts, "")
-        return pattern_parts
-
-    def glob(self, pattern, *, case_sensitive=None):
-        pattern_parts = self._prepare_pattern(pattern)
-        if case_sensitive is None:
-            case_sensitive = True
-        selector = _Selector.parse(pattern_parts, case_sensitive=case_sensitive)
-        yield from selector(self)
-
-    def rglob(self, pattern, *, case_sensitive=None):
-        pattern_parts = ("**", *self._prepare_pattern(pattern))
-        if case_sensitive is None:
-            case_sensitive = True
-        selector = _Selector.parse(pattern_parts, case_sensitive=case_sensitive)
-        yield from selector(self)
-
 
 T = TypeVar("T", bound="Path")
 
@@ -665,8 +732,7 @@ class _Selector(abc.ABC):
         raise ValueError(f"Glob pattern unsupported: {pattern_parts}")
 
     @abstractmethod
-    def __call__(self, path: T) -> Iterable[T]:
-        raise NotImplementedError()
+    def __call__(self, path: T) -> Iterable[T]: ...
 
 
 class _TerminalSelector(_Selector):
@@ -694,8 +760,7 @@ class _NonTerminalSelector(_Selector):
             yield from self._select_children(path)
 
     @abstractmethod
-    def _select_children(self, path: T) -> Iterable[T]:
-        raise NotImplementedError()
+    def _select_children(self, path: T) -> Iterable[T]: ...
 
 
 class _LiteralSelector(_NonTerminalSelector):

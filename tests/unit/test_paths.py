@@ -97,7 +97,7 @@ def test_hash() -> None:
         ("foo", "foo/bar", "foo/baz"),
     ],
 )
-def test_comparison(increasing_paths: tuple[str | list[str], str | list[str], str | list[str]]) -> None:
+def test_comparison(increasing_paths: tuple[str, str, str]) -> None:
     """Test that comparing paths works as expected."""
     ws = create_autospec(WorkspaceClient)
 
@@ -160,7 +160,7 @@ def test_pathlike_error() -> None:
     ws = create_autospec(WorkspaceClient)
     p = WorkspacePath(ws, "/some/path")
 
-    with pytest.raises(NotImplementedError, match="Workspace paths are not path-like"):
+    with pytest.raises(NotImplementedError, match="WorkspacePath paths are not path-like"):
         _ = os.fspath(p)
 
 
@@ -584,19 +584,19 @@ def test_rmdir_removes_directory_recursive() -> None:
     ws.workspace.delete.assert_called_once_with("/test/path", recursive=True)
 
 
-def test_rename_file_without_overwrite() -> None:
+def test_rename_file() -> None:
     ws = create_autospec(WorkspaceClient)
     workspace_path = WorkspacePath(ws, "/test/path")
     ws.workspace.download.return_value.__enter__.return_value.read.return_value = b"test"
-    workspace_path.rename("/new/path")
+    assert workspace_path.rename("/new/path") == WorkspacePath(ws, "/new/path")
     ws.workspace.upload.assert_called_once_with("/new/path", b"test", format=ImportFormat.AUTO, overwrite=False)
 
 
-def test_rename_file_with_overwrite() -> None:
+def test_replace_file() -> None:
     ws = create_autospec(WorkspaceClient)
     workspace_path = WorkspacePath(ws, "/test/path")
     ws.workspace.download.return_value.__enter__.return_value.read.return_value = b"test"
-    workspace_path.rename("/new/path", overwrite=True)
+    assert workspace_path.replace("/new/path") == WorkspacePath(ws, "/new/path")
     ws.workspace.upload.assert_called_once_with("/new/path", b"test", format=ImportFormat.AUTO, overwrite=True)
 
 
@@ -662,6 +662,24 @@ def test_home_directory() -> None:
     workspace_path = WorkspacePath(ws, "/test/path")
     result = workspace_path.home()
     assert str(result) == "/Users/test_user"
+
+
+def test_resolve() -> None:
+    """This is only supported for absolute paths.
+
+    Otherwise it depends on the current working directory which isn't supported."""
+    ws = create_autospec(WorkspaceClient)
+    ws.workspace.get_status.side_effect = (
+        ObjectInfo(path="/path/that/exists", object_type=ObjectType.FILE),
+        NotFound("Simulated NotFound"),
+    )
+
+    assert WorkspacePath(ws, "/absolute/path").resolve() == WorkspacePath(ws, "/absolute/path")
+    assert WorkspacePath(ws, "/path/that/exists").resolve(strict=True) == WorkspacePath(ws, "/path/that/exists")
+    with pytest.raises(FileNotFoundError):
+        _ = WorkspacePath(ws, "/path/that/does/not/exist").resolve(strict=True)
+    with pytest.raises(NotImplementedError):
+        _ = WorkspacePath(ws, "relative/path").resolve()
 
 
 def test_absolute() -> None:
