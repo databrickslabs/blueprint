@@ -584,19 +584,19 @@ def test_rmdir_removes_directory_recursive() -> None:
     ws.workspace.delete.assert_called_once_with("/test/path", recursive=True)
 
 
-def test_rename_file_without_overwrite() -> None:
+def test_rename_file() -> None:
     ws = create_autospec(WorkspaceClient)
     workspace_path = WorkspacePath(ws, "/test/path")
     ws.workspace.download.return_value.__enter__.return_value.read.return_value = b"test"
-    workspace_path.rename("/new/path")
+    assert workspace_path.rename("/new/path") == WorkspacePath(ws, "/new/path")
     ws.workspace.upload.assert_called_once_with("/new/path", b"test", format=ImportFormat.AUTO, overwrite=False)
 
 
-def test_rename_file_with_overwrite() -> None:
+def test_replace_file() -> None:
     ws = create_autospec(WorkspaceClient)
     workspace_path = WorkspacePath(ws, "/test/path")
     ws.workspace.download.return_value.__enter__.return_value.read.return_value = b"test"
-    workspace_path.rename("/new/path", overwrite=True)
+    assert workspace_path.replace("/new/path") == WorkspacePath(ws, "/new/path")
     ws.workspace.upload.assert_called_once_with("/new/path", b"test", format=ImportFormat.AUTO, overwrite=True)
 
 
