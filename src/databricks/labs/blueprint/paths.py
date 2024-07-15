@@ -577,7 +577,7 @@ class WorkspacePath(_DatabricksPath):
             logger.warning("This method is only available in Databricks Runtime")
         return Path("/Workspace", self.as_posix().lstrip("/"))
 
-    def exists(self, *, follow_symlinks=True):
+    def exists(self, *, follow_symlinks: bool = True) -> bool:
         """Return True if the path points to an existing file, directory, or notebook"""
         if not follow_symlinks:
             raise NotImplementedError("follow_symlinks=False is not supported for Databricks Workspace")
@@ -587,7 +587,7 @@ class WorkspacePath(_DatabricksPath):
         except NotFound:
             return False
 
-    def mkdir(self, mode=0o600, parents=True, exist_ok=True):
+    def mkdir(self, mode: int = 0o600, parents: bool = True, exist_ok: bool = True) -> None:
         """Create a directory in Databricks Workspace. Only mode 0o600 is supported."""
         if not exist_ok:
             raise ValueError("exist_ok must be True for Databricks Workspace")
@@ -597,7 +597,7 @@ class WorkspacePath(_DatabricksPath):
             raise ValueError("other modes than 0o600 are not yet supported")
         self._ws.workspace.mkdirs(self.as_posix())
 
-    def rmdir(self, recursive=False):
+    def rmdir(self, recursive: bool = False) -> None:
         """Remove a directory in Databricks Workspace"""
         self._ws.workspace.delete(self.as_posix(), recursive=recursive)
 
@@ -609,13 +609,20 @@ class WorkspacePath(_DatabricksPath):
         self.unlink()
         return dst
 
-    def unlink(self, missing_ok=False):
+    def unlink(self, missing_ok: bool = False) -> None:
         """Remove a file in Databricks Workspace."""
         if not missing_ok and not self.exists():
             raise FileNotFoundError(f"{self.as_posix()} does not exist")
         self._ws.workspace.delete(self.as_posix())
 
-    def open(self, mode="r", buffering=-1, encoding=None, errors=None, newline=None):
+    def open(
+        self,
+        mode: str = "r",
+        buffering: int = -1,
+        encoding: str | None = None,
+        errors: str | None = None,
+        newline: str | None = None,
+    ):
         """Open a file in Databricks Workspace. Only text and binary modes are supported."""
         if encoding is None or encoding == "locale":
             encoding = locale.getpreferredencoding(False)
@@ -631,7 +638,7 @@ class WorkspacePath(_DatabricksPath):
         raise ValueError(f"invalid mode: {mode}")
 
     @property
-    def suffix(self):
+    def suffix(self) -> str:
         """Return the file extension. If the file is a notebook, return the suffix based on the language."""
         suffix = super().suffix
         if suffix:
@@ -656,21 +663,21 @@ class WorkspacePath(_DatabricksPath):
             self._cached_object_info = self._ws.workspace.get_status(self.as_posix())
             return self._object_info
 
-    def is_dir(self):
+    def is_dir(self) -> bool:
         """Return True if the path points to a directory in Databricks Workspace."""
         try:
             return self._object_info.object_type == ObjectType.DIRECTORY
         except DatabricksError:
             return False
 
-    def is_file(self):
+    def is_file(self) -> bool:
         """Return True if the path points to a file in Databricks Workspace."""
         try:
             return self._object_info.object_type == ObjectType.FILE
         except DatabricksError:
             return False
 
-    def expanduser(self):
+    def expanduser(self: P) -> P:
         # Expand ~ (but NOT ~user) constructs.
         if not (self._drv or self._root) and self._path_parts and self._path_parts[0][:1] == "~":
             if self._path_parts[0] == "~":
@@ -685,14 +692,14 @@ class WorkspacePath(_DatabricksPath):
             return self.with_segments(homedir, *self._path_parts[1:])
         return self
 
-    def is_notebook(self):
+    def is_notebook(self) -> bool:
         """Return True if the path points to a notebook in Databricks Workspace."""
         try:
             return self._object_info.object_type == ObjectType.NOTEBOOK
         except DatabricksError:
             return False
 
-    def iterdir(self):
+    def iterdir(self) -> Generator[WorkspacePath, None, None]:
         for child in self._ws.workspace.list(self.as_posix()):
             yield self._from_object_info(self._ws, child)
 
