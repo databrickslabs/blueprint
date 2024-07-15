@@ -61,7 +61,7 @@ class _TextUploadIO(_UploadIO, StringIO):  # type: ignore
         StringIO.__init__(self)
 
 
-DBPath = TypeVar("DBPath", bound="_DatabricksPath")
+P = TypeVar("P", bound="_DatabricksPath")
 
 
 class _DatabricksPath(Path, abc.ABC):  # pylint: disable=too-many-public-methods
@@ -293,7 +293,7 @@ class _DatabricksPath(Path, abc.ABC):  # pylint: disable=too-many-public-methods
             return NotImplemented
         return self._path_parts >= other._path_parts
 
-    def with_segments(self: DBPath, *path_segments: bytes | str | os.PathLike) -> DBPath:
+    def with_segments(self: P, *path_segments: bytes | str | os.PathLike) -> P:
         return type(self)(self._ws, *path_segments)
 
     @property
@@ -319,7 +319,7 @@ class _DatabricksPath(Path, abc.ABC):  # pylint: disable=too-many-public-methods
             return self.drive + self.root, *self._path_parts
         return self._path_parts
 
-    def with_name(self: DBPath, name: str) -> DBPath:
+    def with_name(self: P, name: str) -> P:
         parser = self.parser
         if not name or parser.sep in name or name == ".":
             msg = f"Invalid name: {name!r}"
@@ -330,7 +330,7 @@ class _DatabricksPath(Path, abc.ABC):  # pylint: disable=too-many-public-methods
         path_parts[-1] = name
         return type(self)(self._ws, self.anchor, *path_parts)
 
-    def with_suffix(self: DBPath, suffix: str) -> DBPath:
+    def with_suffix(self: P, suffix: str) -> P:
         stem = self.stem
         if not stem:
             msg = f"{self!r} has an empty name"
@@ -340,7 +340,7 @@ class _DatabricksPath(Path, abc.ABC):  # pylint: disable=too-many-public-methods
             raise ValueError(msg)
         return self.with_name(stem + suffix)
 
-    def relative_to(self: DBPath, *other: str | bytes | os.PathLike, walk_up: bool = False) -> DBPath:  # pylint: disable=arguments-differ,useless-suppression
+    def relative_to(self: P, *other: str | bytes | os.PathLike, walk_up: bool = False) -> P:  # pylint: disable=arguments-differ,useless-suppression
         normalized = self.with_segments(*other)
         if self.anchor != normalized.anchor:
             msg = f"{str(self)!r} and {str(normalized)!r} have different anchors"
@@ -372,12 +372,12 @@ class _DatabricksPath(Path, abc.ABC):  # pylint: disable=too-many-public-methods
         return path_parts0[: len(path_parts1)] == path_parts1
 
     @property
-    def parent(self: DBPath) -> DBPath:
+    def parent(self: P) -> P:
         rel_path = self._path_parts
         return self.with_segments(self.anchor, *rel_path[:-1]) if rel_path else self
 
     @property
-    def parents(self: DBPath) -> tuple[DBPath, ...]:
+    def parents(self: P) -> tuple[P, ...]:
         parents = []
         path = self
         parent = path.parent
@@ -393,10 +393,10 @@ class _DatabricksPath(Path, abc.ABC):  # pylint: disable=too-many-public-methods
     def is_reserved(self) -> bool:
         return False
 
-    def joinpath(self: DBPath, *path_segments) -> DBPath:
+    def joinpath(self: P, *path_segments) -> P:
         return self.with_segments(self, *path_segments)
 
-    def __truediv__(self: DBPath, other: str | bytes | os.PathLike) -> DBPath:
+    def __truediv__(self: P, other: str | bytes | os.PathLike) -> P:
         try:
             return self.with_segments(*self._parts(), other)
         except TypeError:
@@ -442,13 +442,13 @@ class _DatabricksPath(Path, abc.ABC):  # pylint: disable=too-many-public-methods
         return type(self)(self._ws, "~").expanduser()
 
     @abstractmethod
-    def _rename(self: DBPath, target: str | bytes | os.PathLike, overwrite: bool) -> DBPath: ...
+    def _rename(self: P, target: str | bytes | os.PathLike, overwrite: bool) -> P: ...
 
-    def rename(self: DBPath, target: str | bytes | os.PathLike) -> DBPath:
+    def rename(self: P, target: str | bytes | os.PathLike) -> P:
         """Rename this path as the target, unless the target already exists."""
         return self._rename(target, overwrite=False)
 
-    def replace(self: DBPath, target: str | bytes | os.PathLike) -> DBPath:
+    def replace(self: P, target: str | bytes | os.PathLike) -> P:
         """Rename this path, overwriting the target if it exists and can be overwritten."""
         return self._rename(target, overwrite=True)
 
@@ -463,7 +463,7 @@ class _DatabricksPath(Path, abc.ABC):  # pylint: disable=too-many-public-methods
     is_mount = _return_false
     is_junction = _return_false
 
-    def resolve(self: DBPath, strict: bool = False) -> DBPath:
+    def resolve(self: P, strict: bool = False) -> P:
         """Return the absolute path of the file or directory in Databricks Workspace."""
         absolute = self.absolute()
         if strict and not absolute.exists():
@@ -471,7 +471,7 @@ class _DatabricksPath(Path, abc.ABC):  # pylint: disable=too-many-public-methods
             raise FileNotFoundError(msg)
         return absolute
 
-    def absolute(self: DBPath) -> DBPath:
+    def absolute(self: P) -> P:
         if self.is_absolute():
             return self
         return self.with_segments(self.cwd(), self)
@@ -492,8 +492,8 @@ class _DatabricksPath(Path, abc.ABC):  # pylint: disable=too-many-public-methods
         return pattern_parts
 
     def glob(
-        self: DBPath, pattern: str | bytes | os.PathLike, *, case_sensitive: bool | None = None
-    ) -> Generator[DBPath, None, None]:
+        self: P, pattern: str | bytes | os.PathLike, *, case_sensitive: bool | None = None
+    ) -> Generator[P, None, None]:
         pattern_parts = self._prepare_pattern(pattern)
         if case_sensitive is None:
             case_sensitive = True
@@ -501,8 +501,8 @@ class _DatabricksPath(Path, abc.ABC):  # pylint: disable=too-many-public-methods
         yield from selector(self)
 
     def rglob(
-        self: DBPath, pattern: str | bytes | os.PathLike, *, case_sensitive: bool | None = None
-    ) -> Generator[DBPath, None, None]:
+        self: P, pattern: str | bytes | os.PathLike, *, case_sensitive: bool | None = None
+    ) -> Generator[P, None, None]:
         pattern_parts = ("**", *self._prepare_pattern(pattern))
         if case_sensitive is None:
             case_sensitive = True
@@ -541,10 +541,10 @@ class _DatabricksPath(Path, abc.ABC):  # pylint: disable=too-many-public-methods
     def is_file(self) -> bool: ...
 
     @abstractmethod
-    def expanduser(self: DBPath) -> DBPath: ...
+    def expanduser(self: P) -> P: ...
 
     @abstractmethod
-    def iterdir(self: DBPath) -> Generator[DBPath, None, None]: ...
+    def iterdir(self: P) -> Generator[P, None, None]: ...
 
 
 class WorkspacePath(_DatabricksPath):
@@ -601,7 +601,7 @@ class WorkspacePath(_DatabricksPath):
         """Remove a directory in Databricks Workspace"""
         self._ws.workspace.delete(self.as_posix(), recursive=recursive)
 
-    def _rename(self: DBPath, target: str | bytes | os.PathLike, overwrite: bool) -> DBPath:
+    def _rename(self: P, target: str | bytes | os.PathLike, overwrite: bool) -> P:
         """Rename a file or directory in Databricks Workspace"""
         dst = self.with_segments(target)
         with self._ws.workspace.download(self.as_posix(), format=ExportFormat.AUTO) as f:
