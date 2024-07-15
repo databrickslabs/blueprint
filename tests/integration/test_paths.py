@@ -3,10 +3,10 @@ from pathlib import Path
 import pytest
 from databricks.sdk.errors import BadRequest
 
-from databricks.labs.blueprint.paths import WorkspacePath
+from databricks.labs.blueprint.paths import DBFSPath, WorkspacePath
 
-# Currently: WorkspacePath, later: DBFSPath and VolumePath
-DATABRICKS_PATHLIKE = [WorkspacePath]
+# Currently: DBFSPath, WorkspacePath, later: VolumePath
+DATABRICKS_PATHLIKE = [DBFSPath, WorkspacePath]
 
 
 @pytest.mark.parametrize("cls", DATABRICKS_PATHLIKE)
@@ -38,7 +38,7 @@ def test_mkdirs(ws, make_random, cls):
     wsp_check = cls(ws, f"/Users/{user_name}/{name}/foo/bar/baz")
     assert wsp_check.is_dir()
 
-    with pytest.raises(BadRequest):
+    with pytest.raises(expected_exception=(BadRequest, OSError)):
         wsp_check.parent.rmdir()
     wsp_check.parent.rmdir(recursive=True)
 
@@ -100,12 +100,16 @@ def test_replace(ws, make_random, cls):
 
 
 def test_workspace_as_fuse(ws):
-    # WSFS and DBFS have different root paths
     wsp = WorkspacePath(ws, "/Users/foo/bar/baz")
     assert Path("/Workspace/Users/foo/bar/baz") == wsp.as_fuse()
 
 
-def test_as_uri(ws):
+def test_dbfs_as_fuse(ws):
+    p = DBFSPath(ws, "/Users/foo/bar/baz")
+    assert Path("/dbfs/Users/foo/bar/baz") == p.as_fuse()
+
+
+def test_workspace_as_uri(ws):
     # DBFS is not exposed via browser
     wsp = WorkspacePath(ws, "/Users/foo/bar/baz")
     assert wsp.as_uri() == f"{ws.config.host}#workspace/Users/foo/bar/baz"
