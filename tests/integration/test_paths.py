@@ -5,15 +5,20 @@ from databricks.sdk.errors import BadRequest
 
 from databricks.labs.blueprint.paths import WorkspacePath
 
+# Currently: WorkspacePath, later: DBFSPath and VolumePath
+DATABRICKS_PATHLIKE = [WorkspacePath]
 
-def test_exists(ws):
-    wsp = WorkspacePath(ws, "/Users/foo/bar/baz")
+
+@pytest.mark.parametrize("cls", DATABRICKS_PATHLIKE)
+def test_exists(ws, cls):
+    wsp = cls(ws, "/Users/foo/bar/baz")
     assert not wsp.exists()
 
 
-def test_mkdirs(ws, make_random):
+@pytest.mark.parametrize("cls", DATABRICKS_PATHLIKE)
+def test_mkdirs(ws, make_random, cls):
     name = make_random()
-    wsp = WorkspacePath(ws, f"~/{name}/foo/bar/baz")
+    wsp = cls(ws, f"~/{name}/foo/bar/baz")
     assert not wsp.is_absolute()
 
     with pytest.raises(NotImplementedError):
@@ -22,19 +27,15 @@ def test_mkdirs(ws, make_random):
     with_user = wsp.expanduser()
     with_user.mkdir()
 
-    home = WorkspacePath(ws, "~").expanduser()
+    home = cls(ws, "~").expanduser()
     relative_name = with_user.relative_to(home)
     assert relative_name.as_posix() == f"{name}/foo/bar/baz"
 
     assert with_user.is_absolute()
     assert with_user.absolute() == with_user
-    assert Path(f"/Workspace/{with_user.as_posix()}") == with_user.as_fuse()
 
     user_name = ws.current_user.me().user_name
-    browser_uri = f'{ws.config.host}#workspace/Users/{user_name.replace("@", "%40")}/{name}/foo/bar/baz'
-    assert with_user.as_uri() == browser_uri
-
-    wsp_check = WorkspacePath(ws, f"/Users/{user_name}/{name}/foo/bar/baz")
+    wsp_check = cls(ws, f"/Users/{user_name}/{name}/foo/bar/baz")
     assert wsp_check.is_dir()
 
     with pytest.raises(BadRequest):
@@ -44,9 +45,10 @@ def test_mkdirs(ws, make_random):
     assert not wsp_check.exists()
 
 
-def test_open_text_io(ws, make_random):
+@pytest.mark.parametrize("cls", DATABRICKS_PATHLIKE)
+def test_open_text_io(ws, make_random, cls):
     name = make_random()
-    wsp = WorkspacePath(ws, f"~/{name}/a/b/c")
+    wsp = cls(ws, f"~/{name}/a/b/c")
     with_user = wsp.expanduser()
     with_user.mkdir(parents=True)
 
@@ -64,9 +66,10 @@ def test_open_text_io(ws, make_random):
     assert not hello_txt.exists()
 
 
-def test_open_binary_io(ws, make_random):
+@pytest.mark.parametrize("cls", DATABRICKS_PATHLIKE)
+def test_open_binary_io(ws, make_random, cls):
     name = make_random()
-    wsp = WorkspacePath(ws, f"~/{name}")
+    wsp = cls(ws, f"~/{name}")
     with_user = wsp.expanduser()
     with_user.mkdir(parents=True)
 
@@ -80,9 +83,10 @@ def test_open_binary_io(ws, make_random):
     assert not hello_bin.exists()
 
 
-def test_replace(ws, make_random):
+@pytest.mark.parametrize("cls", DATABRICKS_PATHLIKE)
+def test_replace(ws, make_random, cls):
     name = make_random()
-    wsp = WorkspacePath(ws, f"~/{name}")
+    wsp = cls(ws, f"~/{name}")
     with_user = wsp.expanduser()
     with_user.mkdir(parents=True)
 
@@ -93,6 +97,18 @@ def test_replace(ws, make_random):
 
     assert not hello_txt.exists()
     assert (with_user / "hello2.txt").read_text() == "Hello, World!"
+
+
+def test_workspace_as_fuse(ws):
+    # WSFS and DBFS have different root paths
+    wsp = WorkspacePath(ws, "/Users/foo/bar/baz")
+    assert Path("/Workspace/Users/foo/bar/baz") == wsp.as_fuse()
+
+
+def test_as_uri(ws):
+    # DBFS is not exposed via browser
+    wsp = WorkspacePath(ws, "/Users/foo/bar/baz")
+    assert wsp.as_uri() == f"{ws.config.host}#workspace/Users/foo/bar/baz"
 
 
 def test_file_and_notebook_in_same_folder_with_different_suffixes(ws, make_notebook, make_directory):
