@@ -553,7 +553,11 @@ class WorkspacePath(Path):  # pylint: disable=too-many-public-methods
 
     def resolve(self, strict=False):
         """Return the absolute path of the file or directory in Databricks Workspace."""
-        return self
+        absolute = self.absolute()
+        if strict and not absolute.exists():
+            msg = f"Path does not exist: {self}"
+            raise FileNotFoundError(msg)
+        return absolute
 
     def absolute(self):
         if self.is_absolute():
