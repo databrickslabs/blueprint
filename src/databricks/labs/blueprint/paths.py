@@ -482,16 +482,21 @@ class WorkspacePath(Path):  # pylint: disable=too-many-public-methods
         """Remove a directory in Databricks Workspace"""
         self._ws.workspace.delete(self.as_posix(), recursive=recursive)
 
-    def rename(self, target, overwrite=False):
+    def _rename(self, target, overwrite: bool):
         """Rename a file or directory in Databricks Workspace"""
-        dst = WorkspacePath(self._ws, target)
+        dst = self.with_segments(target)
         with self._ws.workspace.download(self.as_posix(), format=ExportFormat.AUTO) as f:
             self._ws.workspace.upload(dst.as_posix(), f.read(), format=ImportFormat.AUTO, overwrite=overwrite)
         self.unlink()
+        return dst
+
+    def rename(self, target):
+        """Rename a file or directory in Databricks Workspace, failing if the target already exists."""
+        return self._rename(target, overwrite=False)
 
     def replace(self, target):
         """Rename a file or directory in Databricks Workspace, overwriting the target if it exists."""
-        return self.rename(target, overwrite=True)
+        return self._rename(target, overwrite=True)
 
     def unlink(self, missing_ok=False):
         """Remove a file in Databricks Workspace."""
