@@ -137,7 +137,7 @@ class _DatabricksPath(Path, abc.ABC):  # pylint: disable=too-many-public-methods
         # Force all initialisation to go via __init__() irrespective of the (Python-specific) base version.
         return object.__new__(cls)
 
-    def __init__(self, ws: WorkspaceClient, *args: str | bytes | os.PathLike) -> None:  # pylint: disable=super-init-not-called,useless-suppression
+    def __init__(self, ws: WorkspaceClient, *args: str | bytes | os.PathLike) -> None:
         # We deliberately do _not_ call the super initializer because we're taking over complete responsibility for the
         # implementation of the public API.
 
@@ -385,7 +385,7 @@ class _DatabricksPath(Path, abc.ABC):  # pylint: disable=too-many-public-methods
             raise ValueError(msg)
         return self.with_name(stem + suffix)
 
-    def relative_to(self: P, *other: str | bytes | os.PathLike, walk_up: bool = False) -> P:  # pylint: disable=arguments-differ,useless-suppression
+    def relative_to(self: P, *other: str | bytes | os.PathLike, walk_up: bool = False) -> P:
         normalized = self.with_segments(*other)
         if self.anchor != normalized.anchor:
             msg = f"{str(self)!r} and {str(normalized)!r} have different anchors"
@@ -408,7 +408,7 @@ class _DatabricksPath(Path, abc.ABC):  # pylint: disable=too-many-public-methods
             relative_parts = (*walkup_parts, *relative_parts)
         return self.with_segments("", *relative_parts)
 
-    def is_relative_to(self, *other: str | bytes | os.PathLike) -> bool:  # pylint: disable=arguments-differ,useless-suppression
+    def is_relative_to(self, *other: str | bytes | os.PathLike) -> bool:
         normalized = self.with_segments(*other)
         if self.anchor != normalized.anchor:
             return False
