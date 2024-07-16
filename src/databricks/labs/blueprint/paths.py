@@ -204,6 +204,52 @@ class _DatabricksPath(Path, abc.ABC):  # pylint: disable=too-many-public-methods
             return sep, part.lstrip(sep)
         return "", part
 
+    @abstractmethod
+    def as_uri(self) -> str: ...
+
+    @abstractmethod
+    def as_fuse(self) -> Path: ...
+
+    @abstractmethod
+    def exists(self, *, follow_symlinks: bool = True) -> bool: ...
+
+    @abstractmethod
+    def mkdir(self, mode: int = 0o600, parents: bool = True, exist_ok: bool = True) -> None: ...
+
+    @abstractmethod
+    def rmdir(self, recursive: bool = False) -> None: ...
+
+    @abstractmethod
+    def unlink(self, missing_ok: bool = False) -> None: ...
+
+    @abstractmethod
+    def open(
+        self,
+        mode: str = "r",
+        buffering: int = -1,
+        encoding: str | None = None,
+        errors: str | None = None,
+        newline: str | None = None,
+    ): ...
+
+    @abstractmethod
+    def is_dir(self) -> bool: ...
+
+    @abstractmethod
+    def is_file(self) -> bool: ...
+
+    @abstractmethod
+    def rename(self: P, target: str | bytes | os.PathLike) -> P: ...
+
+    @abstractmethod
+    def replace(self: P, target: str | bytes | os.PathLike) -> P: ...
+
+    @abstractmethod
+    def expanduser(self: P) -> P: ...
+
+    @abstractmethod
+    def iterdir(self: P) -> Generator[P, None, None]: ...
+
     def __reduce__(self) -> NoReturn:
         # Cannot support pickling because we can't pickle the workspace client.
         msg = f"Pickling {self.__class__.__qualname__} paths is not supported."
@@ -445,12 +491,6 @@ class _DatabricksPath(Path, abc.ABC):  # pylint: disable=too-many-public-methods
         """Return the user's home directory. Adapted from pathlib.Path"""
         return type(self)(self._ws, "~").expanduser()
 
-    @abstractmethod
-    def rename(self: P, target: str | bytes | os.PathLike) -> P: ...
-
-    @abstractmethod
-    def replace(self: P, target: str | bytes | os.PathLike) -> P: ...
-
     def _return_false(self) -> bool:
         return False
 
@@ -513,46 +553,6 @@ class _DatabricksPath(Path, abc.ABC):  # pylint: disable=too-many-public-methods
             case_sensitive = True
         selector = _Selector.parse(pattern_parts, case_sensitive=case_sensitive)
         yield from selector(self)
-
-    @abstractmethod
-    def as_uri(self) -> str: ...
-
-    @abstractmethod
-    def as_fuse(self) -> Path: ...
-
-    @abstractmethod
-    def exists(self, *, follow_symlinks: bool = True) -> bool: ...
-
-    @abstractmethod
-    def mkdir(self, mode: int = 0o600, parents: bool = True, exist_ok: bool = True) -> None: ...
-
-    @abstractmethod
-    def rmdir(self, recursive: bool = False) -> None: ...
-
-    @abstractmethod
-    def unlink(self, missing_ok: bool = False) -> None: ...
-
-    @abstractmethod
-    def open(
-        self,
-        mode: str = "r",
-        buffering: int = -1,
-        encoding: str | None = None,
-        errors: str | None = None,
-        newline: str | None = None,
-    ): ...
-
-    @abstractmethod
-    def is_dir(self) -> bool: ...
-
-    @abstractmethod
-    def is_file(self) -> bool: ...
-
-    @abstractmethod
-    def expanduser(self: P) -> P: ...
-
-    @abstractmethod
-    def iterdir(self: P) -> Generator[P, None, None]: ...
 
 
 class DBFSPath(_DatabricksPath):
