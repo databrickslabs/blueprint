@@ -1,5 +1,10 @@
 # Version changelog
 
+## 0.8.1
+
+* Fixed py3.10 compatibility for `_parts` in pathlike ([#135](https://github.com/databrickslabs/blueprint/issues/135)). The recent update to our open-source library addresses the compatibility issue with Python 3.10 in the `_parts` property of a certain type. Prior to this change, there was also a `_cparts` property that returned the same value as `_parts`, which has been removed and replaced with a direct reference to `_parts`. The `_parts` property can now be accessed via reverse equality comparison, and this change has been implemented in the `joinpath` and `__truediv__` methods as well. This enhancement improves the library's compatibility with Python 3.10 and beyond, ensuring continued functionality and stability for software engineers working with the latest Python versions.
+
+
 ## 0.8.0
 
 * Added `DBFSPath` as `os.PathLike` implementation ([#131](https://github.com/databrickslabs/blueprint/issues/131)). The open-source library has been updated with a new class `DBFSPath`, an implementation of `os.PathLike` for Databricks File System (DBFS) paths. This new class extends the existing `WorkspacePath` support and provides pathlib-like functionality for DBFS paths, including methods for creating directories, renaming and deleting files and directories, and reading and writing files. The addition of `DBFSPath` includes type-hinting for improved code linting and is integrated in the test suite with new and updated tests for path-like objects. The behavior of the `exists` and `unlink` methods have been updated for `WorkspacePath` to improve performance and raise appropriate errors.
