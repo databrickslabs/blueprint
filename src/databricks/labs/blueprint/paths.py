@@ -118,6 +118,7 @@ class _DatabricksPath(Path, abc.ABC):  # pylint: disable=too-many-public-methods
     _flavour = object()
 
     # Public APIs that we don't support.
+    as_uri = _na("as_uri")
     cwd = _na("cwd")
     stat = _na("stat")
     chmod = _na("chmod")
@@ -203,9 +204,6 @@ class _DatabricksPath(Path, abc.ABC):  # pylint: disable=too-many-public-methods
         if part and part[0] == sep:
             return sep, part.lstrip(sep)
         return "", part
-
-    @abstractmethod
-    def as_uri(self) -> str: ...
 
     @abstractmethod
     def as_fuse(self) -> Path: ...
@@ -585,8 +583,6 @@ class DBFSPath(_DatabricksPath):
         path = cls(ws, file_info.path)
         path._cached_file_info = file_info
         return path
-
-    as_uri = _na("as_uri")
 
     def as_fuse(self) -> Path:
         """Return FUSE-mounted path in Databricks Runtime."""
