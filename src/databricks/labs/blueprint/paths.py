@@ -496,7 +496,10 @@ class _DatabricksPath(Path, abc.ABC):  # pylint: disable=too-many-public-methods
         return pattern_parts
 
     def glob(
-        self: P, pattern: str | bytes | os.PathLike, *, case_sensitive: bool | None = None
+        self: P,
+        pattern: str | bytes | os.PathLike,
+        *,
+        case_sensitive: bool | None = None,
     ) -> Generator[P, None, None]:
         pattern_parts = self._prepare_pattern(pattern)
         if case_sensitive is None:
@@ -505,7 +508,10 @@ class _DatabricksPath(Path, abc.ABC):  # pylint: disable=too-many-public-methods
         yield from selector(self)
 
     def rglob(
-        self: P, pattern: str | bytes | os.PathLike, *, case_sensitive: bool | None = None
+        self: P,
+        pattern: str | bytes | os.PathLike,
+        *,
+        case_sensitive: bool | None = None,
     ) -> Generator[P, None, None]:
         pattern_parts = ("**", *self._prepare_pattern(pattern))
         if case_sensitive is None:
