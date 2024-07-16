@@ -292,14 +292,13 @@ class _DatabricksPath(Path, abc.ABC):  # pylint: disable=too-many-public-methods
             self._hash = hash(str(self))
             return self._hash
 
+    @property
     def _parts(self) -> tuple[str, ...]:
         """Return a tuple that has the same natural ordering as paths of this type."""
+        # Compatibility property (python <= 3.11), accessed via reverse equality comparison. This can't be avoided.
         return self._root, *self._path_parts
 
-    @property
-    def _cparts(self):
-        # Compatibility property (python <= 3.11), accessed via reverse equality comparison. This can't be avoided.
-        return self._parts()
+    _cparts = _parts
 
     @property
     def _str_normcase(self):
@@ -443,7 +442,7 @@ class _DatabricksPath(Path, abc.ABC):  # pylint: disable=too-many-public-methods
 
     def __truediv__(self: P, other: str | bytes | os.PathLike) -> P:
         try:
-            return self.with_segments(*self._parts(), other)
+            return self.with_segments(*self._parts, other)
         except TypeError:
             return NotImplemented
 
@@ -455,8 +454,8 @@ class _DatabricksPath(Path, abc.ABC):  # pylint: disable=too-many-public-methods
         # control ends up here.
         try:
             if isinstance(other, PurePath):
-                return type(other)(other, *self._parts())
-            return self.with_segments(other, *self._parts())
+                return type(other)(other, *self._parts)
+            return self.with_segments(other, *self._parts)
         except TypeError:
             return NotImplemented
 
