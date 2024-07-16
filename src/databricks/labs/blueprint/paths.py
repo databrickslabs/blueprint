@@ -446,15 +446,10 @@ class _DatabricksPath(Path, abc.ABC):  # pylint: disable=too-many-public-methods
         return type(self)(self._ws, "~").expanduser()
 
     @abstractmethod
-    def _rename(self: P, target: str | bytes | os.PathLike, overwrite: bool) -> P: ...
+    def rename(self: P, target: str | bytes | os.PathLike) -> P: ...
 
-    def rename(self: P, target: str | bytes | os.PathLike) -> P:
-        """Rename this path as the target, unless the target already exists."""
-        return self._rename(target, overwrite=False)
-
-    def replace(self: P, target: str | bytes | os.PathLike) -> P:
-        """Rename this path, overwriting the target if it exists and can be overwritten."""
-        return self._rename(target, overwrite=True)
+    @abstractmethod
+    def replace(self: P, target: str | bytes | os.PathLike) -> P: ...
 
     def _return_false(self) -> bool:
         return False
@@ -611,14 +606,18 @@ class DBFSPath(_DatabricksPath):
         """Remove a DBFS directory"""
         self._ws.dbfs.delete(self.as_posix(), recursive=recursive)
 
-    def _rename(self: P, target: str | bytes | os.PathLike, overwrite: bool) -> P:
+    def rename(self: P, target: str | bytes | os.PathLike) -> P:
+        """Rename this path as the target, unless the target already exists."""
         dst = self.with_segments(target)
-        if overwrite:
-            with dst.open(mode="wb") as writer, self.open(mode="rb") as reader:
-                shutil.copyfileobj(reader, writer, length=1024 * 1024)
-            self.unlink()
-        else:
-            self._ws.dbfs.move(self.as_posix(), dst.as_posix())
+        self._ws.dbfs.move(self.as_posix(), dst.as_posix())
+        return dst
+
+    def replace(self: P, target: str | bytes | os.PathLike) -> P:
+        """Rename this path, overwriting the target if it exists and can be overwritten."""
+        dst = self.with_segments(target)
+        with dst.open(mode="wb") as writer, self.open(mode="rb") as reader:
+            shutil.copyfileobj(reader, writer, length=1024 * 1024)
+        self.unlink()
         return dst
 
     def unlink(self, missing_ok: bool = False) -> None:
@@ -769,6 +768,14 @@ class WorkspacePath(_DatabricksPath):
             self._ws.workspace.upload(dst.as_posix(), f.read(), format=ImportFormat.AUTO, overwrite=overwrite)
         self.unlink()
         return dst
+
+    def rename(self, target: str | bytes | os.PathLike):
+        """Rename this path as the target, unless the target already exists."""
+        return self._rename(target, overwrite=False)
+
+    def replace(self, target: str | bytes | os.PathLike):
+        """Rename this path, overwriting the target if it exists and can be overwritten."""
+        return self._rename(target, overwrite=True)
 
     def unlink(self, missing_ok: bool = False) -> None:
         """Remove a file in Databricks Workspace."""
