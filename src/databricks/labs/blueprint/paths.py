@@ -245,9 +245,6 @@ class _DatabricksPath(Path, abc.ABC):  # pylint: disable=too-many-public-methods
     def replace(self: P, target: str | bytes | os.PathLike) -> P: ...
 
     @abstractmethod
-    def expanduser(self: P) -> P: ...
-
-    @abstractmethod
     def iterdir(self: P) -> Generator[P, None, None]: ...
 
     def __reduce__(self) -> NoReturn:
@@ -491,6 +488,21 @@ class _DatabricksPath(Path, abc.ABC):  # pylint: disable=too-many-public-methods
         """Return the user's home directory. Adapted from pathlib.Path"""
         return type(self)(self._ws, "~").expanduser()
 
+    def expanduser(self: P) -> P:
+        # Expand ~ (but NOT ~user) constructs.
+        if not (self._drv or self._root) and self._path_parts and self._path_parts[0][:1] == "~":
+            if self._path_parts[0] == "~":
+                user_name = self._ws.current_user.me().user_name
+            else:
+                other_user = self._path_parts[0][1:]
+                msg = f"Cannot determine home directory for: {other_user}"
+                raise RuntimeError(msg)
+            if user_name is None:
+                raise RuntimeError("Could not determine home directory.")
+            homedir = f"/Users/{user_name}"
+            return self.with_segments(homedir, *self._path_parts[1:])
+        return self
+
     def _return_false(self) -> bool:
         return False
 
@@ -687,21 +699,6 @@ class DBFSPath(_DatabricksPath):
         """Return True if the path points to a file in Databricks Workspace."""
         return not self.is_dir()
 
-    def expanduser(self: P) -> P:
-        # Expand ~ (but NOT ~user) constructs.
-        if not (self._drv or self._root) and self._path_parts and self._path_parts[0][:1] == "~":
-            if self._path_parts[0] == "~":
-                user_name = self._ws.current_user.me().user_name
-            else:
-                other_user = self._path_parts[0][1:]
-                msg = f"Cannot determine home directory for: {other_user}"
-                raise RuntimeError(msg)
-            if user_name is None:
-                raise RuntimeError("Could not determine home directory.")
-            homedir = f"/Users/{user_name}"
-            return self.with_segments(homedir, *self._path_parts[1:])
-        return self
-
     def iterdir(self) -> Generator[DBFSPath, None, None]:
         for child in self._ws.dbfs.list(self.as_posix()):
             yield self._from_file_info(self._ws, child)
@@ -846,21 +843,6 @@ class WorkspacePath(_DatabricksPath):
             return self._object_info.object_type == ObjectType.FILE
         except DatabricksError:
             return False
-
-    def expanduser(self: P) -> P:
-        # Expand ~ (but NOT ~user) constructs.
-        if not (self._drv or self._root) and self._path_parts and self._path_parts[0][:1] == "~":
-            if self._path_parts[0] == "~":
-                user_name = self._ws.current_user.me().user_name
-            else:
-                other_user = self._path_parts[0][1:]
-                msg = f"Cannot determine home directory for: {other_user}"
-                raise RuntimeError(msg)
-            if user_name is None:
-                raise RuntimeError("Could not determine home directory.")
-            homedir = f"/Users/{user_name}"
-            return self.with_segments(homedir, *self._path_parts[1:])
-        return self
 
     def is_notebook(self) -> bool:
         """Return True if the path points to a notebook in Databricks Workspace."""
