@@ -212,7 +212,7 @@ class _DatabricksPath(Path, abc.ABC):  # pylint: disable=too-many-public-methods
     def exists(self, *, follow_symlinks: bool = True) -> bool: ...
 
     @abstractmethod
-    def mkdir(self, mode: int = 0o600, parents: bool = True, exist_ok: bool = True) -> None: ...
+    def _mkdir(self) -> None: ...
 
     @abstractmethod
     def rmdir(self, recursive: bool = False) -> None: ...
@@ -525,6 +525,16 @@ class _DatabricksPath(Path, abc.ABC):  # pylint: disable=too-many-public-methods
             return self
         return self.with_segments(self.cwd(), self)
 
+    def mkdir(self, mode: int = 0o600, parents: bool = True, exist_ok: bool = True) -> None:
+        """Create a directory;Only mode 0o600 is supported."""
+        if not exist_ok:
+            raise ValueError("exist_ok must be True for Databricks Workspace")
+        if not parents:
+            raise ValueError("parents must be True for Databricks Workspace")
+        if mode != 0o600:
+            raise ValueError("other modes than 0o600 are not yet supported")
+        self._mkdir()
+
     def _prepare_pattern(self, pattern: str | bytes | os.PathLike) -> Sequence[str]:
         if not pattern:
             raise ValueError("Glob pattern must not be empty.")
@@ -600,14 +610,7 @@ class DBFSPath(_DatabricksPath):
         except NotFound:
             return False
 
-    def mkdir(self, mode: int = 0o600, parents: bool = True, exist_ok: bool = True) -> None:
-        """Create a directory in DBFS. Only mode 0o600 is supported."""
-        if not exist_ok:
-            raise ValueError("exist_ok must be True for Databricks Workspace")
-        if not parents:
-            raise ValueError("parents must be True for Databricks Workspace")
-        if mode != 0o600:
-            raise ValueError("other modes than 0o600 are not yet supported")
+    def _mkdir(self) -> None:
         self._ws.dbfs.mkdirs(self.as_posix())
 
     def rmdir(self, recursive: bool = False) -> None:
@@ -740,14 +743,7 @@ class WorkspacePath(_DatabricksPath):
         except NotFound:
             return False
 
-    def mkdir(self, mode: int = 0o600, parents: bool = True, exist_ok: bool = True) -> None:
-        """Create a directory in Databricks Workspace. Only mode 0o600 is supported."""
-        if not exist_ok:
-            raise ValueError("exist_ok must be True for Databricks Workspace")
-        if not parents:
-            raise ValueError("parents must be True for Databricks Workspace")
-        if mode != 0o600:
-            raise ValueError("other modes than 0o600 are not yet supported")
+    def _mkdir(self) -> None:
         self._ws.workspace.mkdirs(self.as_posix())
 
     def rmdir(self, recursive: bool = False) -> None:
