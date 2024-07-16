@@ -5,7 +5,7 @@ from unittest.mock import create_autospec, patch
 
 import pytest
 from databricks.sdk import WorkspaceClient
-from databricks.sdk.errors import NotFound
+from databricks.sdk.errors import NotFound, ResourceDoesNotExist
 from databricks.sdk.mixins.workspace import WorkspaceExt
 from databricks.sdk.service.workspace import (
     ImportFormat,
@@ -97,7 +97,7 @@ def test_hash() -> None:
         ("foo", "foo/bar", "foo/baz"),
     ],
 )
-def test_comparison(increasing_paths: tuple[str | list[str], str | list[str], str | list[str]]) -> None:
+def test_comparison(increasing_paths: tuple[str, str, str]) -> None:
     """Test that comparing paths works as expected."""
     ws = create_autospec(WorkspaceClient)
 
@@ -160,7 +160,7 @@ def test_pathlike_error() -> None:
     ws = create_autospec(WorkspaceClient)
     p = WorkspacePath(ws, "/some/path")
 
-    with pytest.raises(NotImplementedError, match="Workspace paths are not path-like"):
+    with pytest.raises(NotImplementedError, match="WorkspacePath paths are not path-like"):
         _ = os.fspath(p)
 
 
@@ -424,8 +424,19 @@ def test_iterdir() -> None:
 def test_exists_when_path_exists() -> None:
     ws = create_autospec(WorkspaceClient)
     workspace_path = WorkspacePath(ws, "/test/path")
-    ws.workspace.get_status.return_value = True
+    ws.workspace.get_status.return_value = ObjectInfo(path="/test/path")
     assert workspace_path.exists()
+
+
+def test_exists_caches_info() -> None:
+    ws = create_autospec(WorkspaceClient)
+    workspace_path = WorkspacePath(ws, "/test/path")
+    ws.workspace.get_status.return_value = ObjectInfo(path="/test/path", object_type=ObjectType.FILE)
+    _ = workspace_path.exists()
+
+    ws.workspace.get_status.reset_mock()
+    _ = workspace_path.is_file()
+    assert not ws.workspace.get_status.called
 
 
 def test_exists_when_path_does_not_exist() -> None:
@@ -603,14 +614,15 @@ def test_replace_file() -> None:
 def test_unlink_existing_file() -> None:
     ws = create_autospec(WorkspaceClient)
     workspace_path = WorkspacePath(ws, "/test/path")
-    ws.workspace.get_status.return_value = True
     workspace_path.unlink()
     ws.workspace.delete.assert_called_once_with("/test/path")
+    assert not ws.workspace.get_status.called
 
 
 def test_unlink_non_existing_file() -> None:
     ws = create_autospec(WorkspaceClient)
     workspace_path = WorkspacePath(ws, "/test/path")
+    ws.workspace.delete.side_effect = ResourceDoesNotExist("Simulated ResourceDoesNotExist")
     ws.workspace.get_status.side_effect = NotFound("Simulated NotFound")
     with pytest.raises(FileNotFoundError):
         workspace_path.unlink()

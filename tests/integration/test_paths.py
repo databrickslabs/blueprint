@@ -1,12 +1,12 @@
 from pathlib import Path
 
 import pytest
-from databricks.sdk.errors import BadRequest
+from databricks.sdk.errors import BadRequest, ResourceAlreadyExists
 
-from databricks.labs.blueprint.paths import WorkspacePath
+from databricks.labs.blueprint.paths import DBFSPath, WorkspacePath
 
-# Currently: WorkspacePath, later: DBFSPath and VolumePath
-DATABRICKS_PATHLIKE = [WorkspacePath]
+# Currently: DBFSPath, WorkspacePath, later: VolumePath
+DATABRICKS_PATHLIKE = [DBFSPath, WorkspacePath]
 
 
 @pytest.mark.parametrize("cls", DATABRICKS_PATHLIKE)
@@ -38,7 +38,7 @@ def test_mkdirs(ws, make_random, cls):
     wsp_check = cls(ws, f"/Users/{user_name}/{name}/foo/bar/baz")
     assert wsp_check.is_dir()
 
-    with pytest.raises(BadRequest):
+    with pytest.raises(expected_exception=(BadRequest, OSError)):
         wsp_check.parent.rmdir()
     wsp_check.parent.rmdir(recursive=True)
 
@@ -67,6 +67,28 @@ def test_open_text_io(ws, make_random, cls):
 
 
 @pytest.mark.parametrize("cls", DATABRICKS_PATHLIKE)
+def test_unlink(ws, make_random, cls):
+    name = make_random()
+    tmp_dir = cls(ws, f"~/{name}").expanduser()
+    tmp_dir.mkdir()
+    try:
+        # Check unlink() interactions with a file that exists.
+        some_file = tmp_dir / "some-file.txt"
+        some_file.write_text("Some text")
+        assert some_file.exists() and some_file.is_file()
+        some_file.unlink()
+        assert not some_file.exists()
+
+        # And now the interactions with a missing file.
+        missing_file = tmp_dir / "missing-file.txt"
+        missing_file.unlink(missing_ok=True)
+        with pytest.raises(FileNotFoundError):
+            missing_file.unlink(missing_ok=False)
+    finally:
+        tmp_dir.rmdir(recursive=True)
+
+
+@pytest.mark.parametrize("cls", DATABRICKS_PATHLIKE)
 def test_open_binary_io(ws, make_random, cls):
     name = make_random()
     wsp = cls(ws, f"~/{name}")
@@ -84,28 +106,85 @@ def test_open_binary_io(ws, make_random, cls):
 
 
 @pytest.mark.parametrize("cls", DATABRICKS_PATHLIKE)
-def test_replace(ws, make_random, cls):
+def test_rename_file(ws, make_random, cls):
     name = make_random()
-    wsp = cls(ws, f"~/{name}")
-    with_user = wsp.expanduser()
-    with_user.mkdir(parents=True)
+    tmp_dir = cls(ws, f"~/{name}").expanduser()
+    tmp_dir.mkdir()
+    try:
+        # Test renaming a file when the target doesn't exist.
+        src_file = tmp_dir / "src.txt"
+        src_file.write_text("Some content")
+        dst_file = src_file.rename(src_file.with_name("dst.txt"))
+        expected_file = tmp_dir / "dst.txt"
+        assert dst_file == expected_file and expected_file.is_file()
 
-    hello_txt = with_user / "hello.txt"
-    hello_txt.write_text("Hello, World!")
+        # Test renaming a file when the target already exists.
+        exists_file = tmp_dir / "already-exists.txt"
+        exists_file.write_text("Existing file.")
+        with pytest.raises(ResourceAlreadyExists):
+            _ = dst_file.rename(exists_file)
+        assert expected_file.exists() and expected_file.is_file()  # Check it's still there.
+    finally:
+        tmp_dir.rmdir(recursive=True)
 
-    hello_txt.replace(with_user / "hello2.txt")
 
-    assert not hello_txt.exists()
-    assert (with_user / "hello2.txt").read_text() == "Hello, World!"
+def test_rename_directory(ws, make_random):
+    # The Workspace client doesn't currently support renaming directories so we only test DBFS.
+    name = make_random()
+    tmp_dir = DBFSPath(ws, f"~/{name}").expanduser()
+    tmp_dir.mkdir()
+    try:
+        # Test renaming a directory (with content) when the target doesn't exist.
+        src_dir = tmp_dir / "src-dir"
+        src_dir.mkdir()
+        (src_dir / "content.txt").write_text("Source content.")
+        dst_dir = src_dir.rename(src_dir.with_name("dst-dir"))
+        expected_dir = tmp_dir / "dst-dir"
+        assert dst_dir == expected_dir and expected_dir.is_dir() and (expected_dir / "content.txt").is_file()
+
+        # Test renaming a directory (with content) when the target already exists.
+        exists_dir = tmp_dir / "existing-dir"
+        exists_dir.mkdir()
+        with pytest.raises(ResourceAlreadyExists):
+            _ = dst_dir.rename(exists_dir)
+        assert expected_dir.exists() and expected_dir.is_dir()  # Check it's still there.
+    finally:
+        tmp_dir.rmdir(recursive=True)
+
+
+@pytest.mark.parametrize("cls", DATABRICKS_PATHLIKE)
+def test_replace_file(ws, make_random, cls):
+    name = make_random()
+    tmp_dir = cls(ws, f"~/{name}").expanduser()
+    tmp_dir.mkdir()
+    try:
+        # Test replacing a file when the target doesn't exist.
+        src_file = tmp_dir / "src.txt"
+        src_file.write_text("Some content")
+        dst_file = src_file.replace(src_file.with_name("dst.txt"))
+        expected_file = tmp_dir / "dst.txt"
+        assert dst_file == expected_file and expected_file.is_file()
+
+        # Test replacing a file when the target already exists.
+        exists_file = tmp_dir / "already-exists.txt"
+        exists_file.write_text("Existing file.")
+        replaced_file = dst_file.replace(exists_file)
+        assert replaced_file.is_file() and replaced_file.read_text() == "Some content"
+    finally:
+        tmp_dir.rmdir(recursive=True)
 
 
 def test_workspace_as_fuse(ws):
-    # WSFS and DBFS have different root paths
     wsp = WorkspacePath(ws, "/Users/foo/bar/baz")
     assert Path("/Workspace/Users/foo/bar/baz") == wsp.as_fuse()
 
 
-def test_as_uri(ws):
+def test_dbfs_as_fuse(ws):
+    p = DBFSPath(ws, "/Users/foo/bar/baz")
+    assert Path("/dbfs/Users/foo/bar/baz") == p.as_fuse()
+
+
+def test_workspace_as_uri(ws):
     # DBFS is not exposed via browser
     wsp = WorkspacePath(ws, "/Users/foo/bar/baz")
     assert wsp.as_uri() == f"{ws.config.host}#workspace/Users/foo/bar/baz"
