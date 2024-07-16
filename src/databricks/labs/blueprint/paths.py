@@ -626,6 +626,10 @@ class DBFSPath(_DatabricksPath):
     def replace(self: P, target: str | bytes | os.PathLike) -> P:
         """Rename this path, overwriting the target if it exists and can be overwritten."""
         dst = self.with_segments(target)
+        if self.is_dir():
+            msg = f"DBFS directories cannot currently be replaced: {self} -> {dst}"
+            raise ValueError(msg)
+        # Can't use self._ws.dbfs.move_(): it doesn't honour the overwrite flag properly.
         with dst.open(mode="wb") as writer, self.open(mode="rb") as reader:
             shutil.copyfileobj(reader, writer, length=1024 * 1024)
         self.unlink()
@@ -751,8 +755,11 @@ class WorkspacePath(_DatabricksPath):
         self._ws.workspace.delete(self.as_posix(), recursive=recursive)
 
     def _rename(self: P, target: str | bytes | os.PathLike, overwrite: bool) -> P:
-        """Rename a file or directory in Databricks Workspace"""
+        """Rename a file in Databricks Workspace"""
         dst = self.with_segments(target)
+        if self.is_dir():
+            msg = f"Workspace directories cannot currently be renamed: {self} -> {dst}"
+            raise ValueError(msg)
         with self._ws.workspace.download(self.as_posix(), format=ExportFormat.AUTO) as f:
             self._ws.workspace.upload(dst.as_posix(), f.read(), format=ImportFormat.AUTO, overwrite=overwrite)
         self.unlink()

@@ -1,7 +1,7 @@
 from pathlib import Path
 
 import pytest
-from databricks.sdk.errors import BadRequest
+from databricks.sdk.errors import BadRequest, ResourceAlreadyExists
 
 from databricks.labs.blueprint.paths import DBFSPath, WorkspacePath
 
@@ -106,19 +106,72 @@ def test_open_binary_io(ws, make_random, cls):
 
 
 @pytest.mark.parametrize("cls", DATABRICKS_PATHLIKE)
-def test_replace(ws, make_random, cls):
+def test_rename_file(ws, make_random, cls):
     name = make_random()
-    wsp = cls(ws, f"~/{name}")
-    with_user = wsp.expanduser()
-    with_user.mkdir(parents=True)
+    tmp_dir = cls(ws, f"~/{name}").expanduser()
+    tmp_dir.mkdir()
+    try:
+        # Test renaming a file when the target doesn't exist.
+        src_file = tmp_dir / "src.txt"
+        src_file.write_text("Some content")
+        dst_file = src_file.rename(src_file.with_name("dst.txt"))
+        expected_file = tmp_dir / "dst.txt"
+        assert dst_file == expected_file and expected_file.is_file()
 
-    hello_txt = with_user / "hello.txt"
-    hello_txt.write_text("Hello, World!")
+        # Test renaming a file when the target already exists.
+        exists_file = tmp_dir / "already-exists.txt"
+        exists_file.write_text("Existing file.")
+        with pytest.raises(ResourceAlreadyExists):
+            _ = dst_file.rename(exists_file)
+        assert expected_file.exists() and expected_file.is_file()  # Check it's still there.
+    finally:
+        tmp_dir.rmdir(recursive=True)
 
-    hello_txt.replace(with_user / "hello2.txt")
 
-    assert not hello_txt.exists()
-    assert (with_user / "hello2.txt").read_text() == "Hello, World!"
+def test_rename_directory(ws, make_random):
+    # The Workspace client doesn't currently support renaming directories so we only test DBFS.
+    name = make_random()
+    tmp_dir = DBFSPath(ws, f"~/{name}").expanduser()
+    tmp_dir.mkdir()
+    try:
+        # Test renaming a directory (with content) when the target doesn't exist.
+        src_dir = tmp_dir / "src-dir"
+        src_dir.mkdir()
+        (src_dir / "content.txt").write_text("Source content.")
+        dst_dir = src_dir.rename(src_dir.with_name("dst-dir"))
+        expected_dir = tmp_dir / "dst-dir"
+        assert dst_dir == expected_dir and expected_dir.is_dir() and (expected_dir / "content.txt").is_file()
+
+        # Test renaming a directory (with content) when the target already exists.
+        exists_dir = tmp_dir / "existing-dir"
+        exists_dir.mkdir()
+        with pytest.raises(ResourceAlreadyExists):
+            _ = dst_dir.rename(exists_dir)
+        assert expected_dir.exists() and expected_dir.is_dir()  # Check it's still there.
+    finally:
+        tmp_dir.rmdir(recursive=True)
+
+
+@pytest.mark.parametrize("cls", DATABRICKS_PATHLIKE)
+def test_replace_file(ws, make_random, cls):
+    name = make_random()
+    tmp_dir = cls(ws, f"~/{name}").expanduser()
+    tmp_dir.mkdir()
+    try:
+        # Test replacing a file when the target doesn't exist.
+        src_file = tmp_dir / "src.txt"
+        src_file.write_text("Some content")
+        dst_file = src_file.replace(src_file.with_name("dst.txt"))
+        expected_file = tmp_dir / "dst.txt"
+        assert dst_file == expected_file and expected_file.is_file()
+
+        # Test replacing a file when the target already exists.
+        exists_file = tmp_dir / "already-exists.txt"
+        exists_file.write_text("Existing file.")
+        replaced_file = dst_file.replace(exists_file)
+        assert replaced_file.is_file() and replaced_file.read_text() == "Some content"
+    finally:
+        tmp_dir.rmdir(recursive=True)
 
 
 def test_workspace_as_fuse(ws):
