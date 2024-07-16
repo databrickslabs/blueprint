@@ -5,7 +5,7 @@ from unittest.mock import create_autospec, patch
 
 import pytest
 from databricks.sdk import WorkspaceClient
-from databricks.sdk.errors import NotFound
+from databricks.sdk.errors import NotFound, ResourceDoesNotExist
 from databricks.sdk.mixins.workspace import WorkspaceExt
 from databricks.sdk.service.workspace import (
     ImportFormat,
@@ -614,14 +614,15 @@ def test_replace_file() -> None:
 def test_unlink_existing_file() -> None:
     ws = create_autospec(WorkspaceClient)
     workspace_path = WorkspacePath(ws, "/test/path")
-    ws.workspace.get_status.return_value = True
     workspace_path.unlink()
     ws.workspace.delete.assert_called_once_with("/test/path")
+    assert not ws.workspace.get_status.called
 
 
 def test_unlink_non_existing_file() -> None:
     ws = create_autospec(WorkspaceClient)
     workspace_path = WorkspacePath(ws, "/test/path")
+    ws.workspace.delete.side_effect = ResourceDoesNotExist("Simulated ResourceDoesNotExist")
     ws.workspace.get_status.side_effect = NotFound("Simulated NotFound")
     with pytest.raises(FileNotFoundError):
         workspace_path.unlink()

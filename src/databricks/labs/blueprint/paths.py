@@ -18,7 +18,7 @@ from typing import NoReturn, TypeVar
 from urllib.parse import quote_from_bytes as urlquote_from_bytes
 
 from databricks.sdk import WorkspaceClient
-from databricks.sdk.errors import DatabricksError, NotFound
+from databricks.sdk.errors import DatabricksError, NotFound, ResourceDoesNotExist
 from databricks.sdk.service.files import FileInfo
 from databricks.sdk.service.workspace import (
     ExportFormat,
@@ -623,6 +623,8 @@ class DBFSPath(_DatabricksPath):
 
     def unlink(self, missing_ok: bool = False) -> None:
         """Remove a file in Databricks Workspace."""
+        # Although this introduces a race-condition, we have to handle missing_ok in advance because the DBFS client
+        # doesn't report any error if deleting a target that doesn't exist.
         if not missing_ok and not self.exists():
             raise FileNotFoundError(f"{self.as_posix()} does not exist")
         self._ws.dbfs.delete(self.as_posix())
@@ -770,9 +772,11 @@ class WorkspacePath(_DatabricksPath):
 
     def unlink(self, missing_ok: bool = False) -> None:
         """Remove a file in Databricks Workspace."""
-        if not missing_ok and not self.exists():
-            raise FileNotFoundError(f"{self.as_posix()} does not exist")
-        self._ws.workspace.delete(self.as_posix())
+        try:
+            self._ws.workspace.delete(self.as_posix())
+        except ResourceDoesNotExist as e:
+            if not missing_ok:
+                raise FileNotFoundError(f"{self.as_posix()} does not exist") from e
 
     def open(
         self,

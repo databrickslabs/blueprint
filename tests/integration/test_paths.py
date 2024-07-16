@@ -67,6 +67,28 @@ def test_open_text_io(ws, make_random, cls):
 
 
 @pytest.mark.parametrize("cls", DATABRICKS_PATHLIKE)
+def test_unlink(ws, make_random, cls):
+    name = make_random()
+    tmp_dir = cls(ws, f"~/{name}").expanduser()
+    tmp_dir.mkdir()
+    try:
+        # Check unlink() interactions with a file that exists.
+        some_file = tmp_dir / "some-file.txt"
+        some_file.write_text("Some text")
+        assert some_file.exists() and some_file.is_file()
+        some_file.unlink()
+        assert not some_file.exists()
+
+        # And now the interactions with a missing file.
+        missing_file = tmp_dir / "missing-file.txt"
+        missing_file.unlink(missing_ok=True)
+        with pytest.raises(FileNotFoundError):
+            missing_file.unlink(missing_ok=False)
+    finally:
+        tmp_dir.rmdir(recursive=True)
+
+
+@pytest.mark.parametrize("cls", DATABRICKS_PATHLIKE)
 def test_open_binary_io(ws, make_random, cls):
     name = make_random()
     wsp = cls(ws, f"~/{name}")
