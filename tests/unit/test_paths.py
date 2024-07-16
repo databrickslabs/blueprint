@@ -424,8 +424,19 @@ def test_iterdir() -> None:
 def test_exists_when_path_exists() -> None:
     ws = create_autospec(WorkspaceClient)
     workspace_path = WorkspacePath(ws, "/test/path")
-    ws.workspace.get_status.return_value = True
+    ws.workspace.get_status.return_value = ObjectInfo(path="/test/path")
     assert workspace_path.exists()
+
+
+def test_exists_caches_info() -> None:
+    ws = create_autospec(WorkspaceClient)
+    workspace_path = WorkspacePath(ws, "/test/path")
+    ws.workspace.get_status.return_value = ObjectInfo(path="/test/path", object_type=ObjectType.FILE)
+    _ = workspace_path.exists()
+
+    ws.workspace.get_status.reset_mock()
+    _ = workspace_path.is_file()
+    assert not ws.workspace.get_status.called
 
 
 def test_exists_when_path_does_not_exist() -> None:

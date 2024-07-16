@@ -592,7 +592,7 @@ class DBFSPath(_DatabricksPath):
         if not follow_symlinks:
             raise NotImplementedError("follow_symlinks=False is not supported for DBFS")
         try:
-            self._ws.dbfs.get_status(self.as_posix())
+            self._cached_file_info = self._ws.dbfs.get_status(self.as_posix())
             return True
         except NotFound:
             return False
@@ -741,7 +741,7 @@ class WorkspacePath(_DatabricksPath):
         if not follow_symlinks:
             raise NotImplementedError("follow_symlinks=False is not supported for Databricks Workspace")
         try:
-            self._ws.workspace.get_status(self.as_posix())
+            self._cached_object_info = self._ws.workspace.get_status(self.as_posix())
             return True
         except NotFound:
             return False
