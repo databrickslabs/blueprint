@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import abc
 import builtins
+import codecs
 import fnmatch
 import io
 import locale
@@ -789,18 +790,30 @@ class WorkspacePath(_DatabricksPath):
         newline: str | None = None,
     ):
         """Open a file in Databricks Workspace. Only text and binary modes are supported."""
-        if encoding is None or encoding == "locale":
-            encoding = locale.getpreferredencoding(False)
         if "b" in mode and "r" in mode:
             return self._ws.workspace.download(self.as_posix(), format=ExportFormat.AUTO)
         if "b" in mode and "w" in mode:
             return _BinaryUploadIO(self._ws, self.as_posix())
         if "r" in mode:
             with self._ws.workspace.download(self.as_posix(), format=ExportFormat.AUTO) as f:
-                return StringIO(f.read().decode(encoding))
+                data = f.read()
+                if encoding is None:
+                    if data.startswith(codecs.BOM_UTF32_LE) or data.startswith(codecs.BOM_UTF32_BE):
+                        encoding = 'utf-32'
+                    elif data.startswith(codecs.BOM_UTF16_LE) or data.startswith(codecs.BOM_UTF16_BE):
+                        encoding = 'utf-16'
+                    elif data.startswith(codecs.BOM_UTF8):
+                        encoding = 'utf-8-sig'
+                if encoding is None or encoding == "locale":
+                    encoding = locale.getpreferredencoding(False)
+                return StringIO(data.decode(encoding))
         if "w" in mode:
             return _TextUploadIO(self._ws, self.as_posix())
         raise ValueError(f"invalid mode: {mode}")
+
+    def read_text(self, encoding=None, errors=None):
+        with self.open(mode='r', encoding=encoding, errors=errors) as f:
+            return f.read()
 
     @property
     def suffix(self) -> str:
