@@ -14,6 +14,9 @@ on:
     branches:
       - main
 
+env:
+  HATCH_VERSION: 1.9.4
+
 jobs:
   ci:
     strategy:
@@ -31,6 +34,9 @@ jobs:
           cache: 'pip'
           cache-dependency-path: '**/pyproject.toml'
           python-version: ${{ matrix.pyVersion }}
+
+      - name: Install hatch
+        run: pip install hatch==$HATCH_VERSION
 
       - name: Run unit tests
         run: |
