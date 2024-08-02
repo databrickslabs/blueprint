@@ -1,3 +1,4 @@
+import codecs
 from pathlib import Path
 
 import pytest
@@ -205,3 +206,23 @@ def test_file_and_notebook_in_same_folder_with_different_suffixes(ws, make_noteb
     assert files["a.txt"].suffix == ".txt"
     assert files["b"].suffix == ".py"  # suffix is determined from ObjectInfo
     assert files["b"].read_text() == "# Databricks notebook source\ndisplay(spark.range(10))"
+
+
+@pytest.mark.parametrize(
+    "bom, encoding",
+    [
+        (codecs.BOM_UTF8, "utf-8"),
+        (codecs.BOM_UTF16_LE, "utf-16-le"),
+        (codecs.BOM_UTF16_BE, "utf-16-be"),
+        (codecs.BOM_UTF32_LE, "utf-32-le"),
+        (codecs.BOM_UTF32_BE, "utf-32-be"),
+    ],
+)
+def test_correctly_encodes_and_decodes_file_with_bom(bom, encoding, ws, make_directory):
+    # Can't test notebooks because the server changes the uploaded data
+    folder = WorkspacePath(ws, make_directory())
+    file_path = folder / f"some_file_{encoding}.py"
+    data = bom + "a = 12".encode(encoding)
+    file_path.write_bytes(data)
+    text = file_path.read_text()
+    assert text == "a = 12"
