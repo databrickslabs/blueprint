@@ -54,6 +54,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4.1.7
 
+      - name: Install hatch
+        run: pip install hatch==$HATCH_VERSION
+
       - name: Format all files
         run: make dev fmt
 
