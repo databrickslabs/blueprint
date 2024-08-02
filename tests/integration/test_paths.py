@@ -226,4 +226,3 @@ def test_correctly_encodes_and_decodes_file_with_bom(bom, encoding, ws, make_dir
     file_path.write_bytes(data)
     text = file_path.read_text()
     assert text == "a = 12"
-
