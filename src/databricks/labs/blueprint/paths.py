@@ -20,7 +20,7 @@ from urllib.parse import quote_from_bytes as urlquote_from_bytes
 
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.errors import DatabricksError, NotFound, ResourceDoesNotExist
-from databricks.sdk.service.files import FileInfo
+from databricks.sdk.service.files import DirectoryEntry, FileInfo
 from databricks.sdk.service.workspace import (
     ExportFormat,
     ImportFormat,
@@ -40,7 +40,7 @@ def _na(fn: str):
     return _inner
 
 
-class _UploadIO(abc.ABC):
+class _WsUploadIO(abc.ABC):
     def __init__(self, ws: WorkspaceClient, path: str):
         self._ws = ws
         self._path = path
@@ -54,15 +54,42 @@ class _UploadIO(abc.ABC):
         return f"<{self.__class__.__name__} for {self._path} on {self._ws}>"
 
 
-class _BinaryUploadIO(_UploadIO, BytesIO):  # type: ignore
+class _WsBinaryUploadIO(_WsUploadIO, BytesIO):  # type: ignore
     def __init__(self, ws: WorkspaceClient, path: str):
-        _UploadIO.__init__(self, ws, path)
+        _WsUploadIO.__init__(self, ws, path)
         BytesIO.__init__(self)
 
 
-class _TextUploadIO(_UploadIO, StringIO):  # type: ignore
+class _WsTextUploadIO(_WsUploadIO, StringIO):  # type: ignore
     def __init__(self, ws: WorkspaceClient, path: str):
-        _UploadIO.__init__(self, ws, path)
+        _WsUploadIO.__init__(self, ws, path)
+        StringIO.__init__(self)
+
+
+class _VolumeUploadIO(abc.ABC):
+    def __init__(self, ws: WorkspaceClient, path: str, overwrite: bool):
+        self._ws = ws
+        self._path = path
+        self._overwrite = overwrite
+
+    def close(self):
+        # pylint: disable-next=no-member
+        io_stream = self.getvalue()  # noqa
+        self._ws.files.upload(self._path, io_stream, overwrite=self._overwrite)
+
+    def __repr__(self):
+        return f"<{self.__class__.__name__} for {self._path} on {self._ws}>"
+
+
+class _VolumeBinaryUploadIO(_VolumeUploadIO, BytesIO):  # type: ignore
+    def __init__(self, ws: WorkspaceClient, path: str, overwrite: bool):
+        _VolumeUploadIO.__init__(self, ws, path, overwrite)
+        BytesIO.__init__(self)
+
+
+class _VolumeTextUploadIO(_VolumeUploadIO, StringIO):  # type: ignore
+    def __init__(self, ws: WorkspaceClient, path: str, overwrite: bool):
+        _VolumeUploadIO.__init__(self, ws, path, overwrite)
         StringIO.__init__(self)
 
 
@@ -793,7 +820,7 @@ class WorkspacePath(_DatabricksPath):
         if "b" in mode and "r" in mode:
             return self._ws.workspace.download(self.as_posix(), format=ExportFormat.AUTO)
         if "b" in mode and "w" in mode:
-            return _BinaryUploadIO(self._ws, self.as_posix())
+            return _WsBinaryUploadIO(self._ws, self.as_posix())
         if "r" in mode:
             with self._ws.workspace.download(self.as_posix(), format=ExportFormat.AUTO) as f:
                 data = f.read()
@@ -808,7 +835,7 @@ class WorkspacePath(_DatabricksPath):
                     encoding = locale.getpreferredencoding(False)
                 return StringIO(data.decode(encoding))
         if "w" in mode:
-            return _TextUploadIO(self._ws, self.as_posix())
+            return _WsTextUploadIO(self._ws, self.as_posix())
         raise ValueError(f"invalid mode: {mode}")
 
     def read_text(self, encoding=None, errors=None):
@@ -865,6 +892,219 @@ class WorkspacePath(_DatabricksPath):
     def iterdir(self) -> Generator[WorkspacePath, None, None]:
         for child in self._ws.workspace.list(self.as_posix()):
             yield self._from_object_info(self._ws, child)
+
+
+class VolumePath(_DatabricksPath):
+    """Experimental implementation of pathlib.Path for Databricks Unity Catalog Volumes."""
+
+    __slots__ = ("_cached_is_directory", "_catalog_name", "_schema_name", "_volume_name")
+    _cached_is_directory: bool | None
+    _catalog_name: str
+    _schema_name: str
+    _volume_name: str
+
+    def __init__(self, ws: WorkspaceClient, *args: str | bytes | os.PathLike) -> None:
+        super().__init__(ws, *args)
+        self._cached_is_directory = None
+        self._parse_volume_name()
+
+    def get_catalog_name(self) -> str:
+        """Get the catalog name of this Unity Catalog Volume"""
+        return self._catalog_name
+
+    def get_schema_name(self, with_catalog_name: bool = False) -> str:
+        """Get the schema name of this Unity Catalog Volume
+
+        Args:
+            with_catalog_name: add the catalog name to the output
+        Returns:
+            The schema name as a string
+        """
+        if with_catalog_name:
+            return f"{self._catalog_name}.{self._schema_name}"
+        return self._schema_name
+
+    def get_volume_name(self, with_catalog_name: bool = False, with_schema_name: bool = False) -> str:
+        """Get the volume name of this Unity Catalog Volume
+
+        Args:
+            with_catalog_name: add the catalog and the schema name to the output
+            with_schema_name: add the schema name to the output, it won't affect the output if with_catalog_name is True
+        Returns:
+            The volume name as a string
+        """
+        if with_catalog_name:
+            return f"{self._catalog_name}.{self._schema_name}.{self._volume_name}"
+        if with_schema_name:
+            return f"{self._schema_name}.{self._volume_name}"
+        return self._volume_name
+
+    def _parse_volume_name(self) -> None:
+        if len(self._path_parts) > 0 and self._path_parts[0] != "Volumes":
+            self._path_parts = ("Volumes",) + self._path_parts
+        if len(self._path_parts) < 4:
+            raise ValueError(f"Missing catalog, schema or volume name: {str(self)}")
+        self._root = self.parser.sep
+        # Path pointing to a volume's root can only be a directory
+        if len(self._path_parts) == 4:
+            self._cached_is_directory = True
+        self._catalog_name = self._path_parts[1]
+        self._schema_name = self._path_parts[2]
+        self._volume_name = self._path_parts[3]
+
+    @classmethod
+    def _from_dir_entry(cls, ws: WorkspaceClient, dir_entry: DirectoryEntry) -> VolumePath:
+        """Special (internal-only) constructor that creates an instance based on DirectoryEntry."""
+        if not dir_entry.path:
+            msg = f"Cannot initialise without object path: {dir_entry}"
+            raise ValueError(msg)
+        path = cls(ws, dir_entry.path)
+        path._cached_is_directory = dir_entry.is_directory
+        return path
+
+    def as_uri(self) -> str:
+        volume_path = f"{self._catalog_name}/{self._schema_name}/{self._volume_name}"
+        query_string = f"?volumePath={urlquote_from_bytes(bytes(self))}"
+        return f"{self._ws.config.host}/explore/data/volumes/{volume_path}/{query_string}"
+
+    def as_fuse(self) -> Path:
+        """Return FUSE-mounted path in Databricks Runtime."""
+        if "DATABRICKS_RUNTIME_VERSION" not in os.environ:
+            logger.warning("This method is only available in Databricks Runtime")
+        return Path("/", self.as_posix().lstrip("/"))
+
+    def exists(self, *, follow_symlinks: bool = True) -> bool:
+        """Return True if the path points to an existing file or directory"""
+        if not follow_symlinks:
+            raise NotImplementedError("follow_symlinks=False is not supported for Databricks Volumes")
+        try:
+            # Optimize the order of the checks (dir exists, file exists) based on the cached is_directory value
+            if self._cached_is_directory:
+                try:
+                    self._ws.files.get_directory_metadata(self.as_posix())
+                    self._cached_is_directory = True
+                except NotFound:
+                    self._ws.files.get_metadata(self.as_posix())
+                    self._cached_is_directory = False
+            else:
+                try:
+                    self._ws.files.get_metadata(self.as_posix())
+                    self._cached_is_directory = False
+                except NotFound:
+                    self._ws.files.get_directory_metadata(self.as_posix())
+                    self._cached_is_directory = True
+            return True
+        except NotFound:
+            return False
+
+    def _mkdir(self) -> None:
+        self._ws.files.create_directory(self.as_posix())
+
+    def rmdir(self, recursive: bool = False) -> None:
+        """Remove a directory in Databricks Volume"""
+        if recursive:
+            for path in self.iterdir():
+                if path.is_dir():
+                    path.rmdir(True)
+                else:
+                    path.unlink(True)
+        self._ws.files.delete_directory(self.as_posix())
+
+    def _rename(self: P, target: str | bytes | os.PathLike, overwrite: bool) -> P:
+        """Rename a file in Databricks Volume"""
+        dst = self.with_segments(target)
+        if self.is_dir():
+            msg = f"Volume directories cannot currently be renamed: {self} -> {dst}"
+            raise ValueError(msg)
+        download_response = self._ws.files.download(self.as_posix())
+        if download_response.contents is None:
+            download_response.contents = BytesIO(bytes())
+        with download_response.contents as f:
+            self._ws.files.upload(dst.as_posix(), f, overwrite=overwrite)
+        self.unlink()
+        return dst
+
+    def rename(self, target: str | bytes | os.PathLike):
+        """Rename this path as the target, unless the target already exists."""
+        return self._rename(target, overwrite=False)
+
+    def replace(self, target: str | bytes | os.PathLike):
+        """Rename this path, overwriting the target if it exists and can be overwritten."""
+        return self._rename(target, overwrite=True)
+
+    def unlink(self, missing_ok: bool = False) -> None:
+        """Remove a file in Databricks Volume."""
+        try:
+            self._ws.files.delete(self.as_posix())
+        except NotFound as e:
+            if not missing_ok:
+                raise FileNotFoundError(f"{self.as_posix()} does not exist") from e
+
+    def open(
+        self,
+        mode: str = "r",
+        buffering: int = -1,
+        encoding: str | None = None,
+        errors: str | None = None,
+        newline: str | None = None,
+    ):
+        """Open a file in Databricks Volume. Only text and binary modes are supported."""
+        is_overwrite = "x" not in mode
+        if "b" in mode and "r" in mode:
+            download_response = self._ws.files.download(self.as_posix())
+            if download_response.contents is None:
+                download_response.contents = BytesIO(bytes())
+            return download_response.contents
+        if "b" in mode and "w" in mode:
+            return _VolumeBinaryUploadIO(self._ws, self.as_posix(), is_overwrite)
+        if "r" in mode:
+            download_response = self._ws.files.download(self.as_posix())
+            if download_response.contents is None:
+                download_response.contents = BytesIO(bytes())
+            with download_response.contents as f:
+                data = f.read()
+                if encoding is None:
+                    if data.startswith(codecs.BOM_UTF32_LE) or data.startswith(codecs.BOM_UTF32_BE):
+                        encoding = "utf-32"
+                    elif data.startswith(codecs.BOM_UTF16_LE) or data.startswith(codecs.BOM_UTF16_BE):
+                        encoding = "utf-16"
+                    elif data.startswith(codecs.BOM_UTF8):
+                        encoding = "utf-8-sig"
+                if encoding is None or encoding == "locale":
+                    encoding = locale.getpreferredencoding(False)
+                return StringIO(data.decode(encoding))
+        if "w" in mode:
+            return _VolumeTextUploadIO(self._ws, self.as_posix(), is_overwrite)
+        raise ValueError(f"invalid mode: {mode}")
+
+    def read_text(self, encoding=None, errors=None):
+        with self.open(mode="r", encoding=encoding, errors=errors) as f:
+            return f.read()
+
+    def is_dir(self) -> bool:
+        """Return True if the path points to a directory in Databricks Volume."""
+        try:
+            if self._cached_is_directory is None:
+                # Is it an existing file?
+                try:
+                    self._ws.files.get_metadata(self.as_posix())
+                    self._cached_is_directory = False
+                except NotFound:
+                    # Is it an existing directory?
+                    self._ws.files.get_directory_metadata(self.as_posix())
+                    self._cached_is_directory = True
+            return self._cached_is_directory
+        except DatabricksError:
+            # We don't know the type, default value: file
+            return False
+
+    def is_file(self) -> bool:
+        """Return True if the path points to a file in Databricks Volume."""
+        return not self.is_dir()
+
+    def iterdir(self) -> Generator[VolumePath, None, None]:
+        for child in self._ws.files.list_directory_contents(self.as_posix()):
+            yield self._from_dir_entry(self._ws, child)
 
 
 T = TypeVar("T", bound="Path")
@@ -994,3 +1234,17 @@ class _RecursivePatternSelector(_NonTerminalSelector):
                 if candidate not in yielded:
                     yielded.add(candidate)
                     yield candidate
+
+
+def create_path(ws: WorkspaceClient, path: str) -> _DatabricksPath:
+    """Create a path object from a string if it is a valid absolute path on DBFS or Workspace files or UC Volumes"""
+    # pylint: disable=incompatible-with-uc
+    path_without_scheme = str(path).removeprefix("dbfs:").removeprefix("file:")
+    if path_without_scheme.startswith("/Volumes/"):
+        return VolumePath(ws, path_without_scheme)
+    # pylint: disable=incompatible-with-uc
+    if path.startswith("dbfs:") or path.startswith("/dbfs/") or path.startswith("file:/dbfs/"):
+        return DBFSPath(ws, path_without_scheme)
+    if path.startswith("/Workspace/") or path.startswith("file:/Workspace/"):
+        return WorkspacePath(ws, path_without_scheme)
+    raise ValueError("Not a valid Databricks path: " + path)
