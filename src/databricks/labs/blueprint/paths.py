@@ -11,6 +11,7 @@ import os
 import posixpath
 import re
 import shutil
+import stat
 from abc import abstractmethod
 from collections.abc import Generator, Iterable, Sequence
 from io import BytesIO, StringIO
@@ -121,7 +122,6 @@ class _DatabricksPath(Path, abc.ABC):  # pylint: disable=too-many-public-methods
     # Public APIs that we don't support.
     as_uri = _na("as_uri")
     cwd = _na("cwd")
-    stat = _na("stat")
     chmod = _na("chmod")
     lchmod = _na("lchmod")
     lstat = _na("lstat")
@@ -138,6 +138,7 @@ class _DatabricksPath(Path, abc.ABC):  # pylint: disable=too-many-public-methods
         # Force all initialisation to go via __init__() irrespective of the (Python-specific) base version.
         return object.__new__(cls)
 
+    # pylint: disable=super-init-not-called
     def __init__(self, ws: WorkspaceClient, *args: str | bytes | os.PathLike) -> None:
         # We deliberately do _not_ call the super initializer because we're taking over complete responsibility for the
         # implementation of the public API.
@@ -385,6 +386,7 @@ class _DatabricksPath(Path, abc.ABC):  # pylint: disable=too-many-public-methods
             raise ValueError(msg)
         return self.with_name(stem + suffix)
 
+    # pylint: disable=arguments-differ
     def relative_to(self: P, *other: str | bytes | os.PathLike, walk_up: bool = False) -> P:
         normalized = self.with_segments(*other)
         if self.anchor != normalized.anchor:
@@ -691,6 +693,12 @@ class DBFSPath(_DatabricksPath):
             self._cached_file_info = self._ws.dbfs.get_status(self.as_posix())
             return self._cached_file_info
 
+    def stat(self, *, follow_symlinks=True) -> os.stat_result:
+        seq: list[float] = [-1] * 10
+        seq[stat.ST_SIZE] = self._file_info.file_size or -1  # 6
+        seq[stat.ST_MTIME] = self._file_info.modification_time or -1  # 8
+        return os.stat_result(seq)
+
     def is_dir(self) -> bool:
         """Return True if the path points to a DBFS directory."""
         try:
@@ -840,6 +848,13 @@ class WorkspacePath(_DatabricksPath):
         except AttributeError:
             self._cached_object_info = self._ws.workspace.get_status(self.as_posix())
             return self._object_info
+
+    def stat(self, *, follow_symlinks=True) -> os.stat_result:
+        seq: list[float] = [-1] * 10
+        seq[stat.ST_SIZE] = self._object_info.size or -1  # 6
+        seq[stat.ST_MTIME] = self._object_info.modified_at or -1  # 8
+        seq[stat.ST_CTIME] = self._object_info.created_at or -1  # 9
+        return os.stat_result(seq)
 
     def is_dir(self) -> bool:
         """Return True if the path points to a directory in Databricks Workspace."""
