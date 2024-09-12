@@ -1016,8 +1016,8 @@ def test_workspace_path_stat_has_fields():
     ws.workspace.get_status.return_value = info
     workspace_path = WorkspacePath(ws, "/test/path")
     stats = workspace_path.stat()
-    assert stats.st_ctime == info.created_at
-    assert stats.st_mtime == info.modified_at
+    assert stats.st_ctime == info.created_at / 1000.0
+    assert stats.st_mtime == info.modified_at / 1000.0
     assert stats.st_size == info.size
 
 
@@ -1027,5 +1027,5 @@ def test_dbfs_path_stat_has_fields():
     ws.dbfs.get_status.return_value = info
     dbfs_path = DBFSPath(ws, "/test/path")
     stats = dbfs_path.stat()
-    assert stats.st_mtime == info.modification_time
+    assert stats.st_mtime == info.modification_time / 1000.0
     assert stats.st_size == info.file_size

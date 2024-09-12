@@ -78,7 +78,7 @@ def test_stat(ws, make_random, cls):
 
     hello_txt = with_user / "hello.txt"
     hello_txt.write_text("Hello, World!")
-    if cls is WorkspacePath: # DBFSPath has no st_ctime
+    if cls is WorkspacePath:  # DBFSPath has no st_ctime
         assert hello_txt.stat().st_ctime >= now
     assert hello_txt.stat().st_mtime >= now
 
