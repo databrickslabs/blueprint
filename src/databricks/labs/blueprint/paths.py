@@ -695,8 +695,8 @@ class DBFSPath(_DatabricksPath):
 
     def stat(self, *, follow_symlinks=True) -> os.stat_result:
         seq: list[float] = [-1] * 10
-        seq[stat.ST_SIZE] = self._file_info.file_size or -1  # 6
-        seq[stat.ST_MTIME] = self._file_info.modification_time or -1  # 8
+        seq[stat.ST_SIZE] = float(self._file_info.file_size) / 1000.0 or -1  # 6
+        seq[stat.ST_MTIME] = float(self._file_info.modification_time) / 1000.0 or -1  # 8
         return os.stat_result(seq)
 
     def is_dir(self) -> bool:
@@ -852,8 +852,8 @@ class WorkspacePath(_DatabricksPath):
     def stat(self, *, follow_symlinks=True) -> os.stat_result:
         seq: list[float] = [-1] * 10
         seq[stat.ST_SIZE] = self._object_info.size or -1  # 6
-        seq[stat.ST_MTIME] = self._object_info.modified_at or -1  # 8
-        seq[stat.ST_CTIME] = self._object_info.created_at or -1  # 9
+        seq[stat.ST_MTIME] = float(self._object_info.modified_at) / 1000.0  or -1  # 8
+        seq[stat.ST_CTIME] = float(self._object_info.created_at) / 1000.0  or -1  # 9
         return os.stat_result(seq)
 
     def is_dir(self) -> bool:
