@@ -7,6 +7,7 @@ import pytest
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.errors import NotFound, ResourceDoesNotExist
 from databricks.sdk.mixins.workspace import WorkspaceExt
+from databricks.sdk.service.files import FileInfo
 from databricks.sdk.service.workspace import (
     ImportFormat,
     Language,
@@ -14,7 +15,7 @@ from databricks.sdk.service.workspace import (
     ObjectType,
 )
 
-from databricks.labs.blueprint.paths import WorkspacePath
+from databricks.labs.blueprint.paths import DBFSPath, WorkspacePath
 
 
 def test_empty_init() -> None:
@@ -1007,3 +1008,24 @@ def test_rglob() -> None:
         WorkspacePath(ws, "/test/path/dir1/file1.json"),
         WorkspacePath(ws, "/test/path/dir2/file2.json"),
     }
+
+
+def test_workspace_path_stat_has_fields():
+    info = ObjectInfo(created_at=1234, modified_at=2345, size=3456)
+    ws = create_autospec(WorkspaceClient)
+    ws.workspace.get_status.return_value = info
+    workspace_path = WorkspacePath(ws, "/test/path")
+    stats = workspace_path.stat()
+    assert stats.st_ctime == info.created_at / 1000.0
+    assert stats.st_mtime == info.modified_at / 1000.0
+    assert stats.st_size == info.size
+
+
+def test_dbfs_path_stat_has_fields():
+    info = FileInfo(modification_time=2345, file_size=3456)
+    ws = create_autospec(WorkspaceClient)
+    ws.dbfs.get_status.return_value = info
+    dbfs_path = DBFSPath(ws, "/test/path")
+    stats = dbfs_path.stat()
+    assert stats.st_mtime == info.modification_time / 1000.0
+    assert stats.st_size == info.file_size
