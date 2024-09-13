@@ -1,5 +1,10 @@
 # Version changelog
 
+## 0.8.3
+
+* add missing stat() methods to DBFSPath and WorkspacePath ([#144](https://github.com/databrickslabs/blueprint/issues/144)). The `stat()` method has been added to both `DBFSPath` and `WorkspacePath` classes, addressing issues [#142](https://github.com/databrickslabs/blueprint/issues/142) and [#143](https://github.com/databrickslabs/blueprint/issues/143). This method, which adheres to the Posix standard, returns file status in the `os.stat_result` format, providing access to various metadata attributes such as file size, last modification time, and creation time. By incorporating this method, developers can now obtain essential file information for Databricks File System (DBFS) and Databricks Workspace paths when working with these classes. The change includes a new test case for `stat()` in the `test_paths.py` file to ensure the correctness of the method for both classes.
+
+
 ## 0.8.2
 
 * Make hatch a prerequisite ([#137](https://github.com/databrickslabs/blueprint/issues/137)). In version 1.9.4, hatch has become a prerequisite for installation in the GitHub workflow for the project's main branch, due to occasional failures in `pip install hatch` that depend on the local environment. This change, which includes defining the hatch version as an environment variable and adding a new step for installing hatch with a specific version, aims to enhance the reliability of the build and testing process by eliminating potential installation issues with hatch. Users should install hatch manually before executing the Makefile, as the line `pip install hatch` has been removed from the Makefile. This change aligns with the approach taken for ucx, and users are expected to understand the requirement to install prerequisites before executing the Makefile. To contribute to this project, please install hatch using `pip install hatch`, clone the GitHub repository, and run `make dev` to start the development environment and install necessary dependencies.
