@@ -4,7 +4,6 @@ import functools
 import inspect
 import json
 import logging
-import os
 import types
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -86,9 +85,6 @@ class App:
         # user agent is set consistently with the Databricks CLI:
         # see https://github.com/databricks/cli/blob/main/cmd/root/user_agent_command.go#L35-L37
         with_user_agent_extra("cmd", command)
-        cli_version = os.environ.get("DATABRICKS_CLI_VERSION")
-        if cli_version:
-            with_user_agent_extra("cli", cli_version)
         flags = payload["flags"]
         log_level = flags.pop("log_level")
         if log_level == "disabled":
