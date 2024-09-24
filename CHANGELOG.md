@@ -1,5 +1,10 @@
 # Version changelog
 
+## 0.9.0
+
+* Added Databricks CLI version as part of routed command telemetry ([#147](https://github.com/databrickslabs/blueprint/issues/147)). A new environment variable, "DATABRICKS_CLI_VERSION", has been introduced in the Databricks CLI version for routed command telemetry. This variable is incorporated into the `with_user_agent_extra` method, which adds it to the user agent for outgoing requests, thereby enhancing detailed tracking and version identification in telemetry data. The `with_user_agent_extra` method is invoked twice, with the `blueprint` prefix and the __version__ variable, followed by the `cli` prefix and the DATABRICKS_CLI_VERSION environment variable, ensuring that both the blueprint and CLI versions are transmitted in the user agent for all requests.
+
+
 ## 0.8.3
 
 * add missing stat() methods to DBFSPath and WorkspacePath ([#144](https://github.com/databrickslabs/blueprint/issues/144)). The `stat()` method has been added to both `DBFSPath` and `WorkspacePath` classes, addressing issues [#142](https://github.com/databrickslabs/blueprint/issues/142) and [#143](https://github.com/databrickslabs/blueprint/issues/143). This method, which adheres to the Posix standard, returns file status in the `os.stat_result` format, providing access to various metadata attributes such as file size, last modification time, and creation time. By incorporating this method, developers can now obtain essential file information for Databricks File System (DBFS) and Databricks Workspace paths when working with these classes. The change includes a new test case for `stat()` in the `test_paths.py` file to ensure the correctness of the method for both classes.
