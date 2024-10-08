@@ -40,6 +40,8 @@ Json = dict[str, Any]
 
 __all__ = ["Installation", "MockInstallation", "IllegalState", "NotInstalled", "SerdeError"]
 
+FILE_SIZE_LIMIT: int = 1024 * 1024 * 10
+
 
 class IllegalState(ValueError):
     pass
@@ -358,7 +360,33 @@ class Installation:
             raise KeyError(f"Unknown extension: {extension}")
         logger.debug(f"Converting {type_ref.__name__} into {extension.upper()} format")
         raw = converters[extension](as_dict, type_ref)
+        if extension == "csv":
+            split = self._split_content(raw)
+            if len(split) > 1:
+                for i, chunk in enumerate(split):
+                    self.upload(f"{filename[0:-4]}.{i + 1}.csv", chunk)
+                return
+
+        # Check if the file is more than 10MB
+        if len(raw) > FILE_SIZE_LIMIT:
+            raise ValueError(f"File size too large: {len(raw)} bytes")
+
         self.upload(filename, raw)
+
+    @staticmethod
+    def _split_content(raw: bytes) -> list[bytes]:
+        """The `_split_content` method is a private method that is used to split the raw bytes of a file into chunks
+        that are less than 10MB in size. This method is called by the `_overwrite_content` method."""
+        chunks = []
+        chunk = b""
+        lines = raw.split(b"\n")
+        for line in lines:
+            if len(chunk) + len(line) > FILE_SIZE_LIMIT:
+                chunks.append(chunk)
+                chunk = lines[0] + b"\n"
+            chunk += line + b"\n"
+        chunks.append(chunk)
+        return chunks
 
     @staticmethod
     def _global_installation(product):

@@ -3,7 +3,7 @@ from dataclasses import dataclass
 import pytest
 from databricks.sdk.errors import PermissionDenied
 from databricks.sdk.service.provisioning import Workspace
-
+from databricks.sdk.service.catalog import TableInfo
 from databricks.labs.blueprint.installation import Installation
 
 
@@ -71,6 +71,19 @@ def test_saving_list_of_dataclasses_to_csv(new_installation):
 
     loaded = new_installation.load(list[Workspace], filename="workspaces.csv")
     assert len(loaded) == 2
+
+
+def test_saving_list_of_dataclasses_to_multiple_csvs(new_installation):
+    tables: list[TableInfo] = []
+    for i in range(500000):
+        tables.append(TableInfo(name=f"long_table_name_{i}", schema_name="very_long_schema_name"))
+    new_installation.save(
+        tables,
+        filename="many_tables_test.csv",
+    )
+
+    loaded = new_installation.load(list[Workspace], filename="many_tables_test.1.csv")
+    assert len(loaded) > 100
 
 
 @pytest.mark.parametrize(
