@@ -83,7 +83,7 @@ def test_saving_list_of_dataclasses_to_multiple_csvs(new_installation):
     )
 
     loaded = new_installation.load(list[Workspace], filename="many_tables_test.csv")
-    assert len(loaded) > 100
+    assert len(loaded) == 500000
 
 
 @pytest.mark.parametrize(

@@ -134,6 +134,10 @@ class Installation:
             tasks.append(functools.partial(check_folder, service_principal_folder))
         return Threads.strict(f"finding {product} installations", tasks)
 
+    @staticmethod
+    def extension(filename):
+        return filename.split(".")[-1]
+
     @classmethod
     def load_local(cls, type_ref: type[T], file: Path) -> T:
         """Loads a typed file from the local file system."""
@@ -355,7 +359,7 @@ class Installation:
             "yml": self._dump_yaml,
             "csv": self._dump_csv,
         }
-        extension = filename.split(".")[-1]
+        extension = self.extension(filename)
         if extension not in converters:
             raise KeyError(f"Unknown extension: {extension}")
         logger.debug(f"Converting {type_ref.__name__} into {extension.upper()} format")
@@ -402,17 +406,34 @@ class Installation:
             as_dict = cls._migrate_file_format(type_ref, expected_version, as_dict, filename)
         return cls._unmarshal(as_dict, [], type_ref)
 
-    def _load_content(self, filename: str) -> Json:
+    def _load_content(self, filename: str) -> Json | list[Json]:
         """The `_load_content` method is a private method that is used to load the contents of a file from
         WorkspaceFS as a dictionary. This method is called by the `load` method."""
         with self._lock:
             # TODO: check how to make this fail fast during unit testing, otherwise
             # this currently hangs with the real installation class and mocked workspace client
-            with self._ws.workspace.download(f"{self.install_folder()}/{filename}") as f:
-                return self._convert_content(filename, f)
+            try:
+                with self._ws.workspace.download(f"{self.install_folder()}/{filename}") as f:
+                    return self._convert_content(filename, f)
+            except NotFound:
+                # If the file is not found, check if it is a multi-part csv file
+                if self.extension(filename) != "csv":
+                    raise
+                current_part = 1
+                content = []
+                try:
+                    while True:
+                        with self._ws.workspace.download(f"{self.install_folder()}/{filename[0:-4]}.{current_part}.csv") as f:
+                            content += self._convert_content(filename, f)
+                            current_part += 1
+                except NotFound:
+                    if current_part == 1:
+                        raise
+                return content
+
 
     @classmethod
-    def _convert_content(cls, filename: str, raw: BinaryIO) -> Json:
+    def _convert_content(cls, filename: str, raw: BinaryIO) -> Json|list[Json]:
         """The `_convert_content` method is a private method that is used to convert the raw bytes of a file to a
         dictionary. This method is called by the `_load_content` method."""
         converters: dict[str, Callable[[BinaryIO], Any]] = {
@@ -420,7 +441,7 @@ class Installation:
             "yml": cls._load_yaml,
             "csv": cls._load_csv,
         }
-        extension = filename.split(".")[-1]
+        extension = cls.extension(filename)
         if extension not in converters:
             raise KeyError(f"Unknown extension: {extension}")
         try:
