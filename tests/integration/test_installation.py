@@ -82,7 +82,7 @@ def test_saving_list_of_dataclasses_to_multiple_csvs(new_installation):
         filename="many_tables_test.csv",
     )
 
-    loaded = new_installation.load(list[Workspace], filename="many_tables_test.1.csv")
+    loaded = new_installation.load(list[Workspace], filename="many_tables_test.csv")
     assert len(loaded) > 100
 
 
