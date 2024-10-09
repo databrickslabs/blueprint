@@ -370,24 +370,9 @@ class Installation:
             return
         # Check if the file is more than 10MB
         if len(raws[0]) > FILE_SIZE_LIMIT:
-            raise ValueError(f"File size too large: {len(raw)} bytes")
+            raise ValueError(f"File size too large: {len(raws[0])} bytes")
 
         self.upload(filename, raws[0])
-
-    @staticmethod
-    def _split_content(raw: bytes) -> list[bytes]:
-        """The `_split_content` method is a private method that is used to split the raw bytes of a file into chunks
-        that are less than 10MB in size. This method is called by the `_overwrite_content` method."""
-        chunks = []
-        chunk = b""
-        lines = raw.split(b"\n")
-        for line in lines:
-            if len(chunk) + len(line) > FILE_SIZE_LIMIT:
-                chunks.append(chunk)
-                chunk = lines[0] + b"\n"
-            chunk += line + b"\n"
-        chunks.append(chunk)
-        return chunks
 
     @staticmethod
     def _global_installation(product):
@@ -420,20 +405,25 @@ class Installation:
                 if self.extension(filename) != "csv":
                     raise
                 current_part = 1
-                content = []
+                content: list[Json] = []
                 try:
                     while True:
-                        with self._ws.workspace.download(f"{self.install_folder()}/{filename[0:-4]}.{current_part}.csv") as f:
-                            content += self._convert_content(filename, f)
-                            current_part += 1
+                        with self._ws.workspace.download(
+                            f"{self.install_folder()}/{filename[0:-4]}.{current_part}.csv"
+                        ) as f:
+                            converted_content = self._convert_content(filename, f)
+                            # check if converted_content is a list
+                            if isinstance(converted_content, list):
+                                content += converted_content
+                            else:
+                                content.append(converted_content)
                 except NotFound:
                     if current_part == 1:
                         raise
                 return content
 
-
     @classmethod
-    def _convert_content(cls, filename: str, raw: BinaryIO) -> Json|list[Json]:
+    def _convert_content(cls, filename: str, raw: BinaryIO) -> Json | list[Json]:
         """The `_convert_content` method is a private method that is used to convert the raw bytes of a file to a
         dictionary. This method is called by the `_load_content` method."""
         converters: dict[str, Callable[[BinaryIO], Any]] = {

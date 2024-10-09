@@ -2,8 +2,9 @@ from dataclasses import dataclass
 
 import pytest
 from databricks.sdk.errors import PermissionDenied
-from databricks.sdk.service.provisioning import Workspace
 from databricks.sdk.service.catalog import TableInfo
+from databricks.sdk.service.provisioning import Workspace
+
 from databricks.labs.blueprint.installation import Installation
 
 
