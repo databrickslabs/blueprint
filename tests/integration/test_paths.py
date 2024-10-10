@@ -196,6 +196,15 @@ def test_resolve_is_consistent(ws, cls):
     path = cls(ws, "/a/b/c") / Path("../../d")
     resolved = path.resolve()
     assert resolved == cls(ws, "/a/d")
+    path = cls(ws, "/a/b/c") / "../../d"
+    resolved = path.resolve()
+    assert resolved == cls(ws, "/a/d")
+    resolved = cls(ws, "/a/b/c/../../d").resolve()
+    assert resolved == cls(ws, "/a/d")
+    resolved = cls(ws, "/../d").resolve()
+    assert resolved == cls(ws, "/d")
+    resolved = cls(ws, "/a/b/c/./../../d").resolve()
+    assert resolved == cls(ws, "/a/d")
 
 
 def test_workspace_as_fuse(ws):
