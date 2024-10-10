@@ -520,7 +520,17 @@ class _DatabricksPath(Path, abc.ABC):  # pylint: disable=too-many-public-methods
         if strict and not absolute.exists():
             msg = f"Path does not exist: {self}"
             raise FileNotFoundError(msg)
-        return absolute
+        return absolute._normalize()
+
+    def _normalize(self) -> P:
+        for index, part in enumerate(self._path_parts):
+            if part != '..':
+                continue
+            segments = list(self._path_parts)
+            segments.pop(index)
+            segments.pop(index - 1)
+            return self.with_segments(self.anchor, *segments)._normalize()
+        return self
 
     def absolute(self: P) -> P:
         if self.is_absolute():

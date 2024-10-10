@@ -191,6 +191,12 @@ def test_replace_file(ws, make_random, cls):
         tmp_dir.rmdir(recursive=True)
 
 
+def test_resolve_is_consistent(ws):
+    path = WorkspacePath(ws, "/a/b/c") / Path("../../d")
+    resolved = path.resolve()
+    assert resolved == WorkspacePath(ws,"/a/d")
+
+
 def test_workspace_as_fuse(ws):
     wsp = WorkspacePath(ws, "/Users/foo/bar/baz")
     assert Path("/Workspace/Users/foo/bar/baz") == wsp.as_fuse()
