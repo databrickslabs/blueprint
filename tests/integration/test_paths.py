@@ -191,6 +191,22 @@ def test_replace_file(ws, make_random, cls):
         tmp_dir.rmdir(recursive=True)
 
 
+@pytest.mark.parametrize("cls", DATABRICKS_PATHLIKE)
+def test_resolve_is_consistent(ws, cls):
+    path = cls(ws, "/a/b/c") / Path("../../d")
+    resolved = path.resolve()
+    assert resolved == cls(ws, "/a/d")
+    path = cls(ws, "/a/b/c") / "../../d"
+    resolved = path.resolve()
+    assert resolved == cls(ws, "/a/d")
+    resolved = cls(ws, "/a/b/c/../../d").resolve()
+    assert resolved == cls(ws, "/a/d")
+    resolved = cls(ws, "/../d").resolve()
+    assert resolved == cls(ws, "/d")
+    resolved = cls(ws, "/a/b/c/./../../d").resolve()
+    assert resolved == cls(ws, "/a/d")
+
+
 def test_workspace_as_fuse(ws):
     wsp = WorkspacePath(ws, "/Users/foo/bar/baz")
     assert Path("/Workspace/Users/foo/bar/baz") == wsp.as_fuse()
