@@ -20,7 +20,7 @@ from typing import NoReturn, TypeVar
 from urllib.parse import quote_from_bytes as urlquote_from_bytes
 
 from databricks.sdk import WorkspaceClient
-from databricks.sdk.errors import DatabricksError, NotFound, ResourceDoesNotExist
+from databricks.sdk.errors import DatabricksError, ResourceDoesNotExist
 from databricks.sdk.service.files import FileInfo
 from databricks.sdk.service.workspace import (
     ExportFormat,
@@ -609,7 +609,7 @@ class DBFSPath(_DatabricksPath):
         try:
             self._cached_file_info = self._ws.dbfs.get_status(self.as_posix())
             return True
-        except NotFound:
+        except DatabricksError:
             return False
 
     def _mkdir(self) -> None:
@@ -754,7 +754,7 @@ class WorkspacePath(_DatabricksPath):
         try:
             self._cached_object_info = self._ws.workspace.get_status(self.as_posix())
             return True
-        except NotFound:
+        except DatabricksError:
             return False
 
     def _mkdir(self) -> None:
