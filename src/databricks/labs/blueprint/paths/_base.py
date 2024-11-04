@@ -1,34 +1,19 @@
 from __future__ import annotations
 
 import abc
-import builtins
-import codecs
 import fnmatch
-import io
-import locale
 import logging
 import os
 import posixpath
 import re
-import shutil
-import stat
 from abc import abstractmethod
 from collections.abc import Generator, Iterable, Sequence
 from io import BytesIO, StringIO
 from pathlib import Path, PurePath
 from typing import NoReturn, TypeVar
-from urllib.parse import quote_from_bytes as urlquote_from_bytes
 
 from databricks.sdk import WorkspaceClient
-from databricks.sdk.errors import DatabricksError, ResourceDoesNotExist
-from databricks.sdk.service.files import FileInfo
-from databricks.sdk.service.workspace import (
-    ExportFormat,
-    ImportFormat,
-    Language,
-    ObjectInfo,
-    ObjectType,
-)
+from databricks.sdk.service.workspace import ImportFormat
 
 logger = logging.getLogger(__name__)
 
@@ -55,22 +40,22 @@ class _UploadIO(abc.ABC):
         return f"<{self.__class__.__name__} for {self._path} on {self._ws}>"
 
 
-class _BinaryUploadIO(_UploadIO, BytesIO):  # type: ignore
+class BinaryUploadIO(_UploadIO, BytesIO):  # type: ignore
     def __init__(self, ws: WorkspaceClient, path: str):
         _UploadIO.__init__(self, ws, path)
         BytesIO.__init__(self)
 
 
-class _TextUploadIO(_UploadIO, StringIO):  # type: ignore
+class TextUploadIO(_UploadIO, StringIO):  # type: ignore
     def __init__(self, ws: WorkspaceClient, path: str):
         _UploadIO.__init__(self, ws, path)
         StringIO.__init__(self)
 
 
-P = TypeVar("P", bound="_DatabricksPath")
+P = TypeVar("P", bound="DatabricksPath")
 
 
-class _DatabricksPath(Path, abc.ABC):  # pylint: disable=too-many-public-methods
+class DatabricksPath(Path, abc.ABC):  # pylint: disable=too-many-public-methods
     """Base-class for experimental pathlib.Path implementations covering Databricks Workspace paths and DBFS."""
 
     # Implementation notes:
@@ -113,7 +98,6 @@ class _DatabricksPath(Path, abc.ABC):  # pylint: disable=too-many-public-methods
     _str: str
     _hash: int
 
-    # Path semantics are posix-like.
     parser = posixpath
 
     # Compatibility attribute, for when superclass implementations get invoked on python <= 3.11.
@@ -138,7 +122,6 @@ class _DatabricksPath(Path, abc.ABC):  # pylint: disable=too-many-public-methods
         # Force all initialisation to go via __init__() irrespective of the (Python-specific) base version.
         return object.__new__(cls)
 
-    # pylint: disable=super-init-not-called
     def __init__(self, ws: WorkspaceClient, *args: str | bytes | os.PathLike) -> None:
         # We deliberately do _not_ call the super initializer because we're taking over complete responsibility for the
         # implementation of the public API.
@@ -386,7 +369,6 @@ class _DatabricksPath(Path, abc.ABC):  # pylint: disable=too-many-public-methods
             raise ValueError(msg)
         return self.with_name(stem + suffix)
 
-    # pylint: disable=arguments-differ
     def relative_to(self: P, *other: str | bytes | os.PathLike, walk_up: bool = False) -> P:
         normalized = self.with_segments(*other)
         if self.anchor != normalized.anchor:
@@ -528,13 +510,14 @@ class _DatabricksPath(Path, abc.ABC):  # pylint: disable=too-many-public-methods
             return self
         segments: list[str] = []
         for part in self._path_parts:
-            if part == "..":
-                if segments:
-                    segments.pop()
-            elif part is None or part == '.':
-                continue
-            else:
-                segments.append(part)
+            match part:
+                case "..":
+                    if segments:
+                        segments.pop()
+                case None | ".":
+                    pass
+                case _:
+                    segments.append(part)
         # pylint: disable=protected-access
         return self.with_segments(self.anchor, *segments)._normalize()
 
@@ -591,315 +574,6 @@ class _DatabricksPath(Path, abc.ABC):  # pylint: disable=too-many-public-methods
             case_sensitive = True
         selector = _Selector.parse(pattern_parts, case_sensitive=case_sensitive)
         yield from selector(self)
-
-
-class DBFSPath(_DatabricksPath):
-    """Experimental implementation of pathlib.Path for DBFS paths."""
-
-    __slots__ = (
-        # The cached _file_info value for the instance.
-        "_cached_file_info",
-    )
-    _cached_file_info: FileInfo
-
-    @classmethod
-    def _from_file_info(cls, ws: WorkspaceClient, file_info: FileInfo) -> DBFSPath:
-        """Special (internal-only) constructor that creates an instance based on FileInfo."""
-        if not file_info.path:
-            msg = f"Cannot initialise without file path: {file_info}"
-            raise ValueError(msg)
-        path = cls(ws, file_info.path)
-        path._cached_file_info = file_info
-        return path
-
-    def as_fuse(self) -> Path:
-        """Return FUSE-mounted path in Databricks Runtime."""
-        if "DATABRICKS_RUNTIME_VERSION" not in os.environ:
-            logger.warning("This method is only available in Databricks Runtime")
-        return Path("/dbfs", self.as_posix().lstrip("/"))
-
-    def exists(self, *, follow_symlinks: bool = True) -> bool:
-        """Return True if the path points to an existing file, directory, or notebook"""
-        if not follow_symlinks:
-            raise NotImplementedError("follow_symlinks=False is not supported for DBFS")
-        try:
-            self._cached_file_info = self._ws.dbfs.get_status(self.as_posix())
-            return True
-        except DatabricksError:
-            return False
-
-    def _mkdir(self) -> None:
-        self._ws.dbfs.mkdirs(self.as_posix())
-
-    def rmdir(self, recursive: bool = False) -> None:
-        """Remove a DBFS directory"""
-        self._ws.dbfs.delete(self.as_posix(), recursive=recursive)
-
-    def rename(self: P, target: str | bytes | os.PathLike) -> P:
-        """Rename this path as the target, unless the target already exists."""
-        dst = self.with_segments(target)
-        self._ws.dbfs.move(self.as_posix(), dst.as_posix())
-        return dst
-
-    def replace(self: P, target: str | bytes | os.PathLike) -> P:
-        """Rename this path, overwriting the target if it exists and can be overwritten."""
-        dst = self.with_segments(target)
-        if self.is_dir():
-            msg = f"DBFS directories cannot currently be replaced: {self} -> {dst}"
-            raise ValueError(msg)
-        # Can't use self._ws.dbfs.move_(): it doesn't honour the overwrite flag properly.
-        with dst.open(mode="wb") as writer, self.open(mode="rb") as reader:
-            shutil.copyfileobj(reader, writer, length=1024 * 1024)
-        self.unlink()
-        return dst
-
-    def unlink(self, missing_ok: bool = False) -> None:
-        """Remove a file in Databricks Workspace."""
-        # Although this introduces a race-condition, we have to handle missing_ok in advance because the DBFS client
-        # doesn't report any error if deleting a target that doesn't exist.
-        if not missing_ok and not self.exists():
-            raise FileNotFoundError(f"{self.as_posix()} does not exist")
-        self._ws.dbfs.delete(self.as_posix())
-
-    def open(
-        self,
-        mode: str = "r",
-        buffering: int = -1,
-        encoding: str | None = None,
-        errors: str | None = None,
-        newline: str | None = None,
-    ):
-        """Open a DBFS file.
-
-        Only text and binary I/O are supported in basic read or write mode, along with 'x' to avoid overwriting."""
-        is_write = "w" in mode
-        is_read = "r" in mode or not is_write
-        if is_read and is_write:
-            msg = f"Unsupported mode: {mode} (simultaneous read and write)"
-            raise ValueError(msg)
-        is_binary = "b" in mode
-        is_text = "t" in mode or not is_binary
-        if is_binary and is_text:
-            msg = f"Unsupported mode: {mode} (binary and text I/O)"
-            raise ValueError(msg)
-        is_overwrite = is_write and "x" not in mode
-        binary_io = self._ws.dbfs.open(self.as_posix(), read=is_read, write=is_write, overwrite=is_overwrite)
-        if is_text:
-            return io.TextIOWrapper(binary_io, encoding=encoding, errors=errors, newline=newline)
-        return binary_io
-
-    def write_bytes(self, data):
-        """Write the (binary) data to this path."""
-        # The DBFS BinaryIO implementation only accepts bytes and rejects the (other) byte-like builtins.
-        match data:
-            case builtins.bytes | builtins.bytearray:
-                binary_data = bytes(data)
-            case _:
-                binary_data = bytes(memoryview(data))
-        with self.open("wb") as f:
-            return f.write(binary_data)
-
-    @property
-    def _file_info(self) -> FileInfo:
-        # this method is cached because it is used in multiple is_* methods.
-        # DO NOT use this method in methods, where fresh result is required.
-        try:
-            return self._cached_file_info
-        except AttributeError:
-            self._cached_file_info = self._ws.dbfs.get_status(self.as_posix())
-            return self._cached_file_info
-
-    def stat(self, *, follow_symlinks=True) -> os.stat_result:
-        seq: list[float] = [-1.0] * 10
-        seq[stat.ST_SIZE] = self._file_info.file_size or -1  # 6
-        seq[stat.ST_MTIME] = (
-            float(self._file_info.modification_time) / 1000.0 if self._file_info.modification_time else -1.0
-        )  # 8
-        return os.stat_result(seq)
-
-    def is_dir(self) -> bool:
-        """Return True if the path points to a DBFS directory."""
-        try:
-            return bool(self._file_info.is_dir)
-        except DatabricksError:
-            return False
-
-    def is_file(self) -> bool:
-        """Return True if the path points to a file in Databricks Workspace."""
-        return not self.is_dir()
-
-    def iterdir(self) -> Generator[DBFSPath, None, None]:
-        for child in self._ws.dbfs.list(self.as_posix()):
-            yield self._from_file_info(self._ws, child)
-
-
-class WorkspacePath(_DatabricksPath):
-    """Experimental implementation of pathlib.Path for Databricks Workspace."""
-
-    __slots__ = (
-        # The cached _object_info value for the instance.
-        "_cached_object_info",
-    )
-    _cached_object_info: ObjectInfo
-
-    _SUFFIXES = {".py": Language.PYTHON, ".sql": Language.SQL, ".scala": Language.SCALA, ".R": Language.R}
-
-    @classmethod
-    def _from_object_info(cls, ws: WorkspaceClient, object_info: ObjectInfo) -> WorkspacePath:
-        """Special (internal-only) constructor that creates an instance based on ObjectInfo."""
-        if not object_info.path:
-            msg = f"Cannot initialise without object path: {object_info}"
-            raise ValueError(msg)
-        path = cls(ws, object_info.path)
-        path._cached_object_info = object_info
-        return path
-
-    def as_uri(self) -> str:
-        return f"{self._ws.config.host}#workspace{urlquote_from_bytes(bytes(self))}"
-
-    def as_fuse(self) -> Path:
-        """Return FUSE-mounted path in Databricks Runtime."""
-        if "DATABRICKS_RUNTIME_VERSION" not in os.environ:
-            logger.warning("This method is only available in Databricks Runtime")
-        return Path("/Workspace", self.as_posix().lstrip("/"))
-
-    def exists(self, *, follow_symlinks: bool = True) -> bool:
-        """Return True if the path points to an existing file, directory, or notebook"""
-        if not follow_symlinks:
-            raise NotImplementedError("follow_symlinks=False is not supported for Databricks Workspace")
-        try:
-            self._cached_object_info = self._ws.workspace.get_status(self.as_posix())
-            return True
-        except DatabricksError:
-            return False
-
-    def _mkdir(self) -> None:
-        self._ws.workspace.mkdirs(self.as_posix())
-
-    def rmdir(self, recursive: bool = False) -> None:
-        """Remove a directory in Databricks Workspace"""
-        self._ws.workspace.delete(self.as_posix(), recursive=recursive)
-
-    def _rename(self: P, target: str | bytes | os.PathLike, overwrite: bool) -> P:
-        """Rename a file in Databricks Workspace"""
-        dst = self.with_segments(target)
-        if self.is_dir():
-            msg = f"Workspace directories cannot currently be renamed: {self} -> {dst}"
-            raise ValueError(msg)
-        with self._ws.workspace.download(self.as_posix(), format=ExportFormat.AUTO) as f:
-            self._ws.workspace.upload(dst.as_posix(), f.read(), format=ImportFormat.AUTO, overwrite=overwrite)
-        self.unlink()
-        return dst
-
-    def rename(self, target: str | bytes | os.PathLike):
-        """Rename this path as the target, unless the target already exists."""
-        return self._rename(target, overwrite=False)
-
-    def replace(self, target: str | bytes | os.PathLike):
-        """Rename this path, overwriting the target if it exists and can be overwritten."""
-        return self._rename(target, overwrite=True)
-
-    def unlink(self, missing_ok: bool = False) -> None:
-        """Remove a file in Databricks Workspace."""
-        try:
-            self._ws.workspace.delete(self.as_posix())
-        except ResourceDoesNotExist as e:
-            if not missing_ok:
-                raise FileNotFoundError(f"{self.as_posix()} does not exist") from e
-
-    def open(
-        self,
-        mode: str = "r",
-        buffering: int = -1,
-        encoding: str | None = None,
-        errors: str | None = None,
-        newline: str | None = None,
-    ):
-        """Open a file in Databricks Workspace. Only text and binary modes are supported."""
-        if "b" in mode and "r" in mode:
-            return self._ws.workspace.download(self.as_posix(), format=ExportFormat.AUTO)
-        if "b" in mode and "w" in mode:
-            return _BinaryUploadIO(self._ws, self.as_posix())
-        if "r" in mode:
-            with self._ws.workspace.download(self.as_posix(), format=ExportFormat.AUTO) as f:
-                data = f.read()
-                if encoding is None:
-                    if data.startswith(codecs.BOM_UTF32_LE) or data.startswith(codecs.BOM_UTF32_BE):
-                        encoding = "utf-32"
-                    elif data.startswith(codecs.BOM_UTF16_LE) or data.startswith(codecs.BOM_UTF16_BE):
-                        encoding = "utf-16"
-                    elif data.startswith(codecs.BOM_UTF8):
-                        encoding = "utf-8-sig"
-                if encoding is None or encoding == "locale":
-                    encoding = locale.getpreferredencoding(False)
-                return StringIO(data.decode(encoding))
-        if "w" in mode:
-            return _TextUploadIO(self._ws, self.as_posix())
-        raise ValueError(f"invalid mode: {mode}")
-
-    def read_text(self, encoding=None, errors=None):
-        with self.open(mode="r", encoding=encoding, errors=errors) as f:
-            return f.read()
-
-    @property
-    def suffix(self) -> str:
-        """Return the file extension. If the file is a notebook, return the suffix based on the language."""
-        suffix = super().suffix
-        if suffix:
-            return suffix
-        if not self.is_notebook():
-            return ""
-        for sfx, lang in self._SUFFIXES.items():
-            try:
-                if self._object_info.language == lang:
-                    return sfx
-            except DatabricksError:
-                return ""
-        return ""
-
-    @property
-    def _object_info(self) -> ObjectInfo:
-        # this method is cached because it is used in multiple is_* methods.
-        # DO NOT use this method in methods, where fresh result is required.
-        try:
-            return self._cached_object_info
-        except AttributeError:
-            self._cached_object_info = self._ws.workspace.get_status(self.as_posix())
-            return self._object_info
-
-    def stat(self, *, follow_symlinks=True) -> os.stat_result:
-        seq: list[float] = [-1.0] * 10
-        seq[stat.ST_SIZE] = self._object_info.size or -1  # 6
-        seq[stat.ST_MTIME] = (
-            float(self._object_info.modified_at) / 1000.0 if self._object_info.modified_at else -1.0
-        )  # 8
-        seq[stat.ST_CTIME] = float(self._object_info.created_at) / 1000.0 if self._object_info.created_at else -1.0  # 9
-        return os.stat_result(seq)
-
-    def is_dir(self) -> bool:
-        """Return True if the path points to a directory in Databricks Workspace."""
-        try:
-            return self._object_info.object_type == ObjectType.DIRECTORY
-        except DatabricksError:
-            return False
-
-    def is_file(self) -> bool:
-        """Return True if the path points to a file in Databricks Workspace."""
-        try:
-            return self._object_info.object_type == ObjectType.FILE
-        except DatabricksError:
-            return False
-
-    def is_notebook(self) -> bool:
-        """Return True if the path points to a notebook in Databricks Workspace."""
-        try:
-            return self._object_info.object_type == ObjectType.NOTEBOOK
-        except DatabricksError:
-            return False
-
-    def iterdir(self) -> Generator[WorkspacePath, None, None]:
-        for child in self._ws.workspace.list(self.as_posix()):
-            yield self._from_object_info(self._ws, child)
 
 
 T = TypeVar("T", bound="Path")
