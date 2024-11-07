@@ -238,12 +238,12 @@ class _DatabricksPath(Path, abc.ABC):  # pylint: disable=too-many-public-methods
 
     @abstractmethod
     def open(
-            self,
-            mode: str = "r",
-            buffering: int = -1,
-            encoding: str | None = None,
-            errors: str | None = None,
-            newline: str | None = None,
+        self,
+        mode: str = "r",
+        buffering: int = -1,
+        encoding: str | None = None,
+        errors: str | None = None,
+        newline: str | None = None,
     ): ...
 
     @abstractmethod
@@ -583,10 +583,10 @@ class _DatabricksPath(Path, abc.ABC):  # pylint: disable=too-many-public-methods
         return pattern_parts
 
     def glob(
-            self: P,
-            pattern: str | bytes | os.PathLike,
-            *,
-            case_sensitive: bool | None = None,
+        self: P,
+        pattern: str | bytes | os.PathLike,
+        *,
+        case_sensitive: bool | None = None,
     ) -> Generator[P, None, None]:
         pattern_parts = self._prepare_pattern(pattern)
         if case_sensitive is None:
@@ -595,10 +595,10 @@ class _DatabricksPath(Path, abc.ABC):  # pylint: disable=too-many-public-methods
         yield from selector(self)
 
     def rglob(
-            self: P,
-            pattern: str | bytes | os.PathLike,
-            *,
-            case_sensitive: bool | None = None,
+        self: P,
+        pattern: str | bytes | os.PathLike,
+        *,
+        case_sensitive: bool | None = None,
     ) -> Generator[P, None, None]:
         pattern_parts = ("**", *self._prepare_pattern(pattern))
         if case_sensitive is None:
@@ -676,12 +676,12 @@ class DBFSPath(_DatabricksPath):
         self._ws.dbfs.delete(self.as_posix())
 
     def open(
-            self,
-            mode: str = "r",
-            buffering: int = -1,
-            encoding: str | None = None,
-            errors: str | None = None,
-            newline: str | None = None,
+        self,
+        mode: str = "r",
+        buffering: int = -1,
+        encoding: str | None = None,
+        errors: str | None = None,
+        newline: str | None = None,
     ):
         """Open a DBFS file.
 
@@ -822,12 +822,12 @@ class WorkspacePath(_DatabricksPath):
                 raise FileNotFoundError(f"{self.as_posix()} does not exist") from e
 
     def open(
-            self,
-            mode: str = "r",
-            buffering: int = -1,
-            encoding: str | None = None,
-            errors: str | None = None,
-            newline: str | None = None,
+        self,
+        mode: str = "r",
+        buffering: int = -1,
+        encoding: str | None = None,
+        errors: str | None = None,
+        newline: str | None = None,
     ):
         """Open a file in Databricks Workspace. Only text and binary modes are supported."""
         if "b" in mode and "r" in mode:
