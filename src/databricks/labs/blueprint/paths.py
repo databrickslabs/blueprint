@@ -138,7 +138,6 @@ class _DatabricksPath(Path, abc.ABC):  # pylint: disable=too-many-public-methods
         # Force all initialisation to go via __init__() irrespective of the (Python-specific) base version.
         return object.__new__(cls)
 
-    # pylint: disable=super-init-not-called
     def __init__(self, ws: WorkspaceClient, *args: str | bytes | os.PathLike) -> None:
         # We deliberately do _not_ call the super initializer because we're taking over complete responsibility for the
         # implementation of the public API.
@@ -386,7 +385,6 @@ class _DatabricksPath(Path, abc.ABC):  # pylint: disable=too-many-public-methods
             raise ValueError(msg)
         return self.with_name(stem + suffix)
 
-    # pylint: disable=arguments-differ
     def relative_to(self: P, *other: str | bytes | os.PathLike, walk_up: bool = False) -> P:
         normalized = self.with_segments(*other)
         if self.anchor != normalized.anchor:
@@ -528,13 +526,14 @@ class _DatabricksPath(Path, abc.ABC):  # pylint: disable=too-many-public-methods
             return self
         segments: list[str] = []
         for part in self._path_parts:
-            if part == "..":
-                if segments:
-                    segments.pop()
-            elif part is None or part == '.':
-                continue
-            else:
-                segments.append(part)
+            match part:
+                case "..":
+                    if segments:
+                        segments.pop()
+                case None | ".":
+                    pass
+                case _:
+                    segments.append(part)
         # pylint: disable=protected-access
         return self.with_segments(self.anchor, *segments)._normalize()
 
