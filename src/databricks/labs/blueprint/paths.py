@@ -8,7 +8,6 @@ import io
 import locale
 import logging
 import os
-import posixpath
 import re
 import shutil
 import stat
@@ -29,6 +28,9 @@ from databricks.sdk.service.workspace import (
     ObjectInfo,
     ObjectType,
 )
+
+from databricks.labs.blueprint import _posixpath
+
 
 logger = logging.getLogger(__name__)
 
@@ -85,6 +87,19 @@ class _DatabricksPath(Path, abc.ABC):  # pylint: disable=too-many-public-methods
     #  - Since 3.12 the implementation of these interfaces have been removed:
     #     1. Flavour has been replaced with posixpath and ntpath (normally imported as os.path). Still class-scoped.
     #     2. Accessor has been replaced with inline implementations based directly on the 'os' module.
+    #  - Since 3.13 comparisons and equality include a check on the identity of the 'parser' property instead of using
+    #    the flavour.
+    #  - Comparisons for builtin paths use different strategies, depending on the python version.
+    #     - Python 3.10, 3.11: Loose ("PurePath") type and flavour equality check, _cparts property check.
+    #     - Python 3.12: Loose ("PurePath") type and flavour equality check, _str_normcase property check.
+    #     - Python 3.13: Loose ("PurePath") type and parser identity check, _str_normcase property check.
+    #    Although we can override comparisons when we are on the LHS, when a builtin path is on the LHS its comparison
+    #    is first attempted. We deal with this with a combination of techniques:
+    #     - Stubbing/emulating the internal properties that they use. (This means they don't trigger exceptions.)
+    #     - Trying to force the builtin implementation to return NotImplemented: when this happens, Python will attempt
+    #       the reversed comparison (by swapping LHS/RHS) and therefore our implementation is invoked.
+    #     - Ensuring the parser property doesn't have the same identity as builtin parsers. (From python 3.13 only
+    #       paths with the same parser object are comparable.)
     #
     # This implementation for Databricks-style paths does the following:
     #     1. Flavour is basically posix-style, with the caveat that we don't bother with the special //-prefix handling.
@@ -113,8 +128,7 @@ class _DatabricksPath(Path, abc.ABC):  # pylint: disable=too-many-public-methods
     _str: str
     _hash: int
 
-    # Path semantics are posix-like.
-    parser = posixpath
+    parser = _posixpath
 
     # Compatibility attribute, for when superclass implementations get invoked on python <= 3.11.
     _flavour = object()
