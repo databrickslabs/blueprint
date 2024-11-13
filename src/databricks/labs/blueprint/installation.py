@@ -25,6 +25,7 @@ from typing import (
     get_type_hints,
     runtime_checkable,
 )
+from unittest.mock import create_autospec
 
 import databricks.sdk.core
 from databricks.sdk import WorkspaceClient
@@ -844,6 +845,7 @@ class MockInstallation(Installation):
         self._dbfs: dict[str, bytes] = {}
         self._removed = False
         self._is_global = is_global
+        self._ws = create_autospec(WorkspaceClient)
 
     def install_folder(self) -> str:
         return "~/mock"
