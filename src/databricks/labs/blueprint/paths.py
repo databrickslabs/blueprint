@@ -31,7 +31,6 @@ from databricks.sdk.service.workspace import (
 
 from databricks.labs.blueprint import _posixpath
 
-
 logger = logging.getLogger(__name__)
 
 
