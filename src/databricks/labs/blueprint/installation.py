@@ -472,7 +472,7 @@ class Installation:
     def _marshal(self, type_ref: type, path: list[str], inst: Any) -> tuple[Any, bool]:
         """The `_marshal` method is a private method that is used to serialize an object of type `type_ref` to
         a dictionary. This method is called by the `save` method."""
-        if not inst:
+        if inst is None:
             return None, False
         if isinstance(inst, databricks.sdk.core.Config):
             return self._marshal_databricks_config(inst)
