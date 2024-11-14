@@ -1,5 +1,10 @@
 # Version changelog
 
+## 0.9.3
+
+* Fixed issue when Databricks SDK config objects were overridden for installation config files ([#170](https://github.com/databrickslabs/blueprint/issues/170)). This commit addresses an issue where Databricks SDK config objects were being overridden during installation config files creation, which has been resolved by modifying the `_marshal` method in the `installation` class to handle `databricks.sdk.core.Config` instances more carefully, and by introducing a new helper function `get_databricks_sdk_config` in the `paths.py` file, which retrieves the Databricks SDK configuration and improves the reliability and robustness of the SDK configuration. This fixes bug [#169](https://github.com/databrickslabs/blueprint/issues/169) and ensures that the SDK configuration is not accidentally modified during the installation process, preventing unexpected behavior and errors. The changes are isolated to the `paths.py` file and do not affect other parts of the codebase.
+
+
 ## 0.9.2
 
 * Bump actions/checkout from 4.2.1 to 4.2.2 ([#160](https://github.com/databrickslabs/blueprint/issues/160)). In this release, the 'actions/checkout' dependency has been updated from version 4.2.1 to 4.2.2. This update includes changes to the 'url-helper.ts' file, which now utilizes well-known environment variables for improved reliability and maintainability. Additionally, unit test coverage for the `isGhes` function has been expanded. These changes are recommended for adoption to take advantage of the enhancements. The pull request includes a detailed changelog, commit history, and instructions for managing the update using Dependabot commands and options.
