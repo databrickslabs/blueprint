@@ -15,7 +15,7 @@ jobs:
       # Used to attach signing artifacts to the published release.
       contents: write
     steps:
-      - uses: actions/checkout@v4.1.7
+      - uses: actions/checkout@v4.2.2
 
       - uses: actions/setup-python@v5
         with:
@@ -31,7 +31,6 @@ jobs:
       - name: Draft release
         uses: softprops/action-gh-release@v2
         with:
-          draft: true
           files: |
             dist/databricks_*.whl
             dist/databricks_*.tar.gz

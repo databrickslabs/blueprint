@@ -22,11 +22,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        pyVersion: [ '3.10', '3.11', '3.12' ]
+        pyVersion: [ '3.10', '3.11', '3.12', '3.13' ]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4.1.7
+        uses: actions/checkout@v4.2.2
 
       - name: Install Python
         uses: actions/setup-python@v5
@@ -52,7 +52,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4.1.7
+        uses: actions/checkout@v4.2.2
 
       - name: Install hatch
         run: pip install hatch==$HATCH_VERSION

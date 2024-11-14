@@ -8,9 +8,9 @@ import io
 import locale
 import logging
 import os
-import posixpath
 import re
 import shutil
+import stat
 from abc import abstractmethod
 from collections.abc import Generator, Iterable, Sequence
 from io import BytesIO, StringIO
@@ -28,6 +28,8 @@ from databricks.sdk.service.workspace import (
     ObjectInfo,
     ObjectType,
 )
+
+from databricks.labs.blueprint import _posixpath
 
 logger = logging.getLogger(__name__)
 
@@ -111,6 +113,19 @@ class _DatabricksPath(Path, abc.ABC):  # pylint: disable=too-many-public-methods
     #  - Since 3.12 the implementation of these interfaces have been removed:
     #     1. Flavour has been replaced with posixpath and ntpath (normally imported as os.path). Still class-scoped.
     #     2. Accessor has been replaced with inline implementations based directly on the 'os' module.
+    #  - Since 3.13 comparisons and equality include a check on the identity of the 'parser' property instead of using
+    #    the flavour.
+    #  - Comparisons for builtin paths use different strategies, depending on the python version.
+    #     - Python 3.10, 3.11: Loose ("PurePath") type and flavour equality check, _cparts property check.
+    #     - Python 3.12: Loose ("PurePath") type and flavour equality check, _str_normcase property check.
+    #     - Python 3.13: Loose ("PurePath") type and parser identity check, _str_normcase property check.
+    #    Although we can override comparisons when we are on the LHS, when a builtin path is on the LHS its comparison
+    #    is first attempted. We deal with this with a combination of techniques:
+    #     - Stubbing/emulating the internal properties that they use. (This means they don't trigger exceptions.)
+    #     - Trying to force the builtin implementation to return NotImplemented: when this happens, Python will attempt
+    #       the reversed comparison (by swapping LHS/RHS) and therefore our implementation is invoked.
+    #     - Ensuring the parser property doesn't have the same identity as builtin parsers. (From python 3.13 only
+    #       paths with the same parser object are comparable.)
     #
     # This implementation for Databricks-style paths does the following:
     #     1. Flavour is basically posix-style, with the caveat that we don't bother with the special //-prefix handling.
@@ -139,8 +154,7 @@ class _DatabricksPath(Path, abc.ABC):  # pylint: disable=too-many-public-methods
     _str: str
     _hash: int
 
-    # Path semantics are posix-like.
-    parser = posixpath
+    parser = _posixpath
 
     # Compatibility attribute, for when superclass implementations get invoked on python <= 3.11.
     _flavour = object()
@@ -148,7 +162,6 @@ class _DatabricksPath(Path, abc.ABC):  # pylint: disable=too-many-public-methods
     # Public APIs that we don't support.
     as_uri = _na("as_uri")
     cwd = _na("cwd")
-    stat = _na("stat")
     chmod = _na("chmod")
     lchmod = _na("lchmod")
     lstat = _na("lstat")
@@ -545,7 +558,24 @@ class _DatabricksPath(Path, abc.ABC):  # pylint: disable=too-many-public-methods
         if strict and not absolute.exists():
             msg = f"Path does not exist: {self}"
             raise FileNotFoundError(msg)
-        return absolute
+        # pylint: disable=protected-access
+        return absolute._normalize()
+
+    def _normalize(self: P) -> P:
+        if ".." not in self._path_parts:
+            return self
+        segments: list[str] = []
+        for part in self._path_parts:
+            match part:
+                case "..":
+                    if segments:
+                        segments.pop()
+                case None | ".":
+                    pass
+                case _:
+                    segments.append(part)
+        # pylint: disable=protected-access
+        return self.with_segments(self.anchor, *segments)._normalize()
 
     def absolute(self: P) -> P:
         if self.is_absolute():
@@ -634,7 +664,7 @@ class DBFSPath(_DatabricksPath):
         try:
             self._cached_file_info = self._ws.dbfs.get_status(self.as_posix())
             return True
-        except NotFound:
+        except DatabricksError:
             return False
 
     def _mkdir(self) -> None:
@@ -718,6 +748,14 @@ class DBFSPath(_DatabricksPath):
             self._cached_file_info = self._ws.dbfs.get_status(self.as_posix())
             return self._cached_file_info
 
+    def stat(self, *, follow_symlinks=True) -> os.stat_result:
+        seq: list[float] = [-1.0] * 10
+        seq[stat.ST_SIZE] = self._file_info.file_size or -1  # 6
+        seq[stat.ST_MTIME] = (
+            float(self._file_info.modification_time) / 1000.0 if self._file_info.modification_time else -1.0
+        )  # 8
+        return os.stat_result(seq)
+
     def is_dir(self) -> bool:
         """Return True if the path points to a DBFS directory."""
         try:
@@ -771,7 +809,7 @@ class WorkspacePath(_DatabricksPath):
         try:
             self._cached_object_info = self._ws.workspace.get_status(self.as_posix())
             return True
-        except NotFound:
+        except DatabricksError:
             return False
 
     def _mkdir(self) -> None:
@@ -867,6 +905,15 @@ class WorkspacePath(_DatabricksPath):
         except AttributeError:
             self._cached_object_info = self._ws.workspace.get_status(self.as_posix())
             return self._object_info
+
+    def stat(self, *, follow_symlinks=True) -> os.stat_result:
+        seq: list[float] = [-1.0] * 10
+        seq[stat.ST_SIZE] = self._object_info.size or -1  # 6
+        seq[stat.ST_MTIME] = (
+            float(self._object_info.modified_at) / 1000.0 if self._object_info.modified_at else -1.0
+        )  # 8
+        seq[stat.ST_CTIME] = float(self._object_info.created_at) / 1000.0 if self._object_info.created_at else -1.0  # 9
+        return os.stat_result(seq)
 
     def is_dir(self) -> bool:
         """Return True if the path points to a directory in Databricks Workspace."""

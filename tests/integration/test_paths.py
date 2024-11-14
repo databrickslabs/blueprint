@@ -1,4 +1,5 @@
 import codecs
+from datetime import datetime
 from pathlib import Path
 
 import pytest
@@ -65,6 +66,21 @@ def test_open_text_io(ws, make_random, cls):
     with_user.joinpath("hello.txt").unlink()
 
     assert not hello_txt.exists()
+
+
+@pytest.mark.parametrize("cls", DATABRICKS_PATHLIKE)
+def test_stat(ws, make_random, cls):
+    now = datetime.now().timestamp()
+    name = make_random()
+    wsp = cls(ws, f"~/{name}/a/b/c")
+    with_user = wsp.expanduser()
+    with_user.mkdir(parents=True)
+
+    hello_txt = with_user / "hello.txt"
+    hello_txt.write_text("Hello, World!")
+    if cls is WorkspacePath:  # DBFSPath has no st_ctime
+        assert hello_txt.stat().st_ctime >= now
+    assert hello_txt.stat().st_mtime >= now
 
 
 @pytest.mark.parametrize("cls", DATABRICKS_PATHLIKE)
@@ -173,6 +189,22 @@ def test_replace_file(ws, make_random, cls):
         assert replaced_file.is_file() and replaced_file.read_text() == "Some content"
     finally:
         tmp_dir.rmdir(recursive=True)
+
+
+@pytest.mark.parametrize("cls", DATABRICKS_PATHLIKE)
+def test_resolve_is_consistent(ws, cls):
+    path = cls(ws, "/a/b/c") / Path("../../d")
+    resolved = path.resolve()
+    assert resolved == cls(ws, "/a/d")
+    path = cls(ws, "/a/b/c") / "../../d"
+    resolved = path.resolve()
+    assert resolved == cls(ws, "/a/d")
+    resolved = cls(ws, "/a/b/c/../../d").resolve()
+    assert resolved == cls(ws, "/a/d")
+    resolved = cls(ws, "/../d").resolve()
+    assert resolved == cls(ws, "/d")
+    resolved = cls(ws, "/a/b/c/./../../d").resolve()
+    assert resolved == cls(ws, "/a/d")
 
 
 def test_workspace_as_fuse(ws):
