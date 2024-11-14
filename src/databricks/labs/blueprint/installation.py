@@ -25,7 +25,6 @@ from typing import (
     get_type_hints,
     runtime_checkable,
 )
-from unittest.mock import create_autospec
 
 import databricks.sdk.core
 from databricks.sdk import WorkspaceClient
@@ -481,8 +480,6 @@ class Installation:
             return inst.as_dict(), True
         if dataclasses.is_dataclass(type_ref):
             return self._marshal_dataclass(type_ref, path, inst)
-        if isinstance(inst, databricks.sdk.core.Config):
-            return inst.as_dict(), True
         if type_ref == list:
             return self._marshal_list(type_ref, path, inst)
         if isinstance(type_ref, enum.EnumMeta):
@@ -588,11 +585,14 @@ class Installation:
         `databricks.sdk.core.Config` to a dictionary. This method is called by the `save` method."""
         if not inst:
             return None, False
-        current_client_config = self._ws.config.as_dict()
-        remote_config = inst.as_dict()
-        if current_client_config == remote_config:
+        current_client_config = self._current_client_config()
+        remote_file_config = inst.as_dict()
+        if current_client_config == remote_file_config:
             return None, True
-        return remote_config, True
+        return remote_file_config, True
+
+    def _current_client_config(self) -> dict:
+        return self._ws.config.as_dict()
 
     @staticmethod
     def _marshal_enum(inst):
@@ -845,7 +845,6 @@ class MockInstallation(Installation):
         self._dbfs: dict[str, bytes] = {}
         self._removed = False
         self._is_global = is_global
-        self._ws = create_autospec(WorkspaceClient)
 
     def install_folder(self) -> str:
         return "~/mock"
@@ -887,6 +886,9 @@ class MockInstallation(Installation):
 
     def remove(self):
         self._removed = True
+
+    def _current_client_config(self) -> dict:
+        return {}
 
     def _overwrite_content(self, filename: str, as_dict: Json, type_ref: type):
         self._overwrites[filename] = as_dict
