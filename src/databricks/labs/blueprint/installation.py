@@ -570,7 +570,7 @@ class Installation:
             if origin is typing.ClassVar:
                 continue
             raw = getattr(inst, field)
-            if not raw:
+            if raw is None:
                 continue
             value, ok = self._marshal(hint, [*path, field], raw)
             if not ok:
