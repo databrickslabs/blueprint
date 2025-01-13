@@ -1,5 +1,14 @@
 # Version changelog
 
+## 0.10.0
+
+* Bump codecov/codecov-action from 4 to 5 ([#174](https://github.com/databrickslabs/blueprint/issues/174)). In this release, the `codecov/codecov-action` dependency is bumped from version 4 to 5 in the `push.yml` GitHub workflow file. The new version introduces several changes, including the use of the Codecov Wrapper to encapsulate the CLI, which enables faster updates. Breaking changes include the deprecation of `file` and `plugin` arguments in favor of `files` and `plugins`, respectively. Additionally, several new arguments have been added, such as `binary`, `gcov_args`, `gcov_executable`, `gcov_ignore`, `gcov_include`, `report_type`, `skip_validation`, and `swift_project`. A migration guide is provided to assist users in updating to the new version. Compatibility issues may arise due to the breaking changes, and users are advised to thoroughly review the migration guide and update their configurations accordingly.
+* Skip dataclassess fields only when `None` ([#180](https://github.com/databrickslabs/blueprint/issues/180)). In this release, we've implemented a change to our open-source library that enhances the handling of dataclass fields during the marshalling process. Previously, fields were skipped if their value was falsy, which could inadvertently exclude empty lists, strings, or zeros. Now, the `_marshal_dataclass` function in the `installation.py` file has been updated to explicitly check for `None` when determining if a field should be skipped. This ensures that empty values are properly marshalled, increasing flexibility for users working with different data types. This change resolves issue [#179](https://github.com/databrickslabs/blueprint/issues/179) and demonstrates our commitment to improving the robustness and usability of our library for software engineers.
+
+Dependency updates:
+
+ * Bump codecov/codecov-action from 4 to 5 ([#174](https://github.com/databrickslabs/blueprint/pull/174)).
+
 ## 0.9.3
 
 * Fixed issue when Databricks SDK config objects were overridden for installation config files ([#170](https://github.com/databrickslabs/blueprint/issues/170)). This commit addresses an issue where Databricks SDK config objects were being overridden during installation config files creation, which has been resolved by modifying the `_marshal` method in the `installation` class to handle `databricks.sdk.core.Config` instances more carefully, and by introducing a new helper function `get_databricks_sdk_config` in the `paths.py` file, which retrieves the Databricks SDK configuration and improves the reliability and robustness of the SDK configuration. This fixes bug [#169](https://github.com/databrickslabs/blueprint/issues/169) and ensures that the SDK configuration is not accidentally modified during the installation process, preventing unexpected behavior and errors. The changes are isolated to the `paths.py` file and do not affect other parts of the codebase.
