@@ -65,7 +65,7 @@ fmt         = ["isort .",
                "ruff format",
                "ruff check . --fix",
                "mypy .",
-               "pylint --version"]
+               "pylint --output-format=colorized -j 0 src"]
 verify      = ["isort . --check-only",
                "ruff format --check --diff",
                "ruff check .",

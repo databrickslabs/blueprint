@@ -54,6 +54,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4.2.2
 
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          # Since 3.10 is the development version for the project
+          python-version: '3.10'
+
       - name: Install hatch
         run: pip install hatch==$HATCH_VERSION
 
