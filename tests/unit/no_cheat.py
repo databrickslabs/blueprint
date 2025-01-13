@@ -1,11 +1,11 @@
 import sys
 from pathlib import Path
 
-DISABLE_TAG = '# pylint: disable='
+DISABLE_TAG = "# pylint: disable="
 
 
 def no_cheat(diff_text: str) -> str:
-    lines = diff_text.split('\n')
+    lines = diff_text.split("\n")
     removed: dict[str, int] = {}
     added: dict[str, int] = {}
     for line in lines:
@@ -14,9 +14,9 @@ def no_cheat(diff_text: str) -> str:
         idx = line.find(DISABLE_TAG)
         if idx < 0:
             continue
-        codes = line[idx + len(DISABLE_TAG) :].split(',')
+        codes = line[idx + len(DISABLE_TAG) :].split(",")
         for code in codes:
-            code = code.strip().strip('\n').strip('"').strip("'")
+            code = code.strip().strip("\n").strip('"').strip("'")
             if line.startswith("-"):
                 removed[code] = removed.get(code, 0) + 1
                 continue
@@ -26,7 +26,7 @@ def no_cheat(diff_text: str) -> str:
         count -= removed.get(code, 0)
         if count > 0:
             results.append(f"Do not cheat the linter: found {count} additional {DISABLE_TAG}{code}")
-    return '\n'.join(results)
+    return "\n".join(results)
 
 
 if __name__ == "__main__":
