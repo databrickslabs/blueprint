@@ -1,5 +1,10 @@
 # Version changelog
 
+## 0.10.1
+
+* patch hosted runner ([#185](https://github.com/databrickslabs/blueprint/issues/185)). In this release, we have implemented a temporary fix to address issues with publishing artifacts in the release workflow. This fix involves changing the runner used for the job from `ubuntu-latest` to a protected runner group labeled "linux-ubuntu-latest". This ensures that the job runs on a designated hosted runner with the specified configuration, enhancing the reliability and security of the release process. The `permissions` section of the job remains unchanged, allowing authentication to PyPI and signing of release artifacts with sigstore-python. It is worth noting that this is a stopgap measure, and further changes to the release workflow may be made in the future.
+
+
 ## 0.10.0
 
 * Fixed incorrect script for no-pylint-disable ([#178](https://github.com/databrickslabs/blueprint/issues/178)). In this release, we have updated the script used in the `no-cheat` GitHub workflow to address false positives in stacked pull requests. The updated script fetches the base reference from the remote repository and generates a diff between the base reference and the current branch, saving it to a file. It then runs the "no_cheat.py" script against this diff file and saves the results to a separate file. If the count of cheats (instances where linting has been intentionally disabled) is greater than one, the script outputs the contents of the results file and exits with a non-zero status, indicating an error. This change enhances the accuracy of the script and ensures it functions correctly in a stacked pull request scenario. The `no_cheat` function, which checks for the presence of certain pylint disable tags in a given diff text, has been updated to the latest version from the ucx project to improve accuracy. The function identifies tags by looking for lines starting with `-` or "+" followed by the disable tag and a list of codes, and counts the number of times each code is added and removed, reporting any net additions.
