@@ -425,7 +425,7 @@ Here are the assumptions made by this formatter:
 
  * Most likely you're forwarding your logs to a file already, this log formatter is mainly for visual consumption.
  * The average app or Databricks Job most likely finishes running within a day or two, so we display only hours, minutes, and seconds from the timestamp.
- * We gray out debug messages, and highlight all other messages. Errors and fatas are additionally painted with red.
+ * We gray out debug messages, and highlight all other messages. Errors and fatals are additionally painted with red.
  * We shorten the name of the logger to a readable chunk only, not to clutter the space. Real-world apps have deeply nested folder structures and filenames like `src/databricks/labs/ucx/migration/something.py`, which translate into `databricks.labs.ucx.migration.something` fully-qualified Python module names, that get reflected into `__name__` [top-level code environment](https://docs.python.org/3/library/__main__.html#what-is-the-top-level-code-environment) special variable, that you idiomatically use with logging as `logger.getLogger(__name__)`. This log formatter shortens the full module path to a more readable `d.l.u.migration.something`, which is easier to consume from a terminal screen or a notebook. 
  * We only show the name of the thread if it's other than `MainThread`, because the overwhelming majority of Python applications are single-threaded.
 
