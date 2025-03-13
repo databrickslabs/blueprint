@@ -485,7 +485,7 @@ class Installation:
             return self._marshal_raw_list(path, inst)
         if type_ref == dict:
             return self._marshal_raw_dict(path, inst)
-        if type_ref in (object, any):
+        if type_ref in (object, any, Any):
             return self._marshal(type(inst), path, inst)
         if isinstance(type_ref, enum.EnumMeta):
             return self._marshal_enum(inst)
@@ -676,7 +676,7 @@ class Installation:
             return cls._unmarshal_union(inst, path, type_ref)
         if isinstance(type_ref, (_GenericAlias, types.GenericAlias)):
             return cls._unmarshal_generic(inst, path, type_ref)
-        if type_ref in (object, any):
+        if type_ref in (object, any, Any):
             return cls._unmarshal_object(inst, path)
         raise SerdeError(f'{".".join(path)}: unknown: {type_ref}: {inst}')
 

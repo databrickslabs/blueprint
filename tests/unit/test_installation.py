@@ -525,6 +525,18 @@ def test_generic_dict_any():
     assert loaded == saved
 
 
+def test_generic_dict_any2():
+    @dataclass
+    class SampleClass:
+        field: dict[str, typing.Any]
+
+    installation = MockInstallation()
+    saved = SampleClass(field={"a": ["x", "y"], "b": [], "c": 3, "d": True, "e": {"a": "b"}})
+    installation.save(saved, filename="backups/SampleClass.json")
+    loaded = installation.load(SampleClass, filename="backups/SampleClass.json")
+    assert loaded == saved
+
+
 def test_generic_list_str():
     @dataclass
     class SampleClass:
@@ -589,6 +601,18 @@ def test_generic_list_any():
     @dataclass
     class SampleClass:
         field: list[any]
+
+    installation = MockInstallation()
+    saved = SampleClass(field=[["x", "y"], [], 3, True, {"a": "b"}])
+    installation.save(saved, filename="backups/SampleClass.json")
+    loaded = installation.load(SampleClass, filename="backups/SampleClass.json")
+    assert loaded == saved
+
+
+def test_generic_list_any2():
+    @dataclass
+    class SampleClass:
+        field: list[typing.Any]
 
     installation = MockInstallation()
     saved = SampleClass(field=[["x", "y"], [], 3, True, {"a": "b"}])
