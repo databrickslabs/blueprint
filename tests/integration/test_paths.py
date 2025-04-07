@@ -5,10 +5,10 @@ from pathlib import Path
 import pytest
 from databricks.sdk.errors import BadRequest, ResourceAlreadyExists
 
-from databricks.labs.blueprint.paths import DBFSPath, WorkspacePath
+from databricks.labs.blueprint.paths import DBFSPath, VolumePath, WorkspacePath
 
-# Currently: DBFSPath, WorkspacePath, later: VolumePath
-DATABRICKS_PATHLIKE = [DBFSPath, WorkspacePath]
+# Currently: DBFSPath, WorkspacePath, VolumePath
+DATABRICKS_PATHLIKE = [DBFSPath, WorkspacePath, VolumePath]
 
 
 @pytest.mark.parametrize("cls", DATABRICKS_PATHLIKE)
