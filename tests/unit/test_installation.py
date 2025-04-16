@@ -451,3 +451,99 @@ def test_assert_file_uploaded():
     installation = MockInstallation()
     installation.upload("foo", b"bar")
     installation.assert_file_uploaded("foo", b"bar")
+
+
+def test_generic_dict_str():
+    @dataclass
+    class SampleClass:
+        field: dict[str, str]
+
+    installation = MockInstallation()
+    saved = SampleClass(field={"a": "b", "b": "c"})
+    installation.save(saved, filename="backups/SampleClass.json")
+    loaded = installation.load(SampleClass, filename="backups/SampleClass.json")
+    assert loaded == saved
+
+
+def test_generic_dict_int():
+    @dataclass
+    class SampleClass:
+        field: dict[str, int]
+
+    installation = MockInstallation()
+    saved = SampleClass(field={"a": 1, "b": 1})
+    installation.save(saved, filename="backups/SampleClass.json")
+    loaded = installation.load(SampleClass, filename="backups/SampleClass.json")
+    assert loaded == saved
+
+
+def test_generic_dict_float():
+    @dataclass
+    class SampleClass:
+        field: dict[str, float]
+
+    installation = MockInstallation()
+    saved = SampleClass(field={"a": 1.1, "b": 1.2})
+    installation.save(saved, filename="backups/SampleClass.json")
+    loaded = installation.load(SampleClass, filename="backups/SampleClass.json")
+    assert loaded == saved
+
+
+def test_generic_dict_list():
+    @dataclass
+    class SampleClass:
+        field: dict[str, list[str]]
+
+    installation = MockInstallation()
+    saved = SampleClass(field={"a": ["x", "y"], "b": []})
+    installation.save(saved, filename="backups/SampleClass.json")
+    loaded = installation.load(SampleClass, filename="backups/SampleClass.json")
+    assert loaded == saved
+
+
+def test_generic_list_str():
+    @dataclass
+    class SampleClass:
+        field: list[str]
+
+    installation = MockInstallation()
+    saved = SampleClass(field=["a", "b"])
+    installation.save(saved, filename="backups/SampleClass.json")
+    loaded = installation.load(SampleClass, filename="backups/SampleClass.json")
+    assert loaded == saved
+
+
+def test_generic_list_int():
+    @dataclass
+    class SampleClass:
+        field: list[int]
+
+    installation = MockInstallation()
+    saved = SampleClass(field=[1, 2, 3])
+    installation.save(saved, filename="backups/SampleClass.json")
+    loaded = installation.load(SampleClass, filename="backups/SampleClass.json")
+    assert loaded == saved
+
+
+def test_generic_list_float():
+    @dataclass
+    class SampleClass:
+        field: list[float]
+
+    installation = MockInstallation()
+    saved = SampleClass(field=[1.1, 1.2])
+    installation.save(saved, filename="backups/SampleClass.json")
+    loaded = installation.load(SampleClass, filename="backups/SampleClass.json")
+    assert loaded == saved
+
+
+def test_generic_list_list():
+    @dataclass
+    class SampleClass:
+        field: list[list[str]]
+
+    installation = MockInstallation()
+    saved = SampleClass(field=[["x", "y"], []])
+    installation.save(saved, filename="backups/SampleClass.json")
+    loaded = installation.load(SampleClass, filename="backups/SampleClass.json")
+    assert loaded == saved
