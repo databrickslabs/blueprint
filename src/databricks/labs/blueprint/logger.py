@@ -2,6 +2,7 @@
 
 import logging
 import sys
+from typing import TextIO
 
 
 class NiceFormatter(logging.Formatter):
@@ -17,10 +18,13 @@ class NiceFormatter(logging.Formatter):
     MAGENTA = "\033[35m"
     GRAY = "\033[90m"
 
-    def __init__(self, *, probe_tty: bool = False) -> None:
-        """Create a new instance of the formatter. If probe_tty is True, then the formatter will
-        attempt to detect if the console supports colors. If probe_tty is False, colors will be
-        enabled by default."""
+    def __init__(self, *, probe_tty: bool = False, output: TextIO = sys.stdout) -> None:
+        """Create a new instance of the formatter.
+
+        Args:
+            output: the output stream to which the formatter will write, used to check if it is a console.
+            probe_tty: If true, the formatter will enable color support if the output stream appears to be a console.
+        """
         super().__init__(fmt="%(asctime)s %(levelname)s [%(name)s] %(message)s", datefmt="%H:%M")
         self._levels = {
             logging.NOTSET: self._bold("TRACE"),
@@ -31,7 +35,7 @@ class NiceFormatter(logging.Formatter):
             logging.CRITICAL: self._bold(f"{self.MAGENTA}FATAL"),
         }
         # show colors in runtime, github actions, and while debugging
-        self.colors = sys.stdout.isatty() if probe_tty else True
+        self.colors = output.isatty() if probe_tty else True
 
     def _bold(self, text):
         """Return text in bold."""
@@ -73,7 +77,7 @@ def install_logger(level="DEBUG"):
     for handler in logging.root.handlers:
         logging.root.removeHandler(handler)
     console_handler = logging.StreamHandler(sys.stderr)
-    console_handler.setFormatter(NiceFormatter())
+    console_handler.setFormatter(NiceFormatter(output=sys.stderr))
     console_handler.setLevel(level)
     logging.root.addHandler(console_handler)
     return console_handler
