@@ -777,10 +777,17 @@ class Installation:
     def _unmarshal_primitive(cls, inst, type_ref):
         """The `_unmarshal_primitive` method is a private method that is used to deserialize a dictionary to an object
         of type `type_ref`. This method is called by the `load` method."""
-        if not inst:
+        if inst is None:
+            return None
+        if type(inst)==type_ref:
             return inst
-        # convert from str to int if necessary
-        converted = type_ref(inst)  # type: ignore[call-arg]
+        converted = inst
+        # convert from str
+        if isinstance(inst, str):
+            if type_ref in (int, float):
+                converted = type_ref(inst)  # type: ignore[call-arg]
+            elif type_ref == bool:
+                converted = inst.lower()=="true"
         return converted
 
     @staticmethod

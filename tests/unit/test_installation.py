@@ -595,3 +595,16 @@ def test_generic_list_any():
     installation.save(saved, filename="backups/SampleClass.json")
     loaded = installation.load(SampleClass, filename="backups/SampleClass.json")
     assert loaded == saved
+
+def test_bool_in_union():
+    @dataclass
+    class SampleClass:
+        field: dict[str, bool | str]
+
+    installation = MockInstallation()
+    saved = SampleClass(field={"a": "b"})
+    installation.save(saved, filename="backups/SampleClass.json")
+    loaded = installation.load(SampleClass, filename="backups/SampleClass.json")
+    assert loaded == saved
+
+
