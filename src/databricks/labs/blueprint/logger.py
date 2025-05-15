@@ -32,12 +32,11 @@ class NiceFormatter(logging.Formatter):
         """
         super().__init__(fmt="%(asctime)s %(levelname)s [%(name)s] %(message)s", datefmt="%H:%M")
         self._levels = {
-            logging.NOTSET: self._bold("TRACE"),
-            logging.DEBUG: self._bold(f"{self.CYAN}DEBUG"),
-            logging.INFO: self._bold(f"{self.GREEN} INFO"),
-            logging.WARNING: self._bold(f"{self.YELLOW} WARN"),
-            logging.ERROR: self._bold(f"{self.RED}ERROR"),
-            logging.CRITICAL: self._bold(f"{self.MAGENTA}FATAL"),
+            logging.DEBUG: self._bold(f"{self.CYAN}   DEBUG"),
+            logging.INFO: self._bold(f"{self.GREEN}    INFO"),
+            logging.WARNING: self._bold(f"{self.YELLOW} WARNING"),
+            logging.ERROR: self._bold(f"{self.RED}   ERROR"),
+            logging.CRITICAL: self._bold(f"{self.MAGENTA}CRITICAL"),
         }
         # show colors in runtime, github actions, and while debugging
         self.colors = stream.isatty() if probe_tty else True
