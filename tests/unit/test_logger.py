@@ -206,10 +206,10 @@ def test_formatter_format_simple_msg(use_colors: bool) -> None:
 @pytest.mark.parametrize(
     "use_colors",
     (
-            pytest.param(
-                True, marks=pytest.mark.xfail(reason="Argument interpolation when colorizing doesn't work.", strict=True)
-            ),
-            False,
+        pytest.param(
+            True, marks=pytest.mark.xfail(reason="Argument interpolation when colorizing doesn't work.", strict=True)
+        ),
+        False,
     ),
     ids=("with_colors", "without_colors"),
 )
@@ -229,11 +229,11 @@ def test_formatter_format_msg_with_args(use_colors: bool) -> None:
 @pytest.mark.parametrize(
     "use_colors",
     (
-            True,
-            pytest.param(
-                False,
-                marks=pytest.mark.xfail(reason="Non-colorized logs currently missing second-granularity.", strict=True),
-            ),
+        True,
+        pytest.param(
+            False,
+            marks=pytest.mark.xfail(reason="Non-colorized logs currently missing second-granularity.", strict=True),
+        ),
     ),
     ids=["with_colors", "without_colors"],
 )
@@ -360,13 +360,13 @@ def test_formatter_format_colorized_thread_name() -> None:
 @pytest.mark.parametrize(
     "use_colors",
     (
-            pytest.param(
-                True,
-                marks=pytest.mark.xfail(
-                    reason="Colorized exception formatting is inconsistent with system logging.", strict=True
-                ),
+        pytest.param(
+            True,
+            marks=pytest.mark.xfail(
+                reason="Colorized exception formatting is inconsistent with system logging.", strict=True
             ),
-            False,
+        ),
+        False,
     ),
     ids=("with_colors", "without_colors"),
 )
