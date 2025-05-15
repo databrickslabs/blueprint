@@ -56,7 +56,7 @@ class NiceFormatter(logging.Formatter):
         module_split = record.name.split(".")
         last_two_modules = len(module_split) - 2
         name = ".".join(part if i >= last_two_modules else part[0] for i, part in enumerate(module_split))
-        msg = record.msg
+        msg = record.getMessage()
         if record.exc_info and not record.exc_text:
             record.exc_text = self.formatException(record.exc_info)
         if record.exc_text:
