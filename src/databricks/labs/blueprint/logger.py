@@ -30,7 +30,7 @@ class NiceFormatter(logging.Formatter):
             stream: the output stream to which the formatter will write, used to check if it is a console.
             probe_tty: If true, the formatter will enable color support if the output stream appears to be a console.
         """
-        super().__init__(fmt="%(asctime)s %(levelname)s [%(name)s] %(message)s", datefmt="%H:%M")
+        super().__init__(fmt="%(asctime)s %(levelname)s [%(name)s] %(message)s", datefmt="%H:%M:%S")
         self._levels = {
             logging.NOTSET: self._bold("TRACE"),
             logging.DEBUG: self._bold(f"{self.CYAN}DEBUG"),
@@ -56,7 +56,7 @@ class NiceFormatter(logging.Formatter):
         module_split = record.name.split(".")
         last_two_modules = len(module_split) - 2
         name = ".".join(part if i >= last_two_modules else part[0] for i, part in enumerate(module_split))
-        msg = record.msg
+        msg = record.getMessage()
         if record.exc_info and not record.exc_text:
             record.exc_text = self.formatException(record.exc_info)
         if record.exc_text:

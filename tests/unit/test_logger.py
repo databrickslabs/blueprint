@@ -203,16 +203,7 @@ def test_formatter_format_simple_msg(use_colors: bool) -> None:
     assert stripped.endswith(" This is a test message.")
 
 
-@pytest.mark.parametrize(
-    "use_colors",
-    (
-        pytest.param(
-            True, marks=pytest.mark.xfail(reason="Argument interpolation when colorizing doesn't work.", strict=True)
-        ),
-        False,
-    ),
-    ids=("with_colors", "without_colors"),
-)
+@pytest.mark.parametrize("use_colors", (True, False), ids=("with_colors", "without_colors"))
 def test_formatter_format_msg_with_args(use_colors: bool) -> None:
     """Ensure the formatter correctly formats a message with arguments that need to be interpolated."""
     formatter = NiceFormatter()
@@ -226,17 +217,7 @@ def test_formatter_format_msg_with_args(use_colors: bool) -> None:
     assert stripped.endswith(" This is a test message with 2 arguments.")
 
 
-@pytest.mark.parametrize(
-    "use_colors",
-    (
-        True,
-        pytest.param(
-            False,
-            marks=pytest.mark.xfail(reason="Non-colorized logs currently missing second-granularity.", strict=True),
-        ),
-    ),
-    ids=["with_colors", "without_colors"],
-)
+@pytest.mark.parametrize("use_colors", (True, False), ids=["with_colors", "without_colors"])
 def test_formatter_timestamp(use_colors: bool) -> None:
     """Ensure the formatter starts with the timestamp."""
     formatter = NiceFormatter()
