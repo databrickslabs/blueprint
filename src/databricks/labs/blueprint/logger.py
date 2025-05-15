@@ -52,9 +52,13 @@ class NiceFormatter(logging.Formatter):
             return super().format(record)
         timestamp = self.formatTime(record, datefmt="%H:%M:%S")
         level = self._levels[record.levelno]
+
         # databricks.labs.ucx.foo.bar -> d.l.u.foo.bar
         module_split = record.name.split(".")
-        name = ".".join([*[c[:1] for c in module_split[:-2]], *module_split[-2:]])
+        abbreviated = [c[:1] for c in module_split[:-2]]  # abbreviate all but the last two components
+        as_is = module_split[-2:]  # keep the last two components as-is
+        name = ".".join([*abbreviated, *as_is])
+
         msg = record.msg
         if record.exc_info and not record.exc_text:
             record.exc_text = self.formatException(record.exc_info)
