@@ -17,6 +17,9 @@ class NiceFormatter(logging.Formatter):
     MAGENTA = "\033[35m"
     GRAY = "\033[90m"
 
+    colors: bool
+    """Whether this formatter is formatting with colors or not."""
+
     def __init__(self, *, probe_tty: bool = False) -> None:
         """Create a new instance of the formatter. If probe_tty is True, then the formatter will
         attempt to detect if the console supports colors. If probe_tty is False, colors will be
