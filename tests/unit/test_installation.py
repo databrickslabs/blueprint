@@ -19,25 +19,25 @@ from databricks.labs.blueprint.installation import (
 )
 
 
-def test_current_not_found():
+def test_current_not_found() -> None:
     ws = create_autospec(WorkspaceClient)
     ws.current_user.me().user_name = "foo"
-    ws.workspace.get_status.side_effect = NotFound(...)
+    ws.workspace.get_status.side_effect = NotFound(None)
 
     with pytest.raises(NotFound, match="Application not installed: blueprint"):
         Installation.current(ws, "blueprint")
 
 
-def test_current_not_found_assume_user():
+def test_current_not_found_assume_user() -> None:
     ws = create_autospec(WorkspaceClient)
     ws.current_user.me().user_name = "foo"
-    ws.workspace.get_status.side_effect = NotFound(...)
+    ws.workspace.get_status.side_effect = NotFound(None)
 
     installation = Installation.current(ws, "blueprint", assume_user=True)
     assert "/Users/foo/.blueprint" == installation.install_folder()
 
 
-def test_current_found_user():
+def test_current_found_user() -> None:
     ws = create_autospec(WorkspaceClient)
     ws.current_user.me().user_name = "foo"
     ws.workspace.get_status.side_effect = None
@@ -46,19 +46,19 @@ def test_current_found_user():
     assert "/Users/foo/.blueprint" == installation.install_folder()
 
 
-def test_current_found_root():
+def test_current_found_root() -> None:
     ws = create_autospec(WorkspaceClient)
     ws.current_user.me().user_name = "foo"
-    ws.workspace.get_status.side_effect = [NotFound(...), None]
+    ws.workspace.get_status.side_effect = [NotFound(None), None]
 
     installation = Installation.current(ws, "blueprint")
     assert "/Applications/blueprint" == installation.install_folder()
 
 
-def test_existing_not_found():
+def test_existing_not_found() -> None:
     ws = create_autospec(WorkspaceClient)
     ws.users.list.return_value = [iam.User(user_name="foo")]
-    ws.workspace.get_status.side_effect = NotFound(...)
+    ws.workspace.get_status.side_effect = NotFound(None)
 
     existing = Installation.existing(ws, "blueprint")
     assert [] == existing
@@ -68,12 +68,13 @@ def test_existing_not_found():
     assert 2 == ws.workspace.get_status.call_count
 
 
-def test_existing_found_root():
+def test_existing_found_root() -> None:
     ws = create_autospec(WorkspaceClient)
     ws.workspace.get_status.side_effect = None
 
     existing = Installation.existing(ws, "blueprint")
-    assert "/Applications/blueprint" == existing[0].install_folder()
+    first_existing = next(iter(existing))
+    assert "/Applications/blueprint" == first_existing.install_folder()
 
 
 @dataclass
@@ -91,7 +92,7 @@ class WorkspaceConfig:
     workspace_start_path: str = "/"
 
 
-def test_save_typed_file():
+def test_save_typed_file() -> None:
     ws = create_autospec(WorkspaceClient)
     ws.current_user.me().user_name = "foo"
     installation = Installation(ws, "blueprint")
@@ -121,10 +122,10 @@ def test_save_typed_file():
     )
 
 
-def test_creates_missing_folders():
+def test_creates_missing_folders() -> None:
     ws = create_autospec(WorkspaceClient)
     ws.current_user.me().user_name = "foo"
-    ws.workspace.upload.side_effect = [NotFound(...), None]
+    ws.workspace.upload.side_effect = [NotFound(None), None]
     installation = Installation(ws, "blueprint")
 
     installation.save(WorkspaceConfig(inventory_database="some_blueprint"))
@@ -132,28 +133,28 @@ def test_creates_missing_folders():
     ws.workspace.mkdirs.assert_called_with("/Users/foo/.blueprint")
 
 
-def test_upload_dbfs():
+def test_upload_dbfs() -> None:
     ws = create_autospec(WorkspaceClient)
     ws.current_user.me().user_name = "foo"
     installation = Installation(ws, "blueprint")
 
-    target = installation.upload_dbfs("wheels/foo.whl", b"abc")
+    target = installation.upload_dbfs("wheels/foo.whl", io.BytesIO(b"abc"))
     assert "/Users/foo/.blueprint/wheels/foo.whl" == target
 
 
-def test_upload_dbfs_mkdirs():
+def test_upload_dbfs_mkdirs() -> None:
     ws = create_autospec(WorkspaceClient)
     ws.current_user.me().user_name = "foo"
-    ws.dbfs.upload.side_effect = [NotFound(...), None]
+    ws.dbfs.upload.side_effect = [NotFound(None), None]
     installation = Installation(ws, "blueprint")
 
-    target = installation.upload_dbfs("wheels/foo.whl", b"abc")
+    target = installation.upload_dbfs("wheels/foo.whl", io.BytesIO(b"abc"))
     assert "/Users/foo/.blueprint/wheels/foo.whl" == target
 
     ws.dbfs.mkdirs.assert_called_with("/Users/foo/.blueprint/wheels")
 
 
-def test_save_typed_file_array_csv():
+def test_save_typed_file_array_csv() -> None:
     ws = create_autospec(WorkspaceClient)
     ws.current_user.me().user_name = "foo"
     installation = Installation(ws, "blueprint")
@@ -174,7 +175,7 @@ def test_save_typed_file_array_csv():
     )
 
 
-def test_load_typed_file():
+def test_load_typed_file() -> None:
     ws = create_autospec(WorkspaceClient)
     ws.current_user.me().user_name = "foo"
     ws.workspace.download.return_value = io.StringIO(
@@ -195,7 +196,7 @@ def test_load_typed_file():
     assert "/" == cfg.workspace_start_path
 
 
-def test_load_csv_file():
+def test_load_csv_file() -> None:
     ws = create_autospec(WorkspaceClient)
     ws.current_user.me().user_name = "foo"
     ws.workspace.download.return_value = io.BytesIO(
@@ -211,7 +212,7 @@ def test_load_csv_file():
 
 
 @pytest.mark.parametrize("ext", ["json", "csv"])
-def test_load_typed_list_file(ext):
+def test_load_typed_list_file(ext) -> None:
     installation = MockInstallation(
         {
             f"workspaces.{ext}": [
@@ -228,7 +229,7 @@ def test_load_typed_list_file(ext):
     assert 1235 == workspaces[1].workspace_id
 
 
-def test_save_typed_file_array_json():
+def test_save_typed_file_array_json() -> None:
     installation = MockInstallation()
 
     installation.save(
@@ -245,7 +246,7 @@ def test_save_typed_file_array_json():
     )
 
 
-def test_mock_save_typed_file():
+def test_mock_save_typed_file() -> None:
     installation = MockInstallation()
 
     installation.save(WorkspaceConfig(inventory_database="some_blueprint"))
@@ -267,7 +268,7 @@ class SomeConfig:
     version: str
 
 
-def test_filename_inference():
+def test_filename_inference() -> None:
     installation = MockInstallation()
 
     installation.save(SomeConfig("0.1.2"))
@@ -297,7 +298,7 @@ class EvolvedConfig:
         return raw
 
 
-def test_migrations_on_load():
+def test_migrations_on_load() -> None:
     installation = MockInstallation({"config.yml": {"initial": 999}})
 
     cfg = installation.load(EvolvedConfig)
@@ -323,14 +324,14 @@ class BrokenConfig:
         return {}
 
 
-def test_migrations_broken():
+def test_migrations_broken() -> None:
     installation = MockInstallation({"config.yml": {"initial": 999}})
 
     with pytest.raises(IllegalState):
         installation.load(BrokenConfig)
 
 
-def test_enable_files_in_repos():
+def test_enable_files_in_repos() -> None:
     ws = create_autospec(WorkspaceClient)
     ws.current_user.me().user_name = "foo"
     installation = Installation(ws, "ucx")
@@ -348,7 +349,7 @@ def test_enable_files_in_repos():
     ws.workspace_conf.set_status.assert_called_with({"enableWorkspaceFilesystem": "true"})
 
 
-def test_upload_feature_disabled_failure():
+def test_upload_feature_disabled_failure() -> None:
     ws = create_autospec(WorkspaceClient)
     ws.current_user.me().user_name = "foo"
     ws.workspace.upload.side_effect = [NotFound(error_code="FEATURE_DISABLED"), None]
@@ -376,7 +377,7 @@ class SomePolicy:
         return self._a == o._a and self._b == o._b
 
 
-def test_as_dict_serde():
+def test_as_dict_serde() -> None:
     installation = MockInstallation()
 
     policy = SomePolicy(1, 2)
@@ -397,7 +398,7 @@ class Policy:
         return {"policy_id": self.policy_id, "name": self.name}
 
 
-def test_data_class():
+def test_data_class() -> None:
     installation = MockInstallation()
     policy = Policy("123", "foo")
     installation.save(policy, filename="backups/policy-test.json")
@@ -415,7 +416,7 @@ class ComplexClass:
     CONST: typing.ClassVar[str] = "CONST"
 
 
-def test_load_complex_data_class():
+def test_load_complex_data_class() -> None:
     installation = MockInstallation()
     complex_class = ComplexClass("test", {"key": "value"}, [Policy("123", "foo")], {"123": Policy("123", "foo")})
     installation.save(complex_class, filename="backups/complex-class.json")
@@ -432,7 +433,7 @@ def test_load_complex_data_class():
     assert load == complex_class
 
 
-def test_load_empty_data_class():
+def test_load_empty_data_class() -> None:
     installation = MockInstallation()
     complex_class = ComplexClass("test", {"key": "value"}, None, None)
     installation.save(complex_class, filename="backups/complex-class.json")
@@ -447,13 +448,13 @@ def test_load_empty_data_class():
     assert load == complex_class
 
 
-def test_assert_file_uploaded():
+def test_assert_file_uploaded() -> None:
     installation = MockInstallation()
     installation.upload("foo", b"bar")
     installation.assert_file_uploaded("foo", b"bar")
 
 
-def test_generic_dict_str():
+def test_generic_dict_str() -> None:
     @dataclass
     class SampleClass:
         field: dict[str, str]
@@ -465,7 +466,7 @@ def test_generic_dict_str():
     assert loaded == saved
 
 
-def test_generic_dict_int():
+def test_generic_dict_int() -> None:
     @dataclass
     class SampleClass:
         field: dict[str, int]
@@ -477,7 +478,7 @@ def test_generic_dict_int():
     assert loaded == saved
 
 
-def test_generic_dict_float():
+def test_generic_dict_float() -> None:
     @dataclass
     class SampleClass:
         field: dict[str, float]
@@ -489,7 +490,7 @@ def test_generic_dict_float():
     assert loaded == saved
 
 
-def test_generic_dict_list():
+def test_generic_dict_list() -> None:
     @dataclass
     class SampleClass:
         field: dict[str, list[str]]
@@ -525,7 +526,7 @@ def test_generic_dict_any():
     assert loaded == saved
 
 
-def test_generic_list_str():
+def test_generic_list_str() -> None:
     @dataclass
     class SampleClass:
         field: list[str]
@@ -537,7 +538,7 @@ def test_generic_list_str():
     assert loaded == saved
 
 
-def test_generic_list_int():
+def test_generic_list_int() -> None:
     @dataclass
     class SampleClass:
         field: list[int]
@@ -549,7 +550,7 @@ def test_generic_list_int():
     assert loaded == saved
 
 
-def test_generic_list_float():
+def test_generic_list_float() -> None:
     @dataclass
     class SampleClass:
         field: list[float]
@@ -561,7 +562,7 @@ def test_generic_list_float():
     assert loaded == saved
 
 
-def test_generic_list_list():
+def test_generic_list_list() -> None:
     @dataclass
     class SampleClass:
         field: list[list[str]]

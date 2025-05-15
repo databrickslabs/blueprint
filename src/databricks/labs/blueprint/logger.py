@@ -2,10 +2,13 @@
 
 import logging
 import sys
+from typing import TextIO
 
 
 class NiceFormatter(logging.Formatter):
     """A nice formatter for logging. It uses colors and bold text if the console supports it."""
+
+    # TODO: Actually detect if the console supports colors. Currently, it just assumes that it does.
 
     BOLD = "\033[1m"
     RESET = "\033[0m"
@@ -17,11 +20,17 @@ class NiceFormatter(logging.Formatter):
     MAGENTA = "\033[35m"
     GRAY = "\033[90m"
 
-    def __init__(self, *, probe_tty: bool = False) -> None:
-        """Create a new instance of the formatter. If probe_tty is True, then the formatter will
-        attempt to detect if the console supports colors. If probe_tty is False, colors will be
-        enabled by default."""
-        super().__init__(fmt="%(asctime)s %(levelname)s [%(name)s] %(message)s", datefmt="%H:%M")
+    colors: bool
+    """Whether this formatter is formatting with colors or not."""
+
+    def __init__(self, *, probe_tty: bool = False, stream: TextIO = sys.stdout) -> None:
+        """Create a new instance of the formatter.
+
+        Args:
+            stream: the output stream to which the formatter will write, used to check if it is a console.
+            probe_tty: If true, the formatter will enable color support if the output stream appears to be a console.
+        """
+        super().__init__(fmt="%(asctime)s %(levelname)s [%(name)s] %(message)s", datefmt="%H:%M:%S")
         self._levels = {
             logging.NOTSET: self._bold("TRACE"),
             logging.DEBUG: self._bold(f"{self.CYAN}DEBUG"),
@@ -31,13 +40,13 @@ class NiceFormatter(logging.Formatter):
             logging.CRITICAL: self._bold(f"{self.MAGENTA}FATAL"),
         }
         # show colors in runtime, github actions, and while debugging
-        self.colors = sys.stdout.isatty() if probe_tty else True
+        self.colors = stream.isatty() if probe_tty else True
 
-    def _bold(self, text):
+    def _bold(self, text: str) -> str:
         """Return text in bold."""
         return f"{self.BOLD}{text}{self.RESET}"
 
-    def format(self, record: logging.LogRecord):  # noqa: A003
+    def format(self, record: logging.LogRecord) -> str:
         """Format the log record. If colors are enabled, use them."""
         if not self.colors:
             return super().format(record)
@@ -47,7 +56,7 @@ class NiceFormatter(logging.Formatter):
         module_split = record.name.split(".")
         last_two_modules = len(module_split) - 2
         name = ".".join(part if i >= last_two_modules else part[0] for i, part in enumerate(module_split))
-        msg = record.msg
+        msg = record.getMessage()
         if record.exc_info and not record.exc_text:
             record.exc_text = self.formatException(record.exc_info)
         if record.exc_text:
@@ -62,18 +71,35 @@ class NiceFormatter(logging.Formatter):
             color_marker = self.BOLD
         elif record.levelno in (logging.ERROR, logging.FATAL):
             color_marker = self.RED + self.BOLD
-        thread_name = ""
-        if record.threadName != "MainThread":
-            thread_name = f"[{record.threadName}]"
+
+        thread_name = f"[{record.threadName}]" if record.threadName != "MainThread" else ""
         return f"{self.GRAY}{timestamp}{self.RESET} {level} {color_marker}[{name}]{thread_name} {msg}{self.RESET}"
 
 
-def install_logger(level="DEBUG"):
-    """Install a console logger with a nice formatter."""
-    for handler in logging.root.handlers:
-        logging.root.removeHandler(handler)
-    console_handler = logging.StreamHandler(sys.stderr)
-    console_handler.setFormatter(NiceFormatter())
+def install_logger(
+    level: int | str = logging.DEBUG, *, stream: TextIO = sys.stderr, root: logging.Logger = logging.root
+) -> logging.StreamHandler:
+    """Install a console logger with a nice formatter.
+
+    The root logger will be modified:
+
+     - Its logging level will be left as-is.
+     - All existing handlers will be removed.
+     - A new handler will be installed with our custom formatter. It will be configured to emit logs at the given level
+       (default: DEBUG) or higher, to the specified stream (default: sys.stderr).
+
+    Args:
+        level: The logging level to set for the console handler.
+        stream: The stream to which the logger will write. Defaults to sys.stderr.
+        root: The root logger to modify. Defaults to the system root logger. (Mainly useful in tests.)
+
+    Returns:
+        The logging handler that was installed.
+    """
+    for handler in root.handlers:
+        root.removeHandler(handler)
+    console_handler = logging.StreamHandler(stream)
+    console_handler.setFormatter(NiceFormatter(stream=stream))
     console_handler.setLevel(level)
-    logging.root.addHandler(console_handler)
+    root.addHandler(console_handler)
     return console_handler
