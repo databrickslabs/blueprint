@@ -71,9 +71,8 @@ class NiceFormatter(logging.Formatter):
             color_marker = self.BOLD
         elif record.levelno in (logging.ERROR, logging.FATAL):
             color_marker = self.RED + self.BOLD
-        thread_name = ""
-        if record.threadName != "MainThread":
-            thread_name = f"[{record.threadName}]"
+
+        thread_name = f"[{record.threadName}]" if record.threadName != "MainThread" else ""
         return f"{self.GRAY}{timestamp}{self.RESET} {level} {color_marker}[{name}]{thread_name} {msg}{self.RESET}"
 
 
