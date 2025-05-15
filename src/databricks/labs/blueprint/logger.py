@@ -77,12 +77,30 @@ class NiceFormatter(logging.Formatter):
         return f"{self.GRAY}{timestamp}{self.RESET} {level} {color_marker}[{name}]{thread_name} {msg}{self.RESET}"
 
 
-def install_logger(level="DEBUG") -> logging.StreamHandler:
-    """Install a console logger with a nice formatter."""
-    for handler in logging.root.handlers:
-        logging.root.removeHandler(handler)
-    console_handler = logging.StreamHandler(sys.stderr)
-    console_handler.setFormatter(NiceFormatter())
+def install_logger(
+    level: int | str = logging.DEBUG, *, stream: TextIO = sys.stderr, root: logging.Logger = logging.root
+) -> logging.StreamHandler:
+    """Install a console logger with a nice formatter.
+
+    The root logger will be modified:
+
+     - Its logging level will be left as-is.
+     - All existing handlers will be removed.
+     - A new handler will be installed with our custom formatter. It will be configured to emit logs at the given level
+       (default: DEBUG) or higher, to the specified stream (default: sys.stderr).
+
+    Args:
+        level: The logging level to set for the console handler.
+        stream: The stream to which the logger will write. Defaults to sys.stderr.
+        root: The root logger to modify. Defaults to the system root logger. (Mainly useful in tests.)
+
+    Returns:
+        The logging handler that was installed.
+    """
+    for handler in root.handlers:
+        root.removeHandler(handler)
+    console_handler = logging.StreamHandler(stream)
+    console_handler.setFormatter(NiceFormatter(stream=stream))
     console_handler.setLevel(level)
-    logging.root.addHandler(console_handler)
+    root.addHandler(console_handler)
     return console_handler
