@@ -2,6 +2,7 @@
 
 import logging
 import sys
+from typing import TextIO
 
 
 class NiceFormatter(logging.Formatter):
@@ -20,10 +21,13 @@ class NiceFormatter(logging.Formatter):
     colors: bool
     """Whether this formatter is formatting with colors or not."""
 
-    def __init__(self, *, probe_tty: bool = False) -> None:
-        """Create a new instance of the formatter. If probe_tty is True, then the formatter will
-        attempt to detect if the console supports colors. If probe_tty is False, colors will be
-        enabled by default."""
+    def __init__(self, *, probe_tty: bool = False, stream: TextIO = sys.stdout) -> None:
+        """Create a new instance of the formatter.
+
+        Args:
+            stream: the output stream to which the formatter will write, used to check if it is a console.
+            probe_tty: If true, the formatter will enable color support if the output stream appears to be a console.
+        """
         super().__init__(fmt="%(asctime)s %(levelname)s [%(name)s] %(message)s", datefmt="%H:%M")
         self._levels = {
             logging.NOTSET: self._bold("TRACE"),
@@ -34,7 +38,7 @@ class NiceFormatter(logging.Formatter):
             logging.CRITICAL: self._bold(f"{self.MAGENTA}FATAL"),
         }
         # show colors in runtime, github actions, and while debugging
-        self.colors = sys.stdout.isatty() if probe_tty else True
+        self.colors = stream.isatty() if probe_tty else True
 
     def _bold(self, text: str) -> str:
         """Return text in bold."""
