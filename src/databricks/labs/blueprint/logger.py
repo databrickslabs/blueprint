@@ -54,8 +54,7 @@ class NiceFormatter(logging.Formatter):
         level = self._levels[record.levelno]
         # databricks.labs.ucx.foo.bar -> d.l.u.foo.bar
         module_split = record.name.split(".")
-        last_two_modules = len(module_split) - 2
-        name = ".".join(part if i >= last_two_modules else part[0] for i, part in enumerate(module_split))
+        name = ".".join([*[c[:1] for c in module_split[:-2]], *module_split[-2:]])
         msg = record.msg
         if record.exc_info and not record.exc_text:
             record.exc_text = self.formatException(record.exc_info)

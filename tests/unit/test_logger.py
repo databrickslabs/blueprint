@@ -307,17 +307,7 @@ def test_formatter_format_colorized_logger_name_abbreviated(logger_name: str, fo
 
     # Create a log record with the specified level.
     record = create_record(logging.DEBUG, "Whatever", name=logger_name)
-    # Can't easily mark this as known to sometimes faili, so we simulate it here.
-    expected_failure = ".." in logger_name
-    try:
-        formatted = formatter.format(record)
-        if expected_failure:
-            pytest.fail("Unexpected success: colorized logger name abbreviation is though to fail when .. is present.")
-    except IndexError:
-        if not expected_failure:
-            raise
-        pytest.xfail("Colorized logger name abbreviation is known to fail when .. is present.")
-        return
+    formatted = formatter.format(record)
     stripped = _strip_sgr_sequences(formatted)
 
     # H:M:S LEVEL [logger_name] message
