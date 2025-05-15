@@ -73,9 +73,7 @@ class NiceFormatter(logging.Formatter):
             case _:
                 color_marker = self.GRAY
 
-        thread_name = ""
-        if record.threadName != "MainThread":
-            thread_name = f"[{record.threadName}]"
+        thread_name = f"[{record.threadName}]" if record.threadName != "MainThread" else ""
         return f"{self.GRAY}{timestamp}{self.RESET} {level} {color_marker}[{name}]{thread_name} {msg}{self.RESET}"
 
 
