@@ -107,7 +107,7 @@ def test_installed_logger_logging(logging_system) -> None:
     assert "This is a debug message" in output
     assert "This is an info message" in output
     assert "This is a warning message" in output
-    assert "This is an error message: KeyError: 123" in output
+    assert "This is an error message\nKeyError: 123" in output
     assert "This is a critical message" in output
 
 
@@ -357,19 +357,7 @@ def test_formatter_format_colorized_thread_name() -> None:
     assert f"][{thread_record.threadName}] " in _strip_sgr_sequences(formatter.format(thread_record))
 
 
-@pytest.mark.parametrize(
-    "use_colors",
-    (
-        pytest.param(
-            True,
-            marks=pytest.mark.xfail(
-                reason="Colorized exception formatting is inconsistent with system logging.", strict=True
-            ),
-        ),
-        False,
-    ),
-    ids=("with_colors", "without_colors"),
-)
+@pytest.mark.parametrize("use_colors", (True, False), ids=("with_colors", "without_colors"))
 def test_formatter_format_exception(use_colors: bool) -> None:
     """The colorized formatter includes the thread name if non-main."""
     formatter = NiceFormatter()
