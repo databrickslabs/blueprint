@@ -37,7 +37,7 @@ class NiceFormatter(logging.Formatter):
         """Return text in bold."""
         return f"{self.BOLD}{text}{self.RESET}"
 
-    def format(self, record: logging.LogRecord):  # noqa: A003
+    def format(self, record: logging.LogRecord):
         """Format the log record. If colors are enabled, use them."""
         if not self.colors:
             return super().format(record)
