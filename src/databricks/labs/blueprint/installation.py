@@ -726,9 +726,14 @@ class Installation:
         """The `_unmarshal_union` method is a private method that is used to deserialize a dictionary to an object
         of type `type_ref`. This method is called by the `load` method."""
         for variant in get_args(type_ref):
-            value = cls._unmarshal(inst, path, variant)
-            if value:
-                return value
+            if variant == type(None) and inst is None:
+                return None
+            try:
+                value = cls._unmarshal(inst, path, variant)
+                if value is not None:
+                    return value
+            except:
+                pass
         return None
 
     @classmethod
@@ -787,7 +792,10 @@ class Installation:
             if type_ref in (int, float):
                 converted = type_ref(inst)  # type: ignore[call-arg]
             elif type_ref == bool:
-                converted = inst.lower()=="true"
+                if inst.lower() == "true":
+                    converted = True
+                elif inst.lower() == "false":
+                    converted = False
         return converted
 
     @staticmethod

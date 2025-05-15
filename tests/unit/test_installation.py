@@ -608,3 +608,17 @@ def test_bool_in_union():
     assert loaded == saved
 
 
+JsonType: typing.TypeAlias = None | bool | int | float | str | list["JsonType"] | dict[str, "JsonType"]
+
+def test_complex_union():
+
+    @dataclass
+    class SampleClass:
+        field: dict[str, JsonType]
+
+    installation = MockInstallation()
+    saved = SampleClass(field={"a": "b"})
+    installation.save(saved, filename="backups/SampleClass.json")
+    loaded = installation.load(SampleClass, filename="backups/SampleClass.json")
+    assert loaded == saved
+
