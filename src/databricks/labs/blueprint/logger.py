@@ -23,6 +23,12 @@ class NiceFormatter(logging.Formatter):
     colors: bool
     """Whether this formatter is formatting with colors or not."""
 
+    _levels: dict[int, str]
+    """The colorized level names for each logging level."""
+
+    _msg_colors: dict[int, str]
+    """The color codes to use for rendering the message text depending on the logging level."""
+
     def __init__(self, *, probe_tty: bool = False, stream: TextIO = sys.stdout) -> None:
         """Create a new instance of the formatter.
 
@@ -31,12 +37,21 @@ class NiceFormatter(logging.Formatter):
             probe_tty: If true, the formatter will enable color support if the output stream appears to be a console.
         """
         super().__init__(fmt="%(asctime)s %(levelname)s [%(name)s] %(message)s", datefmt="%H:%M:%S")
+        # Used to colorize the level names.
         self._levels = {
             logging.DEBUG: self._bold(f"{self.CYAN}   DEBUG"),
             logging.INFO: self._bold(f"{self.GREEN}    INFO"),
             logging.WARNING: self._bold(f"{self.YELLOW} WARNING"),
             logging.ERROR: self._bold(f"{self.RED}   ERROR"),
             logging.CRITICAL: self._bold(f"{self.MAGENTA}CRITICAL"),
+        }
+        # Used to colorize the message text. (These are prefixes: after the message text, the color is reset.)
+        self._msg_colors = {
+            logging.DEBUG: self.GRAY,
+            logging.INFO: self.BOLD,
+            logging.WARNING: self.BOLD,
+            logging.ERROR: f"{self.BOLD}{self.RED}",
+            logging.CRITICAL: f"{self.BOLD}{self.RED}",
         }
         # show colors in runtime, github actions, and while debugging
         self.colors = stream.isatty() if probe_tty else True
@@ -65,13 +80,7 @@ class NiceFormatter(logging.Formatter):
                 msg += "\n"
             msg += self.formatStack(record.stack_info)
 
-        match record.levelno:
-            case logging.INFO | logging.WARNING:
-                color_marker = self.BOLD
-            case logging.ERROR | logging.FATAL:
-                color_marker = f"{self.BOLD}{self.RED}"
-            case _:
-                color_marker = self.GRAY
+        color_marker = self._msg_colors[record.levelno]
 
         thread_name = f"[{record.threadName}]" if record.threadName != "MainThread" else ""
         return f"{self.GRAY}{timestamp}{self.RESET} {level} {color_marker}[{name}]{thread_name} {msg}{self.RESET}"
