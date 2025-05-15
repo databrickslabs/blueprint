@@ -33,11 +33,11 @@ class NiceFormatter(logging.Formatter):
         # show colors in runtime, github actions, and while debugging
         self.colors = sys.stdout.isatty() if probe_tty else True
 
-    def _bold(self, text):
+    def _bold(self, text: str) -> str:
         """Return text in bold."""
         return f"{self.BOLD}{text}{self.RESET}"
 
-    def format(self, record: logging.LogRecord):
+    def format(self, record: logging.LogRecord) -> str:
         """Format the log record. If colors are enabled, use them."""
         if not self.colors:
             return super().format(record)
@@ -68,7 +68,7 @@ class NiceFormatter(logging.Formatter):
         return f"{self.GRAY}{timestamp}{self.RESET} {level} {color_marker}[{name}]{thread_name} {msg}{self.RESET}"
 
 
-def install_logger(level="DEBUG"):
+def install_logger(level="DEBUG") -> logging.StreamHandler:
     """Install a console logger with a nice formatter."""
     for handler in logging.root.handlers:
         logging.root.removeHandler(handler)
