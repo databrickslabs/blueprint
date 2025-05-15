@@ -8,6 +8,8 @@ from typing import TextIO
 class NiceFormatter(logging.Formatter):
     """A nice formatter for logging. It uses colors and bold text if the console supports it."""
 
+    # TODO: Actually detect if the console supports colors. Currently, it just assumes that it does.
+
     BOLD = "\033[1m"
     RESET = "\033[0m"
     GREEN = "\033[32m"
