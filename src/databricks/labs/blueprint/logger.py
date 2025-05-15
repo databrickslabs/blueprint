@@ -65,11 +65,14 @@ class NiceFormatter(logging.Formatter):
                 msg += "\n"
             msg += self.formatStack(record.stack_info)
 
-        color_marker = self.GRAY
-        if record.levelno in (logging.INFO, logging.WARNING):
-            color_marker = self.BOLD
-        elif record.levelno in (logging.ERROR, logging.FATAL):
-            color_marker = self.RED + self.BOLD
+        match record.levelno:
+            case logging.INFO | logging.WARNING:
+                color_marker = self.BOLD
+            case logging.ERROR | logging.FATAL:
+                color_marker = f"{self.BOLD}{self.RED}"
+            case _:
+                color_marker = self.GRAY
+
         thread_name = ""
         if record.threadName != "MainThread":
             thread_name = f"[{record.threadName}]"
