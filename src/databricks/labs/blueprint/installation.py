@@ -755,14 +755,16 @@ class Installation:
         return cls._unmarshal_list(inst, path, type_args[0])
 
     @classmethod
-    def _unmarshal_list(cls, inst, path, hint):
+    def _unmarshal_list(cls, inst, path, type_ref):
         """The `_unmarshal_list` method is a private method that is used to deserialize an array to a list
         of type `type_ref`. This method is called by the `load` method."""
         if inst is None:
             return None
+        if not isinstance(inst, list):
+            raise SerdeError(cls._explain_why(type_ref, path, inst))
         as_list = []
         for i, v in enumerate(inst):
-            as_list.append(cls._unmarshal(v, [*path, f"{i}"], hint or type(v)))
+            as_list.append(cls._unmarshal(v, [*path, f"{i}"], type_ref or type(v)))
         return as_list
 
     @classmethod

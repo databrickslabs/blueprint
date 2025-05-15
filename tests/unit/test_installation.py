@@ -622,3 +622,16 @@ def test_complex_union():
     loaded = installation.load(SampleClass, filename="backups/SampleClass.json")
     assert loaded == saved
 
+JsonType2: typing.TypeAlias = dict[str, "JsonType2"] | list["JsonType2"] | str | float | int | bool | None
+
+def test_complex_union2():
+
+    @dataclass
+    class SampleClass:
+        field: dict[str, JsonType2]
+
+    installation = MockInstallation()
+    saved = SampleClass(field={"a": "b"})
+    installation.save(saved, filename="backups/SampleClass.json")
+    loaded = installation.load(SampleClass, filename="backups/SampleClass.json")
+    assert loaded == saved
