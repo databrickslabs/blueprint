@@ -8,7 +8,7 @@ from pathlib import Path
 from databricks.labs.blueprint.logger import install_logger
 
 
-def get_logger(__file: str):
+def get_logger(__file: str, *, manager: logging.Manager = logging.Logger.manager) -> logging.Logger:
     """Used as `get_logger(__file__)` to return a relevant logger for a file"""
     project_root = find_project_root(__file).absolute()
     entrypoint = Path(__file).absolute()
@@ -21,12 +21,10 @@ def get_logger(__file: str):
     relative = relative.removesuffix(".py")
     module_name = relative.replace(os.sep, ".")
 
-    logger = logging.getLogger(module_name)
+    logger = manager.getLogger(module_name)
 
-    level = "INFO"
     if is_in_debug():
-        level = "DEBUG"
-    logger.setLevel(level)
+        logger.setLevel(logging.DEBUG)
 
     return logger
 
