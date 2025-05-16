@@ -77,9 +77,11 @@ class NiceFormatter(logging.Formatter):
         if record.exc_info and not record.exc_text:
             record.exc_text = self.formatException(record.exc_info)
         if record.exc_text:
-            msg += ": " + record.exc_text
+            if not msg.endswith("\n"):
+                msg += "\n"
+            msg += record.exc_text
         if record.stack_info:
-            if msg[-1:] != "\n":
+            if not msg.endswith("\n"):
                 msg += "\n"
             msg += self.formatStack(record.stack_info)
 
