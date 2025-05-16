@@ -107,7 +107,7 @@ def test_installed_logger_logging(logging_system) -> None:
     assert "This is a debug message" in output
     assert "This is an info message" in output
     assert "This is a warning message" in output
-    assert "This is an error message: KeyError: 123" in output
+    assert "This is an error message\nKeyError: 123" in output
     assert "This is a critical message" in output
 
 
@@ -252,20 +252,8 @@ def test_formatter_format_log_level(level: int, use_colors: bool) -> None:
     formatted = formatter.format(record)
     stripped = _strip_sgr_sequences(formatted) if use_colors else formatted
 
-    # Can't mark combinations of parameters for xfail, so we simulate it here.
-    expected_failure = use_colors and level in (logging.WARNING, logging.CRITICAL)
-    try:
-        # H:M:S LEVEL [logger_name] message
-        assert f" {logging.getLevelName(level)} " in stripped
-        if expected_failure:
-            msg = (
-                f"Unexpected success: colorized log-level for {logging.getLevelName(level)} is thought to be incorrect."
-            )
-            pytest.fail(msg)
-    except AssertionError:
-        if not expected_failure:
-            raise
-        pytest.xfail(f"Colorized log-level formatting for {logging.getLevelName(level)} is known to be incorrect.")
+    # H:M:S LEVEL [logger_name] message
+    assert f" {logging.getLevelName(level)} " in stripped
 
 
 # Logger names, and their abbreviated forms.
@@ -288,17 +276,7 @@ def test_formatter_format_colorized_logger_name_abbreviated(logger_name: str, fo
 
     # Create a log record with the specified level.
     record = create_record(logging.DEBUG, "Whatever", name=logger_name)
-    # Can't easily mark this as known to sometimes faili, so we simulate it here.
-    expected_failure = ".." in logger_name
-    try:
-        formatted = formatter.format(record)
-        if expected_failure:
-            pytest.fail("Unexpected success: colorized logger name abbreviation is though to fail when .. is present.")
-    except IndexError:
-        if not expected_failure:
-            raise
-        pytest.xfail("Colorized logger name abbreviation is known to fail when .. is present.")
-        return
+    formatted = formatter.format(record)
     stripped = _strip_sgr_sequences(formatted)
 
     # H:M:S LEVEL [logger_name] message
@@ -338,19 +316,7 @@ def test_formatter_format_colorized_thread_name() -> None:
     assert f"][{thread_record.threadName}] " in _strip_sgr_sequences(formatter.format(thread_record))
 
 
-@pytest.mark.parametrize(
-    "use_colors",
-    (
-        pytest.param(
-            True,
-            marks=pytest.mark.xfail(
-                reason="Colorized exception formatting is inconsistent with system logging.", strict=True
-            ),
-        ),
-        False,
-    ),
-    ids=("with_colors", "without_colors"),
-)
+@pytest.mark.parametrize("use_colors", (True, False), ids=("with_colors", "without_colors"))
 def test_formatter_format_exception(use_colors: bool) -> None:
     """The colorized formatter includes the thread name if non-main."""
     formatter = NiceFormatter()
