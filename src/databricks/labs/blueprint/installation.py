@@ -67,6 +67,8 @@ class Installation:
 
     T = TypeVar("T")
     _PRIMITIVES = (int, bool, float, str)
+    allow_raw_types = True
+    allow_weak_types = True
 
     def __init__(self, ws: WorkspaceClient, product: str, *, install_folder: str | None = None):
         """The `Installation` class constructor creates an `Installation` object for the given product in
@@ -469,19 +471,27 @@ class Installation:
         item_type = type(from_list[0])  # type: ignore[misc]
         return list[item_type]  # type: ignore[valid-type]
 
+    # pylint: disable=too-complex
     def _marshal(self, type_ref: type, path: list[str], inst: Any) -> tuple[Any, bool]:
         """The `_marshal` method is a private method that is used to serialize an object of type `type_ref` to
         a dictionary. This method is called by the `save` method."""
         if inst is None:
-            return None, False
+            none_allowed = type_ref is types.NoneType or (isinstance(type_ref, types.UnionType) and types.NoneType in get_args(type_ref))
+            return None, none_allowed
         if isinstance(inst, databricks.sdk.core.Config):
             return self._marshal_databricks_config(inst)
         if hasattr(inst, "as_dict"):
             return inst.as_dict(), True
         if dataclasses.is_dataclass(type_ref):
             return self._marshal_dataclass(type_ref, path, inst)
-        if type_ref == list:
-            return self._marshal_list(type_ref, path, inst)
+        if self.allow_raw_types:
+            if type_ref == list:
+                return self._marshal_raw_list(path, inst)
+            if type_ref == dict:
+                return self._marshal_raw_dict(path, inst)
+        if self.allow_weak_types:
+            if type_ref in (object, Any):
+                return self._marshal(type(inst), path, inst)
         if isinstance(type_ref, enum.EnumMeta):
             return self._marshal_enum(inst)
         if type_ref == types.NoneType:
@@ -523,8 +533,8 @@ class Installation:
         if not type_args:
             raise SerdeError(f"Missing type arguments: {type_args}")
         if len(type_args) == 2:
-            return self._marshal_dict(type_args[1], path, inst)
-        return self._marshal_list(type_args[0], path, inst)
+            return self._marshal_generic_dict(type_args[1], path, inst)
+        return self._marshal_generic_list(type_args[0], path, inst)
 
     @staticmethod
     def _marshal_generic_alias(type_ref, inst):
@@ -534,21 +544,34 @@ class Installation:
             return None, False
         return inst, isinstance(inst, type_ref.__origin__)  # type: ignore[attr-defined]
 
-    def _marshal_list(self, type_ref: type, path: list[str], inst: Any) -> tuple[Any, bool]:
-        """The `_marshal_list` method is a private method that is used to serialize an object of type `type_ref` to
-        a dictionary. This method is called by the `save` method."""
+    def _marshal_generic_list(self, type_ref: type, path: list[str], inst: Any) -> tuple[Any, bool]:
+        """The `_marshal_generic_list` method is a private method that is used to serialize an object of type list[type_ref] to
+        an array. This method is called by the `save` method."""
         as_list = []
         if not isinstance(inst, list):
             return None, False
         for i, v in enumerate(inst):
             value, ok = self._marshal(type_ref, [*path, f"{i}"], v)
             if not ok:
-                raise SerdeError(self._explain_why(type_ref, [*path, f"{i}"], v))
+                raise SerdeError(self._explain_why(type(v), [*path, f"{i}"], v))
             as_list.append(value)
         return as_list, True
 
-    def _marshal_dict(self, type_ref: type, path: list[str], inst: Any) -> tuple[Any, bool]:
-        """The `_marshal_dict` method is a private method that is used to serialize an object of type `type_ref` to
+    def _marshal_raw_list(self, path: list[str], inst: Any) -> tuple[Any, bool]:
+        """The `_marshal_raw_list` method is a private method that is used to serialize an object of type list to
+        an array. This method is called by the `save` method."""
+        as_list = []
+        if not isinstance(inst, list):
+            return None, False
+        for i, v in enumerate(inst):
+            value, ok = self._marshal(type(v), [*path, f"{i}"], v)
+            if not ok:
+                raise SerdeError(self._explain_why(type(v), [*path, f"{i}"], v))
+            as_list.append(value)
+        return as_list, True
+
+    def _marshal_generic_dict(self, type_ref: type, path: list[str], inst: Any) -> tuple[Any, bool]:
+        """The `_marshal_generic_dict` method is a private method that is used to serialize an object of type dict[str, type_ref] to
         a dictionary. This method is called by the `save` method."""
         if not isinstance(inst, dict):
             return None, False
@@ -556,7 +579,19 @@ class Installation:
         for k, v in inst.items():
             as_dict[k], ok = self._marshal(type_ref, [*path, k], v)
             if not ok:
-                raise SerdeError(self._explain_why(type_ref, [*path, k], v))
+                raise SerdeError(self._explain_why(type(v), [*path, k], v))
+        return as_dict, True
+
+    def _marshal_raw_dict(self, path: list[str], inst: Any) -> tuple[Any, bool]:
+        """The `_marshal_raw_dict` method is a private method that is used to serialize an object of type dict to
+        a dictionary. This method is called by the `save` method."""
+        if not isinstance(inst, dict):
+            return None, False
+        as_dict = {}
+        for k, v in inst.items():
+            as_dict[k], ok = self._marshal(type(v), [*path, k], v)
+            if not ok:
+                raise SerdeError(self._explain_why(type(v), [*path, k], v))
         return as_dict, True
 
     def _marshal_dataclass(self, type_ref: type, path: list[str], inst: Any) -> tuple[Any, bool]:
@@ -616,6 +651,8 @@ class Installation:
     def _unmarshal(cls, inst: Any, path: list[str], type_ref: type[T]) -> T | None:
         """The `_unmarshal` method is a private method that is used to deserialize a dictionary to an object of type
         `type_ref`. This method is called by the `load` method."""
+        if type_ref == types.NoneType:
+            return None
         if dataclasses.is_dataclass(type_ref):
             return cls._unmarshal_dataclass(inst, path, type_ref)
         if isinstance(type_ref, enum.EnumMeta):
@@ -624,12 +661,14 @@ class Installation:
             return type_ref(inst)
         if type_ref in cls._PRIMITIVES:
             return cls._unmarshal_primitive(inst, type_ref)
+        if type_ref == list:
+            return cls._unmarshal_list(inst, path, Any)
+        if type_ref == dict:
+            return cls._unmarshal_dict(inst, path, Any)
         if type_ref == databricks.sdk.core.Config:
             if not inst:
                 inst = {}
             return databricks.sdk.core.Config(**inst)  # type: ignore[return-value]
-        if type_ref == types.NoneType:
-            return None
         if isinstance(type_ref, cls._FromDict):
             return type_ref.from_dict(inst)
         return cls._unmarshal_generic_types(type_ref, path, inst)
@@ -646,7 +685,22 @@ class Installation:
             return cls._unmarshal_union(inst, path, type_ref)
         if isinstance(type_ref, (_GenericAlias, types.GenericAlias)):
             return cls._unmarshal_generic(inst, path, type_ref)
+        if cls.allow_weak_types and type_ref in (object, Any):
+            return cls._unmarshal_object(inst, path)
         raise SerdeError(f'{".".join(path)}: unknown: {type_ref}: {inst}')
+
+    @classmethod
+    def _unmarshal_object(cls, inst, path):
+        if inst is None:
+            return None
+        if isinstance(inst, (bool, int, float, str)):
+            return cls._unmarshal_primitive(inst, type(inst))
+        if cls.allow_raw_types:
+            if isinstance(inst, list):
+                return cls._unmarshal_list(inst, path, object)
+            if isinstance(inst, dict):
+                return cls._unmarshal_dict(inst, path, object)
+        raise SerdeError(f'{".".join(path)}: unknown: {type(inst)}: {inst}')
 
     @classmethod
     def _unmarshal_dataclass(cls, inst, path, type_ref):
@@ -682,9 +736,14 @@ class Installation:
         """The `_unmarshal_union` method is a private method that is used to deserialize a dictionary to an object
         of type `type_ref`. This method is called by the `load` method."""
         for variant in get_args(type_ref):
-            value = cls._unmarshal(inst, path, variant)
-            if value:
-                return value
+            if variant == type(None) and inst is None:
+                return None
+            try:
+                value = cls._unmarshal(inst, path, variant)
+                if value is not None:
+                    return value
+            except SerdeError:
+                pass
         return None
 
     @classmethod
@@ -706,14 +765,16 @@ class Installation:
         return cls._unmarshal_list(inst, path, type_args[0])
 
     @classmethod
-    def _unmarshal_list(cls, inst, path, hint):
-        """The `_unmarshal_list` method is a private method that is used to deserialize a dictionary to an object
+    def _unmarshal_list(cls, inst, path, type_ref):
+        """The `_unmarshal_list` method is a private method that is used to deserialize an array to a list
         of type `type_ref`. This method is called by the `load` method."""
         if inst is None:
             return None
+        if not isinstance(inst, list):
+            raise SerdeError(cls._explain_why(type_ref, path, inst))
         as_list = []
         for i, v in enumerate(inst):
-            as_list.append(cls._unmarshal(v, [*path, f"{i}"], hint))
+            as_list.append(cls._unmarshal(v, [*path, f"{i}"], type_ref or type(v)))
         return as_list
 
     @classmethod
@@ -733,10 +794,23 @@ class Installation:
     def _unmarshal_primitive(cls, inst, type_ref):
         """The `_unmarshal_primitive` method is a private method that is used to deserialize a dictionary to an object
         of type `type_ref`. This method is called by the `load` method."""
-        if not inst:
+        if inst is None:
+            return None
+        if isinstance(inst, type_ref):
             return inst
-        # convert from str to int if necessary
-        converted = type_ref(inst)  # type: ignore[call-arg]
+        converted = inst
+        # convert from str
+        if isinstance(inst, str):
+            if type_ref in (int, float):
+                try:
+                    converted = type_ref(inst)  # type: ignore[call-arg]
+                except ValueError as exc:
+                    raise SerdeError(f"Not a number {inst}!") from exc
+            elif type_ref == bool:
+                if inst.lower() == "true":
+                    converted = True
+                elif inst.lower() == "false":
+                    converted = False
         return converted
 
     @staticmethod
@@ -745,7 +819,8 @@ class Installation:
         type. This method is called by the `_unmarshal` and `_marshal` methods."""
         if raw is None:
             raw = "value is missing"
-        return f'{".".join(path)}: not a {type_ref.__name__}: {raw}'
+        type_name = getattr(type_ref, "__name__", str(type_ref))
+        return f'{".".join(path)}: not a {type_name}: {raw}'
 
     @staticmethod
     def _dump_json(as_dict: Json, _: type) -> bytes:
