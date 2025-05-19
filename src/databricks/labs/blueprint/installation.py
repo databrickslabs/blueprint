@@ -802,7 +802,10 @@ class Installation:
         # convert from str
         if isinstance(inst, str):
             if type_ref in (int, float):
-                converted = type_ref(inst)  # type: ignore[call-arg]
+                try:
+                    converted = type_ref(inst)  # type: ignore[call-arg]
+                except ValueError:
+                    raise SerdeError(f"Not a number {inst}!")
             elif type_ref == bool:
                 if inst.lower() == "true":
                     converted = True
