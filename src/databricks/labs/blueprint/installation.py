@@ -654,12 +654,12 @@ class Installation:
             return type_ref(inst)
         if type_ref in cls._PRIMITIVES:
             return cls._unmarshal_primitive(inst, type_ref)
+        if type_ref == list:
+            return cls._unmarshal_list(inst, path, Any)
         if type_ref == databricks.sdk.core.Config:
             if not inst:
                 inst = {}
             return databricks.sdk.core.Config(**inst)  # type: ignore[return-value]
-        if type_ref == types.NoneType:
-            return None
         if isinstance(type_ref, cls._FromDict):
             return type_ref.from_dict(inst)
         return cls._unmarshal_generic_types(type_ref, path, inst)
