@@ -656,6 +656,8 @@ class Installation:
             return cls._unmarshal_primitive(inst, type_ref)
         if type_ref == list:
             return cls._unmarshal_list(inst, path, Any)
+        if type_ref == dict:
+            return cls._unmarshal_dict(inst, path, Any)
         if type_ref == databricks.sdk.core.Config:
             if not inst:
                 inst = {}
