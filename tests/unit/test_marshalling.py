@@ -92,6 +92,31 @@ def test_progressive_typing_with_dict(allow_weak_types) -> None:
     loaded = installation.load(SampleClassV2, filename="backups/SampleClass.json")
     assert loaded == SampleClassV2(field=saved.field)
 
+@pytest.mark.parametrize("allow_weak_types", [ True, False ])
+def test_type_migration(allow_weak_types) -> None:
+
+    # this example corresponds to a frequent Python coding scenario
+    # where users change their mind about a type
+
+    @dataclass
+    class SampleClassV1:
+        field: list[str]
+
+    @dataclass
+    class SampleClassV2:
+        field: list[int | None]
+
+    Installation.allow_weak_types = allow_weak_types
+    installation = MockInstallation()
+    saved = SampleClassV1(field=["1", "2", ""])
+    installation.save(saved, filename="backups/SampleClass.json")
+    # problem: can't directly convert an item value
+    # loaded_v1 = installation.load(SampleClassV2, filename="backups/SampleClass.json")
+    # so they've stored strings, and they need to read ints
+    converted = SampleClassV2(field=[(int(val) if val else None) for val in saved.field])
+    loaded = installation.load(SampleClassV2, filename="backups/SampleClass.json")
+    assert loaded == converted
+
 @pytest.mark.parametrize("allow_weak_types", [True, False])
 def test_lost_code_with_list(allow_weak_types) -> None:
     # this example corresponds to a scenario where data was stored
