@@ -475,7 +475,8 @@ class Installation:
         a dictionary. This method is called by the `save` method."""
         if inst is None:
             none_allowed = type_ref is types.NoneType or (
-                        isinstance(type_ref, types.UnionType) and types.NoneType in get_args(type_ref))
+                isinstance(type_ref, types.UnionType) and types.NoneType in get_args(type_ref)
+            )
             return None, none_allowed
         if isinstance(inst, databricks.sdk.core.Config):
             return self._marshal_databricks_config(inst)
@@ -736,7 +737,7 @@ class Installation:
                 value = cls._unmarshal(inst, path, variant)
                 if value is not None:
                     return value
-            except:
+            except SerdeError:
                 pass
         return None
 
@@ -790,7 +791,7 @@ class Installation:
         of type `type_ref`. This method is called by the `load` method."""
         if inst is None:
             return None
-        if type(inst)==type_ref:
+        if type(inst) == type_ref:
             return inst
         converted = inst
         # convert from str
