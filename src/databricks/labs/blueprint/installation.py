@@ -814,7 +814,8 @@ class Installation:
         type. This method is called by the `_unmarshal` and `_marshal` methods."""
         if raw is None:
             raw = "value is missing"
-        return f'{".".join(path)}: not a {type_ref.__name__}: {raw}'
+        type_name = getattr(type_ref, "__name__", str(type_ref))
+        return f'{".".join(path)}: not a {type_name}: {raw}'
 
     @staticmethod
     def _dump_json(as_dict: Json, _: type) -> bytes:
