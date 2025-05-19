@@ -597,6 +597,7 @@ def test_generic_list_any():
     loaded = installation.load(SampleClass, filename="backups/SampleClass.json")
     assert loaded == saved
 
+
 def test_bool_in_union():
     @dataclass
     class SampleClass:
@@ -611,8 +612,8 @@ def test_bool_in_union():
 
 JsonType: typing.TypeAlias = None | bool | int | float | str | list["JsonType"] | dict[str, "JsonType"]
 
-def test_complex_union():
 
+def test_complex_union():
     @dataclass
     class SampleClass:
         field: dict[str, JsonType]
@@ -623,10 +624,11 @@ def test_complex_union():
     loaded = installation.load(SampleClass, filename="backups/SampleClass.json")
     assert loaded == saved
 
+
 JsonType2: typing.TypeAlias = dict[str, "JsonType2"] | list["JsonType2"] | str | float | int | bool | None
 
-def test_complex_union2():
 
+def test_complex_union2():
     @dataclass
     class SampleClass:
         field: dict[str, JsonType2]

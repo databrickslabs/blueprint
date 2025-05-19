@@ -796,7 +796,7 @@ class Installation:
         of type `type_ref`. This method is called by the `load` method."""
         if inst is None:
             return None
-        if type(inst) == type_ref:
+        if isinstance(inst, type_ref):
             return inst
         converted = inst
         # convert from str
@@ -804,8 +804,8 @@ class Installation:
             if type_ref in (int, float):
                 try:
                     converted = type_ref(inst)  # type: ignore[call-arg]
-                except ValueError:
-                    raise SerdeError(f"Not a number {inst}!")
+                except ValueError as exc:
+                    raise SerdeError(f"Not a number {inst}!") from exc
             elif type_ref == bool:
                 if inst.lower() == "true":
                     converted = True
@@ -819,7 +819,8 @@ class Installation:
         type. This method is called by the `_unmarshal` and `_marshal` methods."""
         if raw is None:
             raw = "value is missing"
-        return f'{".".join(path)}: not a {type_ref.__name__}: {raw}'
+        type_name = getattr(type_ref, "__name__", str(type_ref))
+        return f'{".".join(path)}: not a {type_name}: {raw}'
 
     @staticmethod
     def _dump_json(as_dict: Json, _: type) -> bytes:
