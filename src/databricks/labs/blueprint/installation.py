@@ -476,7 +476,9 @@ class Installation:
         """The `_marshal` method is a private method that is used to serialize an object of type `type_ref` to
         a dictionary. This method is called by the `save` method."""
         if inst is None:
-            return None, False
+            none_allowed = type_ref is types.NoneType or (
+                        isinstance(type_ref, types.UnionType) and types.NoneType in get_args(type_ref))
+            return None, none_allowed
         if isinstance(inst, databricks.sdk.core.Config):
             return self._marshal_databricks_config(inst)
         if hasattr(inst, "as_dict"):
