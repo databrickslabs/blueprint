@@ -67,6 +67,7 @@ class Installation:
 
     T = TypeVar("T")
     _PRIMITIVES = (int, bool, float, str)
+    allow_raw_types = True
     allow_weak_types = True
 
     def __init__(self, ws: WorkspaceClient, product: str, *, install_folder: str | None = None):
@@ -482,11 +483,12 @@ class Installation:
             return inst.as_dict(), True
         if dataclasses.is_dataclass(type_ref):
             return self._marshal_dataclass(type_ref, path, inst)
-        if type_ref == list:
-            return self._marshal_raw_list(path, inst)
-        if self.allow_weak_types:
+        if self.allow_raw_types:
+            if type_ref == list:
+                return self._marshal_raw_list(path, inst)
             if type_ref == dict:
                 return self._marshal_raw_dict(path, inst)
+        if self.allow_weak_types:
             if type_ref in (object, Any):
                 return self._marshal(type(inst), path, inst)
         if isinstance(type_ref, enum.EnumMeta):
@@ -692,7 +694,7 @@ class Installation:
             return None
         if isinstance(inst, (bool, int, float, str)):
             return cls._unmarshal_primitive(inst, type(inst))
-        if cls.allow_weak_types:
+        if cls.allow_raw_types:
             if isinstance(inst, list):
                 return cls._unmarshal_list(inst, path, object)
             if isinstance(inst, dict):
