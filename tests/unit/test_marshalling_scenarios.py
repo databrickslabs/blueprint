@@ -1,8 +1,10 @@
+from abc import ABC
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any
 
 import pytest
+from mypy.metastore import abstractmethod
 
 from databricks.labs.blueprint.installation import Installation, MockInstallation
 
@@ -154,6 +156,47 @@ def test_lost_code_with_list(type_support) -> None:
     # so we're loading the data as weakly typed
     loaded = installation.load(RecoverySampleClass, filename="backups/SampleClass.json")
     assert loaded.field == saved.field
+
+
+@pytest.mark.parametrize("type_support", [s for s in TypeSupport])
+def test_dynamic_config_data(type_support) -> None:
+    set_type_support(type_support)
+    # this example corresponds to a scenario where we store data provided
+    # by some object, without a schema for it
+
+    class AbstractDriver(ABC):
+
+        @abstractmethod
+        def get_config_data(self) -> object: ...
+
+    class XDriver(AbstractDriver):
+        def get_config_data(self) -> object:
+            return "oracle:jdbc:thin://my_login:my_password@myserver:2312"
+
+    class YDriver(AbstractDriver):
+        def get_config_data(self) -> object:
+            return {
+                "login": "my_login",
+                "password": "my_password",
+                "host": "myserver",
+                "port": 2312
+            }
+
+    @dataclass
+    class SampleClass:
+        driver_class: str
+        driver_config: object
+
+    installation = MockInstallation()
+    saved_x = SampleClass(driver_class=type(XDriver).__name__, driver_config=XDriver().get_config_data())
+    installation.save(saved_x, filename="backups/SampleDriverX.json")
+    saved_y = SampleClass(driver_class=type(YDriver).__name__, driver_config=YDriver().get_config_data())
+    installation.save(saved_y, filename="backups/SampleDriverY.json")
+    loaded_x = installation.load(SampleClass, filename="backups/SampleDriverX.json")
+    assert loaded_x == saved_x
+    loaded_y = installation.load(SampleClass, filename="backups/SampleDriverY.json")
+    assert loaded_y == saved_y
+
 
 
 @pytest.mark.parametrize("type_support", [s for s in TypeSupport])
