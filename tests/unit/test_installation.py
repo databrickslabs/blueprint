@@ -502,6 +502,30 @@ def test_generic_dict_list() -> None:
     assert loaded == saved
 
 
+def test_generic_dict_object():
+    @dataclass
+    class SampleClass:
+        field: dict[str, object]
+
+    installation = MockInstallation()
+    saved = SampleClass(field={"a": ["x", "y"], "b": [], "c": 3, "d": True, "e": {"a": "b"}})
+    installation.save(saved, filename="backups/SampleClass.json")
+    loaded = installation.load(SampleClass, filename="backups/SampleClass.json")
+    assert loaded == saved
+
+
+def test_generic_dict_any():
+    @dataclass
+    class SampleClass:
+        field: dict[str, typing.Any]
+
+    installation = MockInstallation()
+    saved = SampleClass(field={"a": ["x", "y"], "b": [], "c": 3, "d": True, "e": {"a": "b"}})
+    installation.save(saved, filename="backups/SampleClass.json")
+    loaded = installation.load(SampleClass, filename="backups/SampleClass.json")
+    assert loaded == saved
+
+
 def test_generic_list_str() -> None:
     @dataclass
     class SampleClass:
@@ -545,6 +569,72 @@ def test_generic_list_list() -> None:
 
     installation = MockInstallation()
     saved = SampleClass(field=[["x", "y"], []])
+    installation.save(saved, filename="backups/SampleClass.json")
+    loaded = installation.load(SampleClass, filename="backups/SampleClass.json")
+    assert loaded == saved
+
+
+def test_generic_list_object():
+    @dataclass
+    class SampleClass:
+        field: list[object]
+
+    installation = MockInstallation()
+    saved = SampleClass(field=[["x", "y"], [], 3, True, {"a": "b"}])
+    installation.save(saved, filename="backups/SampleClass.json")
+    loaded = installation.load(SampleClass, filename="backups/SampleClass.json")
+    assert loaded == saved
+
+
+def test_generic_list_any():
+    @dataclass
+    class SampleClass:
+        field: list[typing.Any]
+
+    installation = MockInstallation()
+    saved = SampleClass(field=[["x", "y"], [], 3, True, {"a": "b"}])
+    installation.save(saved, filename="backups/SampleClass.json")
+    loaded = installation.load(SampleClass, filename="backups/SampleClass.json")
+    assert loaded == saved
+
+
+def test_bool_in_union():
+    @dataclass
+    class SampleClass:
+        field: dict[str, bool | str]
+
+    installation = MockInstallation()
+    saved = SampleClass(field={"a": "b"})
+    installation.save(saved, filename="backups/SampleClass.json")
+    loaded = installation.load(SampleClass, filename="backups/SampleClass.json")
+    assert loaded == saved
+
+
+JsonType: typing.TypeAlias = None | bool | int | float | str | list["JsonType"] | dict[str, "JsonType"]
+
+
+def test_complex_union():
+    @dataclass
+    class SampleClass:
+        field: dict[str, JsonType]
+
+    installation = MockInstallation()
+    saved = SampleClass(field={"a": "b"})
+    installation.save(saved, filename="backups/SampleClass.json")
+    loaded = installation.load(SampleClass, filename="backups/SampleClass.json")
+    assert loaded == saved
+
+
+JsonType2: typing.TypeAlias = dict[str, "JsonType2"] | list["JsonType2"] | str | float | int | bool | None
+
+
+def test_complex_union2():
+    @dataclass
+    class SampleClass:
+        field: dict[str, JsonType2]
+
+    installation = MockInstallation()
+    saved = SampleClass(field={"a": "b"})
     installation.save(saved, filename="backups/SampleClass.json")
     loaded = installation.load(SampleClass, filename="backups/SampleClass.json")
     assert loaded == saved
