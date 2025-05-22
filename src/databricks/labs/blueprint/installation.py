@@ -250,7 +250,24 @@ class Installation:
 
         In this example, the `Installation` object is created for the "blueprint" product. A dataclass object of type
         `MyClass` is then created and saved to a file using the `save` method. The object is then loaded from the file
-        using the `load` method and compared to the original object to verify that it was saved correctly."""
+        using the `load` method and compared to the original object to verify that it was saved correctly.
+
+        The types of fields on the dataclass are limited to the following:
+
+          - The primitive types: `None`, `bool`, `int`, `float`, `str`.
+          - Lists of types that conform to this list.
+          - Dictionaries of types where the key is a string, and the value is a type that conforms to this list.
+          - Python `Enum` classes.
+          - Dataclassses whose fields also conform to this list.
+          - Classes that implement a custom `.as_dict()`/`.from_dict()` serialization protocol.
+          - The Databricks SDK configuration class: `databricks.sdk.core.Config`
+
+        All fields must be type-annotated correctly. For compatibility reasons the raw `list` and `dict` annotations are
+        accepted but support for this is deprecated and will be removed.
+
+        Note: lists and dictionaries at runtime must currently contain at least one element and be homogeneous in type
+        with respect to the first element.
+        """
         if not inst:
             raise SerdeError("missing value")
         type_ref = self._get_type_ref(inst)
