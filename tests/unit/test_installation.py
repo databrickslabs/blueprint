@@ -502,7 +502,7 @@ def test_generic_dict_list() -> None:
     assert loaded == saved
 
 
-def test_generic_dict_object():
+def test_generic_dict_object() -> None:
     @dataclass
     class SampleClass:
         field: dict[str, object]
@@ -514,7 +514,7 @@ def test_generic_dict_object():
     assert loaded == saved
 
 
-def test_generic_dict_any():
+def test_generic_dict_any() -> None:
     @dataclass
     class SampleClass:
         field: dict[str, typing.Any]
@@ -574,7 +574,7 @@ def test_generic_list_list() -> None:
     assert loaded == saved
 
 
-def test_generic_list_object():
+def test_generic_list_object() -> None:
     @dataclass
     class SampleClass:
         field: list[object]
@@ -586,7 +586,7 @@ def test_generic_list_object():
     assert loaded == saved
 
 
-def test_generic_list_any():
+def test_generic_list_any() -> None:
     @dataclass
     class SampleClass:
         field: list[typing.Any]
@@ -598,7 +598,7 @@ def test_generic_list_any():
     assert loaded == saved
 
 
-def test_bool_in_union():
+def test_bool_in_union() -> None:
     @dataclass
     class SampleClass:
         field: dict[str, bool | str]
@@ -613,7 +613,7 @@ def test_bool_in_union():
 JsonType: typing.TypeAlias = None | bool | int | float | str | list["JsonType"] | dict[str, "JsonType"]
 
 
-def test_complex_union():
+def test_complex_union() -> None:
     @dataclass
     class SampleClass:
         field: dict[str, JsonType]
@@ -628,7 +628,7 @@ def test_complex_union():
 JsonType2: typing.TypeAlias = dict[str, "JsonType2"] | list["JsonType2"] | str | float | int | bool | None
 
 
-def test_complex_union2():
+def test_complex_union2() -> None:
     @dataclass
     class SampleClass:
         field: dict[str, JsonType2]
