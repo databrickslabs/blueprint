@@ -706,21 +706,7 @@ class Installation:
             return cls._unmarshal_union(inst, path, type_ref)
         if isinstance(type_ref, (_GenericAlias, types.GenericAlias)):
             return cls._unmarshal_generic(inst, path, type_ref)
-        if type_ref in (object, Any):
-            return cls._unmarshal_object(inst, path)
         raise SerdeError(f'{".".join(path)}: unknown: {type_ref}: {inst}')
-
-    @classmethod
-    def _unmarshal_object(cls, inst, path):
-        if inst is None:
-            return None
-        if isinstance(inst, (bool, int, float, str)):
-            return cls._unmarshal_primitive(inst, type(inst))
-        if isinstance(inst, list):
-            return cls._unmarshal_list(inst, path, object)
-        if isinstance(inst, dict):
-            return cls._unmarshal_dict(inst, path, object)
-        raise SerdeError(f'{".".join(path)}: unknown: {type(inst)}: {inst}')
 
     @classmethod
     def _unmarshal_dataclass(cls, inst, path, type_ref):
