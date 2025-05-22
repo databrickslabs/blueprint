@@ -681,9 +681,11 @@ class Installation:
         if type_ref in cls._PRIMITIVES:
             return cls._unmarshal_primitive(inst, type_ref)
         if type_ref == list:
-            return cls._unmarshal_list(inst, path, Any)
+            msg = f"{'.'.join(path)}: raw list encountered; use list[type] instead: {inst}"
+            raise SerdeError(msg)
         if type_ref == dict:
-            return cls._unmarshal_dict(inst, path, Any)
+            msg = f"{'.'.join(path)}: raw dict encountered; use dict[str,type] instead: {inst}"
+            raise SerdeError(msg)
         if type_ref == databricks.sdk.core.Config:
             if not inst:
                 inst = {}

@@ -1,4 +1,6 @@
+import dataclasses
 import io
+import re
 import typing
 from dataclasses import dataclass
 from typing import TypeAlias
@@ -18,6 +20,7 @@ from databricks.labs.blueprint.installation import (
     Installation,
     JSONValue,
     MockInstallation,
+    SerdeError,
 )
 
 
@@ -634,8 +637,16 @@ def test_raw_list_deprecation() -> None:
     with pytest.warns(DeprecationWarning, match="Raw list serialization is deprecated"):
         installation.save(saved, filename="backups/SampleClass.json")
 
-    loaded = installation.load(SampleClass, filename="backups/SampleClass.json")
-    assert loaded == saved
+    # Loading raw (untyped) lists never worked, so there's no need for deprecation: it now fails with instructions.
+    with pytest.raises(SerdeError, match=re.escape("field: raw list encountered; use list[type] instead: [1, 2, 3]")):
+        installation.load(SampleClass, filename="backups/SampleClass.json")
+
+    @dataclass
+    class SampleClassFixed:
+        field: list[int]
+
+    loaded = installation.load(SampleClassFixed, filename="backups/SampleClass.json")
+    assert dataclasses.asdict(loaded) == dataclasses.asdict(saved)
 
 
 def test_raw_dict_deprecation() -> None:
@@ -648,5 +659,13 @@ def test_raw_dict_deprecation() -> None:
     with pytest.warns(DeprecationWarning, match="Raw dict serialization is deprecated"):
         installation.save(saved, filename="backups/SampleClass.json")
 
-    loaded = installation.load(SampleClass, filename="backups/SampleClass.json")
-    assert loaded == saved
+    # Loading raw (untyped) lists never worked, so there's no need for deprecation: it now fails with instructions.
+    with pytest.raises(SerdeError, match=re.escape("field: raw dict encountered; use dict[str,type] instead: {'a': 1, 'b': 2, 'c': 3}")):
+        installation.load(SampleClass, filename="backups/SampleClass.json")
+
+    @dataclass
+    class SampleClassFixed:
+        field: dict[str, int]
+
+    loaded = installation.load(SampleClassFixed, filename="backups/SampleClass.json")
+    assert dataclasses.asdict(loaded) == dataclasses.asdict(saved)
