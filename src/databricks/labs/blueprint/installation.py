@@ -493,6 +493,9 @@ class Installation:
 
     # pylint: disable=too-complex
     def _marshal(self, type_ref: type, path: list[str], inst: Any) -> tuple[Any, bool]:
+        # This method does not (universally) guide serialisation based on the supplied type reference, meaning that
+        # the serialised values may not conform to the declared type reference.
+        # TODO: Refactor this to ensure that marshalling is guided by the declared type reference runtime values conform
         if type_ref == types.NoneType:
             return inst, inst is None
         if isinstance(inst, databricks.sdk.core.Config):
