@@ -622,3 +622,31 @@ def test_complex_union_alt() -> None:
 
     loaded = installation.load(SampleClass, filename="backups/SampleClass.json")
     assert loaded == saved
+
+
+def test_raw_list_deprecation() -> None:
+    @dataclass
+    class SampleClass:
+        field: list
+
+    installation = MockInstallation()
+    saved = SampleClass(field=[1, 2, 3])
+    with pytest.warns(DeprecationWarning, match="Raw list serialization is deprecated"):
+        installation.save(saved, filename="backups/SampleClass.json")
+
+    loaded = installation.load(SampleClass, filename="backups/SampleClass.json")
+    assert loaded == saved
+
+
+def test_raw_dict_deprecation() -> None:
+    @dataclass
+    class SampleClass:
+        field: dict
+
+    installation = MockInstallation()
+    saved = SampleClass(field={"a": 1, "b": 2, "c": 3})
+    with pytest.warns(DeprecationWarning, match="Raw dict serialization is deprecated"):
+        installation.save(saved, filename="backups/SampleClass.json")
+
+    loaded = installation.load(SampleClass, filename="backups/SampleClass.json")
+    assert loaded == saved

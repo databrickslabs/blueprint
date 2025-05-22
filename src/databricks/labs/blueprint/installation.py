@@ -12,6 +12,7 @@ import re
 import threading
 import types
 import typing
+import warnings
 from collections.abc import Callable, Collection
 from functools import partial
 from json import JSONDecodeError
@@ -573,6 +574,9 @@ class Installation:
     def _marshal_raw_list(self, path: list[str], inst: Any) -> tuple[Any, bool]:
         """The `_marshal_raw_list` method is a private method that is used to serialize an object of type list to
         an array. This method is called by the `save` method."""
+        warnings.warn(
+            "Raw list serialization is deprecated and will soon be removed: use list[type] instead.", DeprecationWarning
+        )
         as_list = []
         if not isinstance(inst, list):
             return None, False
@@ -598,6 +602,10 @@ class Installation:
     def _marshal_raw_dict(self, path: list[str], inst: Any) -> tuple[Any, bool]:
         """The `_marshal_raw_dict` method is a private method that is used to serialize an object of type dict to
         a dictionary. This method is called by the `save` method."""
+        warnings.warn(
+            "Raw dict serialization is deprecated and will soon be removed: use dict[str, type] instead.",
+            DeprecationWarning,
+        )
         if not isinstance(inst, dict):
             return None, False
         as_dict = {}
