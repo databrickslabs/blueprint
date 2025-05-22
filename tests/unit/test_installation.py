@@ -1,6 +1,7 @@
 import io
 import typing
 from dataclasses import dataclass
+from typing import TypeAlias
 from unittest.mock import MagicMock, create_autospec
 
 import pytest
@@ -15,6 +16,7 @@ from databricks.sdk.service.workspace import ImportFormat
 from databricks.labs.blueprint.installation import (
     IllegalState,
     Installation,
+    JSONValue,
     MockInstallation,
 )
 
@@ -502,25 +504,15 @@ def test_generic_dict_list() -> None:
     assert loaded == saved
 
 
-def test_generic_dict_object() -> None:
+def test_generic_dict_json_value() -> None:
     @dataclass
     class SampleClass:
-        field: dict[str, object]
+        field: dict[str, JSONValue]
 
     installation = MockInstallation()
-    saved = SampleClass(field={"a": ["x", "y"], "b": [], "c": 3, "d": True, "e": {"a": "b"}})
-    installation.save(saved, filename="backups/SampleClass.json")
-    loaded = installation.load(SampleClass, filename="backups/SampleClass.json")
-    assert loaded == saved
 
-
-def test_generic_dict_any() -> None:
-    @dataclass
-    class SampleClass:
-        field: dict[str, typing.Any]
-
-    installation = MockInstallation()
-    saved = SampleClass(field={"a": ["x", "y"], "b": [], "c": 3, "d": True, "e": {"a": "b"}})
+    json_like: dict[str, JSONValue] = {"a": ["x", "y"], "b": [], "c": 3, "d": True, "e": {"a": "b"}}
+    saved = SampleClass(field=json_like)
     installation.save(saved, filename="backups/SampleClass.json")
     loaded = installation.load(SampleClass, filename="backups/SampleClass.json")
     assert loaded == saved
@@ -574,25 +566,20 @@ def test_generic_list_list() -> None:
     assert loaded == saved
 
 
-def test_generic_list_object() -> None:
+def test_generic_list_json() -> None:
     @dataclass
     class SampleClass:
-        field: list[object]
+        field: list[JSONValue]
 
     installation = MockInstallation()
-    saved = SampleClass(field=[["x", "y"], [], 3, True, {"a": "b"}])
-    installation.save(saved, filename="backups/SampleClass.json")
-    loaded = installation.load(SampleClass, filename="backups/SampleClass.json")
-    assert loaded == saved
-
-
-def test_generic_list_any() -> None:
-    @dataclass
-    class SampleClass:
-        field: list[typing.Any]
-
-    installation = MockInstallation()
-    saved = SampleClass(field=[["x", "y"], [], 3, True, {"a": "b"}])
+    json_like: list[JSONValue] = [
+        ["x", "y"],
+        [],
+        3,
+        True,
+        {"a": "b"},
+    ]
+    saved = SampleClass(field=json_like)
     installation.save(saved, filename="backups/SampleClass.json")
     loaded = installation.load(SampleClass, filename="backups/SampleClass.json")
     assert loaded == saved
@@ -610,31 +597,28 @@ def test_bool_in_union() -> None:
     assert loaded == saved
 
 
-JsonType: typing.TypeAlias = None | bool | int | float | str | list["JsonType"] | dict[str, "JsonType"]
-
-
 def test_complex_union() -> None:
     @dataclass
     class SampleClass:
-        field: dict[str, JsonType]
+        field: dict[str, JSONValue]
 
     installation = MockInstallation()
     saved = SampleClass(field={"a": "b"})
     installation.save(saved, filename="backups/SampleClass.json")
-    loaded = installation.load(SampleClass, filename="backups/SampleClass.json")
-    assert loaded == saved
 
 
-JsonType2: typing.TypeAlias = dict[str, "JsonType2"] | list["JsonType2"] | str | float | int | bool | None
+# Alternative union describing the JSON bounds that we support.
+JSONValueAlt: TypeAlias = dict[str, "JSONValueAlt"] | list["JSONValueAlt"] | str | float | int | bool | None
 
 
-def test_complex_union2() -> None:
+def test_complex_union_alt() -> None:
     @dataclass
     class SampleClass:
-        field: dict[str, JsonType2]
+        field: dict[str, JSONValueAlt]
 
     installation = MockInstallation()
     saved = SampleClass(field={"a": "b"})
     installation.save(saved, filename="backups/SampleClass.json")
+
     loaded = installation.load(SampleClass, filename="backups/SampleClass.json")
     assert loaded == saved
