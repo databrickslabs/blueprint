@@ -491,7 +491,6 @@ class Installation:
         item_type = type(from_list[0])  # type: ignore[misc]
         return list[item_type]  # type: ignore[valid-type]
 
-    # pylint: disable=too-complex
     def _marshal(self, type_ref: type, path: list[str], inst: Any) -> tuple[Any, bool]:
         # This method does not (universally) guide serialisation based on the supplied type reference, meaning that
         # the serialised values may not conform to the declared type reference.
