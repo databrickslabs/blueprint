@@ -20,6 +20,7 @@ from typing import (
     Any,
     BinaryIO,
     Protocol,
+    TypeAlias,
     TypeVar,
     get_args,
     get_type_hints,
@@ -38,7 +39,11 @@ logger = logging.getLogger(__name__)
 
 Json = dict[str, Any]
 
-__all__ = ["Installation", "MockInstallation", "IllegalState", "NotInstalled", "SerdeError"]
+# TODO: Extend to allow Sequence["JSONValue"] and Mapping[str, "JSONValue"] instead of list/dict.
+JSONValue: TypeAlias = None | bool | int | float | str | list["JSONValue"] | dict[str, "JSONValue"]
+
+
+__all__ = ["Installation", "MockInstallation", "IllegalState", "NotInstalled", "SerdeError", "JSONValue"]
 
 
 class IllegalState(ValueError):
