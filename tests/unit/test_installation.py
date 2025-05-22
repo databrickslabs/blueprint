@@ -660,7 +660,9 @@ def test_raw_dict_deprecation() -> None:
         installation.save(saved, filename="backups/SampleClass.json")
 
     # Loading raw (untyped) lists never worked, so there's no need for deprecation: it now fails with instructions.
-    with pytest.raises(SerdeError, match=re.escape("field: raw dict encountered; use dict[str,type] instead: {'a': 1, 'b': 2, 'c': 3}")):
+    with pytest.raises(
+        SerdeError, match=re.escape("field: raw dict encountered; use dict[str,type] instead: {'a': 1, 'b': 2, 'c': 3}")
+    ):
         installation.load(SampleClass, filename="backups/SampleClass.json")
 
     @dataclass
