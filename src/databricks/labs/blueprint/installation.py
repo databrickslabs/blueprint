@@ -508,8 +508,6 @@ class Installation:
             return self._marshal_raw_list(path, inst)
         if type_ref == dict:
             return self._marshal_raw_dict(path, inst)
-        if type_ref in (object, Any):
-            return self._marshal(type(inst), path, inst)
         if isinstance(type_ref, enum.EnumMeta):
             return self._marshal_enum(inst)
         if type_ref in self._PRIMITIVES:
