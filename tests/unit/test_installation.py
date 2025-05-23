@@ -18,7 +18,7 @@ from databricks.sdk.service.workspace import ImportFormat
 from databricks.labs.blueprint.installation import (
     IllegalState,
     Installation,
-    JSONValue,
+    JsonValue,
     MockInstallation,
     SerdeError,
 )
@@ -510,11 +510,11 @@ def test_generic_dict_list() -> None:
 def test_generic_dict_json_value() -> None:
     @dataclass
     class SampleClass:
-        field: dict[str, JSONValue]
+        field: dict[str, JsonValue]
 
     installation = MockInstallation()
 
-    json_like: dict[str, JSONValue] = {"a": ["x", "y"], "b": [], "c": 3, "d": True, "e": {"a": "b"}}
+    json_like: dict[str, JsonValue] = {"a": ["x", "y"], "b": [], "c": 3, "d": True, "e": {"a": "b"}}
     saved = SampleClass(field=json_like)
     installation.save(saved, filename="backups/SampleClass.json")
     loaded = installation.load(SampleClass, filename="backups/SampleClass.json")
@@ -572,10 +572,10 @@ def test_generic_list_list() -> None:
 def test_generic_list_json() -> None:
     @dataclass
     class SampleClass:
-        field: list[JSONValue]
+        field: list[JsonValue]
 
     installation = MockInstallation()
-    json_like: list[JSONValue] = [
+    json_like: list[JsonValue] = [
         ["x", "y"],
         [],
         3,
@@ -603,7 +603,7 @@ def test_bool_in_union() -> None:
 def test_complex_union() -> None:
     @dataclass
     class SampleClass:
-        field: dict[str, JSONValue]
+        field: dict[str, JsonValue]
 
     installation = MockInstallation()
     saved = SampleClass(field={"a": "b"})

@@ -13,7 +13,7 @@ import threading
 import types
 import typing
 import warnings
-from collections.abc import Callable, Collection
+from collections.abc import Callable, Collection, Mapping, Sequence
 from functools import partial
 from json import JSONDecodeError
 from pathlib import Path
@@ -38,13 +38,14 @@ from databricks.labs.blueprint.parallel import Threads
 
 logger = logging.getLogger(__name__)
 
-Json = dict[str, Any]
-
 # TODO: Extend to allow Sequence["JSONValue"] and Mapping[str, "JSONValue"] instead of list/dict.
-JSONValue: TypeAlias = None | bool | int | float | str | list["JSONValue"] | dict[str, "JSONValue"]
+JsonList: TypeAlias = list["JsonValue"]
+JsonObject: TypeAlias = dict[str, "JsonValue"]
+RootJsonValue: TypeAlias = JsonObject | JsonList
+JsonValue: TypeAlias = None | bool | int | float | str | RootJsonValue
 
 
-__all__ = ["Installation", "MockInstallation", "IllegalState", "NotInstalled", "SerdeError", "JSONValue"]
+__all__ = ["Installation", "MockInstallation", "IllegalState", "NotInstalled", "SerdeError", "JsonValue"]
 
 
 class IllegalState(ValueError):
@@ -365,7 +366,7 @@ class Installation:
         """Returns the host of the current workspace."""
         return self._ws.config.host
 
-    def _overwrite_content(self, filename: str, as_dict: Json, type_ref: type):
+    def _overwrite_content(self, filename: str, as_dict: JsonObject, type_ref: type):
         """The `_overwrite_content` method is a private method that is used to serialize an object of type `type_ref`
         to a dictionary and write it to a file on WorkspaceFS. This method is called by the `save` and `upload` methods.
 
@@ -400,7 +401,7 @@ class Installation:
             as_dict = cls._migrate_file_format(type_ref, expected_version, as_dict, filename)
         return cls._unmarshal(as_dict, [], type_ref)
 
-    def _load_content(self, filename: str) -> Json:
+    def _load_content(self, filename: str) -> RootJsonValue:
         """The `_load_content` method is a private method that is used to load the contents of a file from
         WorkspaceFS as a dictionary. This method is called by the `load` method."""
         with self._lock:
@@ -410,7 +411,7 @@ class Installation:
                 return self._convert_content(filename, f)
 
     @classmethod
-    def _convert_content(cls, filename: str, raw: BinaryIO) -> Json:
+    def _convert_content(cls, filename: str, raw: BinaryIO) -> JsonObject:
         """The `_convert_content` method is a private method that is used to convert the raw bytes of a file to a
         dictionary. This method is called by the `_load_content` method."""
         converters: dict[str, Callable[[BinaryIO], Any]] = {
@@ -829,13 +830,13 @@ class Installation:
         return f'{".".join(path)}: not a {type_name}: {raw}'
 
     @staticmethod
-    def _dump_json(as_dict: Json, _: type) -> bytes:
+    def _dump_json(as_dict: JsonValue, _: type) -> bytes:
         """The `_dump_json` method is a private method that is used to serialize a dictionary to a JSON string. This
         method is called by the `save` method."""
         return json.dumps(as_dict, indent=2).encode("utf8")
 
     @staticmethod
-    def _dump_yaml(raw: Json, _: type) -> bytes:
+    def _dump_yaml(raw: JsonValue, _: type) -> bytes:
         """The `_dump_yaml` method is a private method that is used to serialize a dictionary to a YAML string. This
         method is called by the `save` method."""
         try:
@@ -846,7 +847,7 @@ class Installation:
             raise SyntaxError("PyYAML is not installed. Fix: pip install databricks-labs-blueprint[yaml]") from err
 
     @staticmethod
-    def _load_yaml(raw: BinaryIO) -> Json:
+    def _load_yaml(raw: BinaryIO) -> JsonValue:
         """The `_load_yaml` method is a private method that is used to deserialize a YAML string to a dictionary. This
         method is called by the `load` method."""
         try:
@@ -863,7 +864,7 @@ class Installation:
             raise SyntaxError("PyYAML is not installed. Fix: pip install databricks-labs-blueprint[yaml]") from err
 
     @staticmethod
-    def _dump_csv(raw: list[Json], type_ref: type) -> bytes:
+    def _dump_csv(raw: list[JsonObject], type_ref: type) -> bytes:
         """The `_dump_csv` method is a private method that is used to serialize a list of dictionaries to a CSV string.
         This method is called by the `save` method."""
         type_args = get_args(type_ref)
@@ -891,7 +892,7 @@ class Installation:
         return buffer.read().encode("utf8")
 
     @staticmethod
-    def _load_csv(raw: BinaryIO) -> list[Json]:
+    def _load_csv(raw: BinaryIO) -> list[JsonObject]:
         with io.TextIOWrapper(raw, encoding="utf8") as text_file:
             out = []
             for row in csv.DictReader(text_file):  # type: ignore[arg-type]
@@ -918,7 +919,7 @@ class MockInstallation(Installation):
         pytest.register_assert_rewrite('databricks.labs.blueprint.installation')
     """
 
-    def __init__(self, overwrites: dict[str, JSONValue] = None, *, is_global=True):  # pylint: disable=super-init-not-called
+    def __init__(self, overwrites: dict[str, RootJsonValue] | None = None, *, is_global=True):  # pylint: disable=super-init-not-called
         if not overwrites:
             overwrites = {}
         self._overwrites = overwrites
@@ -971,10 +972,10 @@ class MockInstallation(Installation):
     def _current_client_config(self) -> dict:
         return {}
 
-    def _overwrite_content(self, filename: str, as_dict: Json, type_ref: type):
+    def _overwrite_content(self, filename: str, as_dict: JsonObject, type_ref: type):
         self._overwrites[filename] = as_dict
 
-    def _load_content(self, filename: str) -> Json:
+    def _load_content(self, filename: str) -> RootJsonValue:
         if filename not in self._overwrites:
             raise NotFound(filename)
         return self._overwrites[filename]
