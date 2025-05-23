@@ -38,7 +38,7 @@ from databricks.labs.blueprint.parallel import Threads
 
 logger = logging.getLogger(__name__)
 
-# TODO: Extend to allow Sequence["JSONValue"] and Mapping[str, "JSONValue"] instead of list/dict.
+# TODO: Extend to allow Sequence["JsonValue"] and Mapping[str, "JsonValue"] instead of list/dict.
 JsonList: TypeAlias = list["JsonValue"]
 JsonObject: TypeAlias = dict[str, "JsonValue"]
 RootJsonValue: TypeAlias = JsonObject | JsonList
