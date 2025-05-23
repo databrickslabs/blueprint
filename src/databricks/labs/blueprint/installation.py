@@ -573,8 +573,6 @@ class Installation:
         return as_list, True
 
     def _marshal_raw_list(self, path: list[str], inst: Any) -> tuple[Any, bool]:
-        """The `_marshal_raw_list` method is a private method that is used to serialize an object of type list to
-        an array. This method is called by the `save` method."""
         warnings.warn(
             "Raw list serialization is deprecated and will soon be removed: use list[type] instead.", DeprecationWarning
         )
@@ -601,8 +599,6 @@ class Installation:
         return as_dict, True
 
     def _marshal_raw_dict(self, path: list[str], inst: Any) -> tuple[Any, bool]:
-        """The `_marshal_raw_dict` method is a private method that is used to serialize an object of type dict to
-        a dictionary. This method is called by the `save` method."""
         warnings.warn(
             "Raw dict serialization is deprecated and will soon be removed: use dict[str, type] instead.",
             DeprecationWarning,
