@@ -50,7 +50,7 @@ class InstallState:
         return cls(None, None, installation=installation)
 
     @staticmethod
-    def _init_installation(ws, product, install_folder, installation):
+    def _init_installation(ws, product, install_folder, installation) -> "Installation":
         if installation is not None:
             return installation
         if ws is None and product is None:
