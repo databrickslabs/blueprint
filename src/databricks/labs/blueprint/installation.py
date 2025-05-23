@@ -918,7 +918,7 @@ class MockInstallation(Installation):
         pytest.register_assert_rewrite('databricks.labs.blueprint.installation')
     """
 
-    def __init__(self, overwrites: Any = None, *, is_global=True):  # pylint: disable=super-init-not-called
+    def __init__(self, overwrites: dict[str, JSONValue] = None, *, is_global=True):  # pylint: disable=super-init-not-called
         if not overwrites:
             overwrites = {}
         self._overwrites = overwrites
