@@ -981,12 +981,16 @@ class MockInstallation(Installation):
 
     def assert_file_written(self, filename: str, expected: Any):
         assert filename in self._overwrites, f"{filename} had no writes"
-        if isinstance(expected, dict):
-            for k, v in expected.items():
-                if v == ...:
-                    self._overwrites[filename][k] = ...
         actual = self._overwrites[filename]
-        assert expected == actual, f"{filename} content missmatch"
+        actual_for_comparison: Sequence[JsonValue] | Mapping[str, JsonValue | types.EllipsisType]
+        if isinstance(expected, Mapping) and isinstance(actual, Mapping):
+            # The caller is allowed to specify '...' as a don't-care value (only at the first level of the dictionary).
+            # To allow this we clone the underlying dictionary and substitute '...' where necessary so that subsequent
+            # comparison will succeed.
+            actual_for_comparison = {k: v if expected[k] is not ... else ... for k, v in actual.items()}
+        else:
+            actual_for_comparison = actual
+        assert expected == actual_for_comparison, f"{filename} content missmatch"
 
     def assert_file_uploaded(self, filename, expected: bytes | None = None):
         """Asserts that a file was uploaded with the expected content"""
