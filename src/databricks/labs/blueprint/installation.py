@@ -20,6 +20,8 @@ from pathlib import Path
 from typing import (
     Any,
     BinaryIO,
+    Dict,
+    List,
     Protocol,
     TypeAlias,
     TypeVar,
@@ -38,9 +40,10 @@ from databricks.labs.blueprint.parallel import Threads
 
 logger = logging.getLogger(__name__)
 
+# Note: we have to use List/Dict instead of list/dict because the latter do not resolve future references.
 # TODO: Extend to allow Sequence["JsonValue"] and Mapping[str, "JsonValue"] instead of list/dict.
-JsonList: TypeAlias = list["JsonValue"]
-JsonObject: TypeAlias = dict[str, "JsonValue"]
+JsonList: TypeAlias = List["JsonValue"]  # pylint: disable=deprecated-typing-alias
+JsonObject: TypeAlias = Dict[str, "JsonValue"]  # pylint: disable=deprecated-typing-alias
 RootJsonValue: TypeAlias = JsonObject | JsonList
 JsonValue: TypeAlias = None | bool | int | float | str | RootJsonValue
 
@@ -675,8 +678,8 @@ class Installation:
             if not inst:
                 return None
             return type_ref(inst)
-        if type_ref in cls._PRIMITIVES:
-            return cls._unmarshal_primitive(inst, type_ref)
+        if type_ref in cls._PRIMITIVES and type(inst) in cls._PRIMITIVES:
+            return cls._unmarshal_primitive(inst, path, type_ref)
         if type_ref == list:
             msg = f"{'.'.join(path)}: raw list encountered; use list[type] instead: {inst}"
             raise SerdeError(msg)
@@ -719,9 +722,10 @@ class Installation:
             origin = getattr(hint, "__origin__", None)
             if origin is typing.ClassVar:
                 continue
-            raw = inst.get(field_name)
-            value = cls._unmarshal(raw, [*path, field_name], hint)
-            if value is None:
+            if field_name in inst:
+                raw = inst.get(field_name)
+                value = cls._unmarshal(raw, [*path, field_name], hint)
+            else:
                 field = fields.get(field_name)
                 default_value = field.default
                 default_factory = field.default_factory
@@ -794,26 +798,44 @@ class Installation:
         return from_dict
 
     @classmethod
-    def _unmarshal_primitive(cls, inst, type_ref):
-        """The `_unmarshal_primitive` method is a private method that is used to deserialize a dictionary to an object
-        of type `type_ref`. This method is called by the `load` method."""
-        if inst is None:
-            return None
+    def _unmarshal_primitive(cls, inst: Any, path: list[str], type_ref: type) -> Any:
+        """Unmarshal a primitive value that should be of type `type_ref`.
+
+        If the value does not match the expected type, it will attempt to coerce it but may fail. Coercion uses
+        the natural conversion of the type_reference (e.g. `int` as `int(v)`, etc.), except for `bool` which can
+        only convert from a case-insensitive string representation of `true` or `false`.
+
+        Args:
+            inst: the value to unmarshal.
+            path: the location of the value in its enclosing structure, used for error messages.
+            type_ref: the expected type reference (e.g. `int`, `float`, `str`, `bool`).
+        Returns:
+            the converted value, if successful, or None if the types are incompatible and coercion is not possible.
+        Raises:
+            SerdeError: if the value cannot be converted to the expected type.
+        """
+        # No coercion necessary.
         if isinstance(inst, type_ref):
             return inst
-        converted = inst
-        # convert from str
-        if isinstance(inst, str):
-            if type_ref in (int, float):
-                try:
-                    converted = type_ref(inst)  # type: ignore[call-arg]
-                except ValueError as exc:
-                    raise SerdeError(f"Not a number {inst}!") from exc
-            elif type_ref == bool:
+        # Only attempt coercion between primitive types.
+        if type(inst) not in cls._PRIMITIVES:
+            msg = f"{'.'.join(path)}: Expected {type_ref.__name__}, got: {inst}"
+            raise SerdeError(msg)
+        # Special case for strings to bool
+        if type_ref == bool:
+            if isinstance(inst, str):
                 if inst.lower() == "true":
-                    converted = True
-                elif inst.lower() == "false":
-                    converted = False
+                    return True
+                if inst.lower() == "false":
+                    return False
+            msg = f"{'.'.join(path)}: Expected bool, got: {inst}"
+            raise SerdeError(msg)
+        # Everything else.
+        try:
+            converted = type_ref(inst)
+        except (ValueError, TypeError) as exc:
+            msg = f"{'.'.join(path)}: Expected {type_ref.__name__}, got: {inst}"
+            raise SerdeError(msg) from exc
         return converted
 
     @staticmethod

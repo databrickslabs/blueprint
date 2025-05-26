@@ -671,3 +671,45 @@ def test_raw_dict_deprecation() -> None:
 
     loaded = installation.load(SampleClassFixed, filename="backups/SampleClass.json")
     assert dataclasses.asdict(loaded) == dataclasses.asdict(saved)
+
+
+def test_loading_value_coercion_to_str() -> None:
+    """When the stored values don't match the hinted type, behaviour is to coerce if possible."""
+
+    @dataclass
+    class SampleClass:
+        field_str: str
+        field_bool: str
+        field_int: str
+        field_float: str
+
+    installation = MockInstallation(
+        {"something.json": {"field_str": "str", "field_bool": True, "field_int": 1, "field_float": 1.1}}
+    )
+    loaded = installation.load(SampleClass, filename="something.json")
+    assert loaded == SampleClass(field_str="str", field_bool="True", field_int="1", field_float="1.1")
+
+
+def test_loading_value_coercion_from_str() -> None:
+    """When the underlying values don't match the hinted type, pre-existing behaviour is to coerce if possible."""
+
+    @dataclass
+    class SampleClass:
+        field_dict: dict[str, int]
+        field_bool: bool
+        field_int: int
+        field_floats: dict[str, float]
+
+    raw_data: dict[str, typing.Any] = {
+        "field_dict": {"a": "1", "b": "2"},
+        "field_bool": "tRuE",
+        "field_int": "42",
+        "field_floats": {"x": "3.14", "y": 2},
+    }
+    expected = SampleClass(
+        field_dict={"a": 1, "b": 2}, field_bool=True, field_int=42, field_floats={"x": 3.14, "y": 2.0}
+    )
+
+    installation = MockInstallation({"something.json": raw_data})
+    loaded = installation.load(SampleClass, filename="something.json")
+    assert loaded == expected
