@@ -690,6 +690,8 @@ class Installation:
             if not inst:
                 inst = {}
             return databricks.sdk.core.Config(**inst)  # type: ignore[return-value]
+        if type_ref == types.NoneType and inst is None:
+            return None
         if isinstance(type_ref, cls._FromDict):
             return type_ref.from_dict(inst)
         return cls._unmarshal_generic_types(type_ref, path, inst)
