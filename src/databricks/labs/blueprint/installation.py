@@ -672,6 +672,9 @@ class Installation:
     def _unmarshal(cls, inst: Any, path: list[str], type_ref: type[T]) -> T | None:
         """The `_unmarshal` method is a private method that is used to deserialize a dictionary to an object of type
         `type_ref`. This method is called by the `load` method."""
+        # Forward-references aren't always resolved, so we need to handle them. (Assumes reference is visible here.)
+        if isinstance(type_ref, typing.ForwardRef):
+            type_ref = type_ref._evaluate(globals(), locals(), frozenset())  # pylint: disable=protected-access
         if dataclasses.is_dataclass(type_ref):
             return cls._unmarshal_dataclass(inst, path, type_ref)
         if isinstance(type_ref, enum.EnumMeta):
