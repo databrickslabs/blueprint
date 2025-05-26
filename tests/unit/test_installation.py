@@ -673,6 +673,25 @@ def test_raw_dict_deprecation() -> None:
     assert dataclasses.asdict(loaded) == dataclasses.asdict(saved)
 
 
+def test_loading_dict_coercion_special_case() -> None:
+    """Earlier versions of the unmarshalling code would sometimes initialize a dataclass field with its default value if:
+        - The saved value was falsey;
+        - THe saved value could not be coerced to the expected type.
+
+    In particular the UCX code that loads existing dashboards during installation does not expect SerdeError to be
+    raised.
+    """
+
+    @dataclass
+    class OldSampleClass:
+        field: dict[str, int] = dataclasses.field(default_factory=dict)
+
+    installation = MockInstallation({"something.json": {"field": "not_a_dict"}})
+    loaded = installation.load(OldSampleClass, filename="something.json")
+
+    assert loaded == OldSampleClass(field={})
+
+
 def test_loading_value_coercion_to_str() -> None:
     """When the stored values don't match the hinted type, behaviour is to coerce if possible."""
 

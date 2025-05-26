@@ -722,15 +722,23 @@ class Installation:
             origin = getattr(hint, "__origin__", None)
             if origin is typing.ClassVar:
                 continue
-            if field_name in inst:
-                raw = inst.get(field_name)
+            raw = inst.get(field_name)
+            pending_exception: SerdeError | None
+            try:
                 value = cls._unmarshal(raw, [*path, field_name], hint)
-            else:
+                pending_exception = None
+            except SerdeError as exc:
+                # Special case: if the value couldn't be deserialized, we will try to use the default value or factory
+                # instead. Existing code (ucx) expects this as a fallback when loading incompatible data.
+                # This is horrible, but we want to preserve the exception and rethrow it if there's no default value.
+                pending_exception = exc
+                value = None
+            if value is None:
                 field = fields.get(field_name)
                 default_value = field.default
                 default_factory = field.default_factory
                 if default_factory == dataclasses.MISSING and default_value == dataclasses.MISSING:
-                    raise SerdeError(cls._explain_why(hint, [*path, field_name], value))
+                    raise pending_exception or SerdeError(cls._explain_why(hint, [*path, field_name], raw))
                 if default_value != dataclasses.MISSING:
                     value = default_value
                 else:
