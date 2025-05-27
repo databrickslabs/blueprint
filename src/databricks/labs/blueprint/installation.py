@@ -12,14 +12,18 @@ import re
 import threading
 import types
 import typing
-from collections.abc import Callable, Collection
+import warnings
+from collections.abc import Callable, Collection, Mapping, Sequence
 from functools import partial
 from json import JSONDecodeError
 from pathlib import Path
 from typing import (
     Any,
     BinaryIO,
+    Dict,
+    List,
     Protocol,
+    TypeAlias,
     TypeVar,
     get_args,
     get_type_hints,
@@ -36,9 +40,15 @@ from databricks.labs.blueprint.parallel import Threads
 
 logger = logging.getLogger(__name__)
 
-Json = dict[str, Any]
+# Note: we have to use List/Dict instead of list/dict because the latter do not resolve future references.
+# TODO: Extend to allow Sequence["JsonValue"] and Mapping[str, "JsonValue"] instead of list/dict.
+JsonList: TypeAlias = List["JsonValue"]  # pylint: disable=deprecated-typing-alias
+JsonObject: TypeAlias = Dict[str, "JsonValue"]  # pylint: disable=deprecated-typing-alias
+RootJsonValue: TypeAlias = JsonObject | JsonList
+JsonValue: TypeAlias = None | bool | int | float | str | RootJsonValue
 
-__all__ = ["Installation", "MockInstallation", "IllegalState", "NotInstalled", "SerdeError"]
+
+__all__ = ["Installation", "MockInstallation", "IllegalState", "NotInstalled", "SerdeError", "JsonValue"]
 
 
 class IllegalState(ValueError):
@@ -245,7 +255,24 @@ class Installation:
 
         In this example, the `Installation` object is created for the "blueprint" product. A dataclass object of type
         `MyClass` is then created and saved to a file using the `save` method. The object is then loaded from the file
-        using the `load` method and compared to the original object to verify that it was saved correctly."""
+        using the `load` method and compared to the original object to verify that it was saved correctly.
+
+        The types of fields on the dataclass are limited to the following:
+
+          - The primitive types: `None`, `bool`, `int`, `float`, `str`.
+          - Lists of types that conform to this list.
+          - Dictionaries of types where the key is a string, and the value is a type that conforms to this list.
+          - Python `Enum` classes.
+          - Dataclassses whose fields also conform to this list.
+          - Classes that implement a custom `.as_dict()`/`.from_dict()` serialization protocol.
+          - The Databricks SDK configuration class: `databricks.sdk.core.Config`
+
+        All fields must be type-annotated correctly. For compatibility reasons the raw `list` and `dict` annotations are
+        accepted but support for this is deprecated and will be removed.
+
+        Note: lists and dictionaries at runtime must currently contain at least one element and be homogeneous in type
+        with respect to the first element.
+        """
         if not inst:
             raise SerdeError("missing value")
         type_ref = self._get_type_ref(inst)
@@ -342,7 +369,7 @@ class Installation:
         """Returns the host of the current workspace."""
         return self._ws.config.host
 
-    def _overwrite_content(self, filename: str, as_dict: Json, type_ref: type):
+    def _overwrite_content(self, filename: str, as_dict: JsonObject, type_ref: type):
         """The `_overwrite_content` method is a private method that is used to serialize an object of type `type_ref`
         to a dictionary and write it to a file on WorkspaceFS. This method is called by the `save` and `upload` methods.
 
@@ -377,7 +404,7 @@ class Installation:
             as_dict = cls._migrate_file_format(type_ref, expected_version, as_dict, filename)
         return cls._unmarshal(as_dict, [], type_ref)
 
-    def _load_content(self, filename: str) -> Json:
+    def _load_content(self, filename: str) -> RootJsonValue:
         """The `_load_content` method is a private method that is used to load the contents of a file from
         WorkspaceFS as a dictionary. This method is called by the `load` method."""
         with self._lock:
@@ -387,7 +414,7 @@ class Installation:
                 return self._convert_content(filename, f)
 
     @classmethod
-    def _convert_content(cls, filename: str, raw: BinaryIO) -> Json:
+    def _convert_content(cls, filename: str, raw: BinaryIO) -> JsonObject:
         """The `_convert_content` method is a private method that is used to convert the raw bytes of a file to a
         dictionary. This method is called by the `_load_content` method."""
         converters: dict[str, Callable[[BinaryIO], Any]] = {
@@ -470,10 +497,11 @@ class Installation:
         return list[item_type]  # type: ignore[valid-type]
 
     def _marshal(self, type_ref: type, path: list[str], inst: Any) -> tuple[Any, bool]:
-        """The `_marshal` method is a private method that is used to serialize an object of type `type_ref` to
-        a dictionary. This method is called by the `save` method."""
-        if inst is None:
-            return None, False
+        # This method does not (universally) guide serialisation based on the supplied type reference, meaning that
+        # the serialised values may not conform to the declared type reference.
+        # TODO: Refactor this to ensure that marshalling is guided by the declared type reference runtime values conform
+        if type_ref == types.NoneType:
+            return inst, inst is None
         if isinstance(inst, databricks.sdk.core.Config):
             return self._marshal_databricks_config(inst)
         if hasattr(inst, "as_dict"):
@@ -481,11 +509,11 @@ class Installation:
         if dataclasses.is_dataclass(type_ref):
             return self._marshal_dataclass(type_ref, path, inst)
         if type_ref == list:
-            return self._marshal_list(type_ref, path, inst)
+            return self._marshal_raw_list(path, inst)
+        if type_ref == dict:
+            return self._marshal_raw_dict(path, inst)
         if isinstance(type_ref, enum.EnumMeta):
             return self._marshal_enum(inst)
-        if type_ref == types.NoneType:
-            return inst, inst is None
         if type_ref in self._PRIMITIVES:
             return inst, True
         return self._marshal_generic_types(type_ref, path, inst)
@@ -523,8 +551,8 @@ class Installation:
         if not type_args:
             raise SerdeError(f"Missing type arguments: {type_args}")
         if len(type_args) == 2:
-            return self._marshal_dict(type_args[1], path, inst)
-        return self._marshal_list(type_args[0], path, inst)
+            return self._marshal_generic_dict(type_args[1], path, inst)
+        return self._marshal_generic_list(type_args[0], path, inst)
 
     @staticmethod
     def _marshal_generic_alias(type_ref, inst):
@@ -534,21 +562,35 @@ class Installation:
             return None, False
         return inst, isinstance(inst, type_ref.__origin__)  # type: ignore[attr-defined]
 
-    def _marshal_list(self, type_ref: type, path: list[str], inst: Any) -> tuple[Any, bool]:
-        """The `_marshal_list` method is a private method that is used to serialize an object of type `type_ref` to
-        a dictionary. This method is called by the `save` method."""
+    def _marshal_generic_list(self, type_ref: type, path: list[str], inst: Any) -> tuple[Any, bool]:
+        """The `_marshal_generic_list` method is a private method that is used to serialize an object of type list[type_ref] to
+        an array. This method is called by the `save` method."""
         as_list = []
         if not isinstance(inst, list):
             return None, False
         for i, v in enumerate(inst):
             value, ok = self._marshal(type_ref, [*path, f"{i}"], v)
             if not ok:
-                raise SerdeError(self._explain_why(type_ref, [*path, f"{i}"], v))
+                raise SerdeError(self._explain_why(type(v), [*path, f"{i}"], v))
             as_list.append(value)
         return as_list, True
 
-    def _marshal_dict(self, type_ref: type, path: list[str], inst: Any) -> tuple[Any, bool]:
-        """The `_marshal_dict` method is a private method that is used to serialize an object of type `type_ref` to
+    def _marshal_raw_list(self, path: list[str], inst: Any) -> tuple[Any, bool]:
+        warnings.warn(
+            "Raw list serialization is deprecated and will soon be removed: use list[type] instead.", DeprecationWarning
+        )
+        as_list = []
+        if not isinstance(inst, list):
+            return None, False
+        for i, v in enumerate(inst):
+            value, ok = self._marshal(type(v), [*path, f"{i}"], v)
+            if not ok:
+                raise SerdeError(self._explain_why(type(v), [*path, f"{i}"], v))
+            as_list.append(value)
+        return as_list, True
+
+    def _marshal_generic_dict(self, type_ref: type, path: list[str], inst: Any) -> tuple[Any, bool]:
+        """The `_marshal_generic_dict` method is a private method that is used to serialize an object of type dict[str, type_ref] to
         a dictionary. This method is called by the `save` method."""
         if not isinstance(inst, dict):
             return None, False
@@ -556,7 +598,21 @@ class Installation:
         for k, v in inst.items():
             as_dict[k], ok = self._marshal(type_ref, [*path, k], v)
             if not ok:
-                raise SerdeError(self._explain_why(type_ref, [*path, k], v))
+                raise SerdeError(self._explain_why(type(v), [*path, k], v))
+        return as_dict, True
+
+    def _marshal_raw_dict(self, path: list[str], inst: Any) -> tuple[Any, bool]:
+        warnings.warn(
+            "Raw dict serialization is deprecated and will soon be removed: use dict[str, type] instead.",
+            DeprecationWarning,
+        )
+        if not isinstance(inst, dict):
+            return None, False
+        as_dict = {}
+        for k, v in inst.items():
+            as_dict[k], ok = self._marshal(type(v), [*path, k], v)
+            if not ok:
+                raise SerdeError(self._explain_why(type(v), [*path, k], v))
         return as_dict, True
 
     def _marshal_dataclass(self, type_ref: type, path: list[str], inst: Any) -> tuple[Any, bool]:
@@ -616,19 +672,22 @@ class Installation:
     def _unmarshal(cls, inst: Any, path: list[str], type_ref: type[T]) -> T | None:
         """The `_unmarshal` method is a private method that is used to deserialize a dictionary to an object of type
         `type_ref`. This method is called by the `load` method."""
+        # Forward-references aren't always resolved, so we need to handle them. (Assumes reference is visible here.)
+        if isinstance(type_ref, typing.ForwardRef):
+            type_ref = type_ref._evaluate(globals(), locals(), frozenset())  # pylint: disable=protected-access
         if dataclasses.is_dataclass(type_ref):
             return cls._unmarshal_dataclass(inst, path, type_ref)
         if isinstance(type_ref, enum.EnumMeta):
             if not inst:
                 return None
             return type_ref(inst)
-        if type_ref in cls._PRIMITIVES:
-            return cls._unmarshal_primitive(inst, type_ref)
+        if type_ref in cls._PRIMITIVES and type(inst) in cls._PRIMITIVES:
+            return cls._unmarshal_primitive(inst, path, type_ref)
         if type_ref == databricks.sdk.core.Config:
             if not inst:
                 inst = {}
             return databricks.sdk.core.Config(**inst)  # type: ignore[return-value]
-        if type_ref == types.NoneType:
+        if type_ref == types.NoneType and inst is None:
             return None
         if isinstance(type_ref, cls._FromDict):
             return type_ref.from_dict(inst)
@@ -641,6 +700,13 @@ class Installation:
             _GenericAlias,
             _UnionGenericAlias,
         )
+
+        if type_ref == list:
+            msg = f"{'.'.join(path)}: raw list encountered; use list[type] instead: {inst}"
+            raise SerdeError(msg)
+        if type_ref == dict:
+            msg = f"{'.'.join(path)}: raw dict encountered; use dict[str,type] instead: {inst}"
+            raise SerdeError(msg)
 
         if isinstance(type_ref, (types.UnionType, _UnionGenericAlias)):
             return cls._unmarshal_union(inst, path, type_ref)
@@ -663,13 +729,22 @@ class Installation:
             if origin is typing.ClassVar:
                 continue
             raw = inst.get(field_name)
-            value = cls._unmarshal(raw, [*path, field_name], hint)
+            pending_exception: SerdeError | None
+            try:
+                value = cls._unmarshal(raw, [*path, field_name], hint)
+                pending_exception = None
+            except SerdeError as exc:
+                # Special case: if the value couldn't be deserialized, we will try to use the default value or factory
+                # instead. Existing code (ucx) expects this as a fallback when loading incompatible data.
+                # This is horrible, but we want to preserve the exception and rethrow it if there's no default value.
+                pending_exception = exc
+                value = None
             if value is None:
                 field = fields.get(field_name)
                 default_value = field.default
                 default_factory = field.default_factory
                 if default_factory == dataclasses.MISSING and default_value == dataclasses.MISSING:
-                    raise SerdeError(cls._explain_why(hint, [*path, field_name], value))
+                    raise pending_exception or SerdeError(cls._explain_why(hint, [*path, field_name], raw))
                 if default_value != dataclasses.MISSING:
                     value = default_value
                 else:
@@ -682,9 +757,14 @@ class Installation:
         """The `_unmarshal_union` method is a private method that is used to deserialize a dictionary to an object
         of type `type_ref`. This method is called by the `load` method."""
         for variant in get_args(type_ref):
-            value = cls._unmarshal(inst, path, variant)
-            if value:
-                return value
+            if variant == type(None) and inst is None:
+                return None
+            try:
+                value = cls._unmarshal(inst, path, variant)
+                if value is not None:
+                    return value
+            except SerdeError:
+                pass
         return None
 
     @classmethod
@@ -706,14 +786,16 @@ class Installation:
         return cls._unmarshal_list(inst, path, type_args[0])
 
     @classmethod
-    def _unmarshal_list(cls, inst, path, hint):
-        """The `_unmarshal_list` method is a private method that is used to deserialize a dictionary to an object
+    def _unmarshal_list(cls, inst, path, type_ref):
+        """The `_unmarshal_list` method is a private method that is used to deserialize an array to a list
         of type `type_ref`. This method is called by the `load` method."""
         if inst is None:
             return None
+        if not isinstance(inst, list):
+            raise SerdeError(cls._explain_why(type_ref, path, inst))
         as_list = []
         for i, v in enumerate(inst):
-            as_list.append(cls._unmarshal(v, [*path, f"{i}"], hint))
+            as_list.append(cls._unmarshal(v, [*path, f"{i}"], type_ref or type(v)))
         return as_list
 
     @classmethod
@@ -730,13 +812,44 @@ class Installation:
         return from_dict
 
     @classmethod
-    def _unmarshal_primitive(cls, inst, type_ref):
-        """The `_unmarshal_primitive` method is a private method that is used to deserialize a dictionary to an object
-        of type `type_ref`. This method is called by the `load` method."""
-        if not inst:
+    def _unmarshal_primitive(cls, inst: Any, path: list[str], type_ref: type) -> Any:
+        """Unmarshal a primitive value that should be of type `type_ref`.
+
+        If the value does not match the expected type, it will attempt to coerce it but may fail. Coercion uses
+        the natural conversion of the type_reference (e.g. `int` as `int(v)`, etc.), except for `bool` which can
+        only convert from a case-insensitive string representation of `true` or `false`.
+
+        Args:
+            inst: the value to unmarshal.
+            path: the location of the value in its enclosing structure, used for error messages.
+            type_ref: the expected type reference (e.g. `int`, `float`, `str`, `bool`).
+        Returns:
+            the converted value, if successful, or None if the types are incompatible and coercion is not possible.
+        Raises:
+            SerdeError: if the value cannot be converted to the expected type.
+        """
+        # No coercion necessary.
+        if isinstance(inst, type_ref):
             return inst
-        # convert from str to int if necessary
-        converted = type_ref(inst)  # type: ignore[call-arg]
+        # Only attempt coercion between primitive types.
+        if type(inst) not in cls._PRIMITIVES:
+            msg = f"{'.'.join(path)}: Expected {type_ref.__name__}, got: {inst}"
+            raise SerdeError(msg)
+        # Special case for strings to bool
+        if type_ref == bool:
+            if isinstance(inst, str):
+                if inst.lower() == "true":
+                    return True
+                if inst.lower() == "false":
+                    return False
+            msg = f"{'.'.join(path)}: Expected bool, got: {inst}"
+            raise SerdeError(msg)
+        # Everything else.
+        try:
+            converted = type_ref(inst)
+        except (ValueError, TypeError) as exc:
+            msg = f"{'.'.join(path)}: Expected {type_ref.__name__}, got: {inst}"
+            raise SerdeError(msg) from exc
         return converted
 
     @staticmethod
@@ -745,16 +858,17 @@ class Installation:
         type. This method is called by the `_unmarshal` and `_marshal` methods."""
         if raw is None:
             raw = "value is missing"
-        return f'{".".join(path)}: not a {type_ref.__name__}: {raw}'
+        type_name = getattr(type_ref, "__name__", str(type_ref))
+        return f'{".".join(path)}: not a {type_name}: {raw}'
 
     @staticmethod
-    def _dump_json(as_dict: Json, _: type) -> bytes:
+    def _dump_json(as_dict: JsonValue, _: type) -> bytes:
         """The `_dump_json` method is a private method that is used to serialize a dictionary to a JSON string. This
         method is called by the `save` method."""
         return json.dumps(as_dict, indent=2).encode("utf8")
 
     @staticmethod
-    def _dump_yaml(raw: Json, _: type) -> bytes:
+    def _dump_yaml(raw: JsonValue, _: type) -> bytes:
         """The `_dump_yaml` method is a private method that is used to serialize a dictionary to a YAML string. This
         method is called by the `save` method."""
         try:
@@ -765,7 +879,7 @@ class Installation:
             raise SyntaxError("PyYAML is not installed. Fix: pip install databricks-labs-blueprint[yaml]") from err
 
     @staticmethod
-    def _load_yaml(raw: BinaryIO) -> Json:
+    def _load_yaml(raw: BinaryIO) -> JsonValue:
         """The `_load_yaml` method is a private method that is used to deserialize a YAML string to a dictionary. This
         method is called by the `load` method."""
         try:
@@ -782,7 +896,7 @@ class Installation:
             raise SyntaxError("PyYAML is not installed. Fix: pip install databricks-labs-blueprint[yaml]") from err
 
     @staticmethod
-    def _dump_csv(raw: list[Json], type_ref: type) -> bytes:
+    def _dump_csv(raw: list[JsonObject], type_ref: type) -> bytes:
         """The `_dump_csv` method is a private method that is used to serialize a list of dictionaries to a CSV string.
         This method is called by the `save` method."""
         type_args = get_args(type_ref)
@@ -810,7 +924,7 @@ class Installation:
         return buffer.read().encode("utf8")
 
     @staticmethod
-    def _load_csv(raw: BinaryIO) -> list[Json]:
+    def _load_csv(raw: BinaryIO) -> list[JsonObject]:
         with io.TextIOWrapper(raw, encoding="utf8") as text_file:
             out = []
             for row in csv.DictReader(text_file):  # type: ignore[arg-type]
@@ -837,7 +951,7 @@ class MockInstallation(Installation):
         pytest.register_assert_rewrite('databricks.labs.blueprint.installation')
     """
 
-    def __init__(self, overwrites: Any = None, *, is_global=True):  # pylint: disable=super-init-not-called
+    def __init__(self, overwrites: dict[str, RootJsonValue] | None = None, *, is_global=True):  # pylint: disable=super-init-not-called
         if not overwrites:
             overwrites = {}
         self._overwrites = overwrites
@@ -890,22 +1004,26 @@ class MockInstallation(Installation):
     def _current_client_config(self) -> dict:
         return {}
 
-    def _overwrite_content(self, filename: str, as_dict: Json, type_ref: type):
+    def _overwrite_content(self, filename: str, as_dict: JsonObject, type_ref: type):
         self._overwrites[filename] = as_dict
 
-    def _load_content(self, filename: str) -> Json:
+    def _load_content(self, filename: str) -> RootJsonValue:
         if filename not in self._overwrites:
             raise NotFound(filename)
         return self._overwrites[filename]
 
     def assert_file_written(self, filename: str, expected: Any):
         assert filename in self._overwrites, f"{filename} had no writes"
-        if isinstance(expected, dict):
-            for k, v in expected.items():
-                if v == ...:
-                    self._overwrites[filename][k] = ...
         actual = self._overwrites[filename]
-        assert expected == actual, f"{filename} content missmatch"
+        actual_for_comparison: Sequence[JsonValue] | Mapping[str, JsonValue | types.EllipsisType]
+        if isinstance(expected, Mapping) and isinstance(actual, Mapping):
+            # The caller is allowed to specify '...' as a don't-care value (only at the first level of the dictionary).
+            # To allow this we clone the underlying dictionary and substitute '...' where necessary so that subsequent
+            # comparison will succeed.
+            actual_for_comparison = {k: v if expected[k] is not ... else ... for k, v in actual.items()}
+        else:
+            actual_for_comparison = actual
+        assert expected == actual_for_comparison, f"{filename} content missmatch"
 
     def assert_file_uploaded(self, filename, expected: bytes | None = None):
         """Asserts that a file was uploaded with the expected content"""

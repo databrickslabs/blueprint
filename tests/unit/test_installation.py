@@ -1,6 +1,9 @@
+import dataclasses
 import io
+import re
 import typing
 from dataclasses import dataclass
+from typing import TypeAlias
 from unittest.mock import MagicMock, create_autospec
 
 import pytest
@@ -15,7 +18,9 @@ from databricks.sdk.service.workspace import ImportFormat
 from databricks.labs.blueprint.installation import (
     IllegalState,
     Installation,
+    JsonValue,
     MockInstallation,
+    SerdeError,
 )
 
 
@@ -502,6 +507,20 @@ def test_generic_dict_list() -> None:
     assert loaded == saved
 
 
+def test_generic_dict_json_value() -> None:
+    @dataclass
+    class SampleClass:
+        field: dict[str, JsonValue]
+
+    installation = MockInstallation()
+
+    json_like: dict[str, JsonValue] = {"a": ["x", "y"], "b": [], "c": 3, "d": True, "e": {"a": "b"}}
+    saved = SampleClass(field=json_like)
+    installation.save(saved, filename="backups/SampleClass.json")
+    loaded = installation.load(SampleClass, filename="backups/SampleClass.json")
+    assert loaded == saved
+
+
 def test_generic_list_str() -> None:
     @dataclass
     class SampleClass:
@@ -548,3 +567,168 @@ def test_generic_list_list() -> None:
     installation.save(saved, filename="backups/SampleClass.json")
     loaded = installation.load(SampleClass, filename="backups/SampleClass.json")
     assert loaded == saved
+
+
+def test_generic_list_json() -> None:
+    @dataclass
+    class SampleClass:
+        field: list[JsonValue]
+
+    installation = MockInstallation()
+    json_like: list[JsonValue] = [
+        ["x", "y"],
+        [],
+        3,
+        True,
+        {"a": "b"},
+    ]
+    saved = SampleClass(field=json_like)
+    installation.save(saved, filename="backups/SampleClass.json")
+    loaded = installation.load(SampleClass, filename="backups/SampleClass.json")
+    assert loaded == saved
+
+
+def test_bool_in_union() -> None:
+    @dataclass
+    class SampleClass:
+        field: dict[str, bool | str]
+
+    installation = MockInstallation()
+    saved = SampleClass(field={"a": "b"})
+    installation.save(saved, filename="backups/SampleClass.json")
+    loaded = installation.load(SampleClass, filename="backups/SampleClass.json")
+    assert loaded == saved
+
+
+def test_complex_union() -> None:
+    @dataclass
+    class SampleClass:
+        field: dict[str, JsonValue]
+
+    installation = MockInstallation()
+    saved = SampleClass(field={"a": "b"})
+    installation.save(saved, filename="backups/SampleClass.json")
+
+
+# Alternative union describing the JSON bounds that we support.
+JSONValueAlt: TypeAlias = dict[str, "JSONValueAlt"] | list["JSONValueAlt"] | str | float | int | bool | None
+
+
+def test_complex_union_alt() -> None:
+    @dataclass
+    class SampleClass:
+        field: dict[str, JSONValueAlt]
+
+    installation = MockInstallation()
+    saved = SampleClass(field={"a": "b"})
+    installation.save(saved, filename="backups/SampleClass.json")
+
+    loaded = installation.load(SampleClass, filename="backups/SampleClass.json")
+    assert loaded == saved
+
+
+def test_raw_list_deprecation() -> None:
+    @dataclass
+    class SampleClass:
+        field: list
+
+    installation = MockInstallation()
+    saved = SampleClass(field=[1, 2, 3])
+    with pytest.warns(DeprecationWarning, match="Raw list serialization is deprecated"):
+        installation.save(saved, filename="backups/SampleClass.json")
+
+    # Loading raw (untyped) lists never worked, so there's no need for deprecation: it now fails with instructions.
+    with pytest.raises(SerdeError, match=re.escape("field: raw list encountered; use list[type] instead: [1, 2, 3]")):
+        installation.load(SampleClass, filename="backups/SampleClass.json")
+
+    @dataclass
+    class SampleClassFixed:
+        field: list[int]
+
+    loaded = installation.load(SampleClassFixed, filename="backups/SampleClass.json")
+    assert dataclasses.asdict(loaded) == dataclasses.asdict(saved)
+
+
+def test_raw_dict_deprecation() -> None:
+    @dataclass
+    class SampleClass:
+        field: dict
+
+    installation = MockInstallation()
+    saved = SampleClass(field={"a": 1, "b": 2, "c": 3})
+    with pytest.warns(DeprecationWarning, match="Raw dict serialization is deprecated"):
+        installation.save(saved, filename="backups/SampleClass.json")
+
+    # Loading raw (untyped) lists never worked, so there's no need for deprecation: it now fails with instructions.
+    with pytest.raises(
+        SerdeError, match=re.escape("field: raw dict encountered; use dict[str,type] instead: {'a': 1, 'b': 2, 'c': 3}")
+    ):
+        installation.load(SampleClass, filename="backups/SampleClass.json")
+
+    @dataclass
+    class SampleClassFixed:
+        field: dict[str, int]
+
+    loaded = installation.load(SampleClassFixed, filename="backups/SampleClass.json")
+    assert dataclasses.asdict(loaded) == dataclasses.asdict(saved)
+
+
+def test_loading_dict_coercion_special_case() -> None:
+    """Earlier versions of the unmarshalling code would sometimes initialize a dataclass field with its default value if:
+        - The saved value was falsey;
+        - THe saved value could not be coerced to the expected type.
+
+    In particular the UCX code that loads existing dashboards during installation does not expect SerdeError to be
+    raised.
+    """
+
+    @dataclass
+    class OldSampleClass:
+        field: dict[str, int] = dataclasses.field(default_factory=dict)
+
+    installation = MockInstallation({"something.json": {"field": "not_a_dict"}})
+    loaded = installation.load(OldSampleClass, filename="something.json")
+
+    assert loaded == OldSampleClass(field={})
+
+
+def test_loading_value_coercion_to_str() -> None:
+    """When the stored values don't match the hinted type, behaviour is to coerce if possible."""
+
+    @dataclass
+    class SampleClass:
+        field_str: str
+        field_bool: str
+        field_int: str
+        field_float: str
+
+    installation = MockInstallation(
+        {"something.json": {"field_str": "str", "field_bool": True, "field_int": 1, "field_float": 1.1}}
+    )
+    loaded = installation.load(SampleClass, filename="something.json")
+    assert loaded == SampleClass(field_str="str", field_bool="True", field_int="1", field_float="1.1")
+
+
+def test_loading_value_coercion_from_str() -> None:
+    """When the underlying values don't match the hinted type, pre-existing behaviour is to coerce if possible."""
+
+    @dataclass
+    class SampleClass:
+        field_dict: dict[str, int]
+        field_bool: bool
+        field_int: int
+        field_floats: dict[str, float]
+
+    raw_data: dict[str, typing.Any] = {
+        "field_dict": {"a": "1", "b": "2"},
+        "field_bool": "tRuE",
+        "field_int": "42",
+        "field_floats": {"x": "3.14", "y": 2},
+    }
+    expected = SampleClass(
+        field_dict={"a": 1, "b": 2}, field_bool=True, field_int=42, field_floats={"x": 3.14, "y": 2.0}
+    )
+
+    installation = MockInstallation({"something.json": raw_data})
+    loaded = installation.load(SampleClass, filename="something.json")
+    assert loaded == expected
