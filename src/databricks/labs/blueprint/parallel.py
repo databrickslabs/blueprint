@@ -41,6 +41,10 @@ class Threads(Generic[Result]):
     @classmethod
     def available_cpu_count(cls) -> int:
         """Obtain the number of logical CPUs available for this process."""
+        # From Python 3.13, this is solved for us by the os module.
+        if hasattr(os, "process_cpu_count"):
+            return getattr(os, "process_cpu_count")()
+        # Otherwise use the number of CPUs in the system, if known, even if not all are available.
         return os.cpu_count() or 1
 
     @classmethod
