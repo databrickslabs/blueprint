@@ -5,7 +5,6 @@ import builtins
 import codecs
 import fnmatch
 import io
-import locale
 import logging
 import os
 import re
@@ -837,16 +836,7 @@ class WorkspacePath(_DatabricksPath):
         if "r" in mode:
             with self._ws.workspace.download(self.as_posix(), format=ExportFormat.AUTO) as f:
                 data = f.read()
-                if encoding is None:
-                    if data.startswith(codecs.BOM_UTF32_LE) or data.startswith(codecs.BOM_UTF32_BE):
-                        encoding = "utf-32"
-                    elif data.startswith(codecs.BOM_UTF16_LE) or data.startswith(codecs.BOM_UTF16_BE):
-                        encoding = "utf-16"
-                    elif data.startswith(codecs.BOM_UTF8):
-                        encoding = "utf-8-sig"
-                if encoding is None or encoding == "locale":
-                    encoding = locale.getpreferredencoding(False)
-                return StringIO(data.decode(encoding))
+            return decode_with_bom(BytesIO(data), encoding=encoding, errors=errors, newline=newline)
         if "w" in mode:
             return _TextUploadIO(self._ws, self.as_posix())
         raise ValueError(f"invalid mode: {mode}")
