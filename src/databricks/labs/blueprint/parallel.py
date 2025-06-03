@@ -39,14 +39,17 @@ class Threads(Generic[Result]):
         self._default_log_every = 100
 
     @classmethod
+    def available_cpu_count(cls) -> int:
+        """Obtain the number of logical CPUs available for this process."""
+        return os.cpu_count() or 1
+
+    @classmethod
     def gather(
         cls, name: str, tasks: Sequence[Task[Result]], num_threads: int | None = None
     ) -> tuple[Collection[Result], list[Exception]]:
         """Run tasks in parallel and return results and errors"""
         if num_threads is None:
-            num_cpus = os.cpu_count()
-            if num_cpus is None:
-                num_cpus = 1
+            num_cpus = cls.available_cpu_count()
             num_threads = max(num_cpus * 2, MIN_THREADS)
         return cls(name, tasks, num_threads=num_threads)._run()
 
