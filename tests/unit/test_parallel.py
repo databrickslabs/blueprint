@@ -167,12 +167,16 @@ def test_cpu_count_source_process_cpu_count() -> None:
     mock_cpu_count = MagicMock()
 
     # First priority is os.process_cpu_count() if that's available.
-    with patch("os.process_cpu_count", mock_process_cpu_count, create=True), \
-         patch("os.sched_getaffinity", mock_sched_getaffinity, create=True), \
-         patch("os.cpu_count", mock_cpu_count):
+    with (
+        patch("os.process_cpu_count", mock_process_cpu_count, create=True),
+        patch("os.sched_getaffinity", mock_sched_getaffinity, create=True),
+        patch("os.cpu_count", mock_cpu_count),
+    ):
         assert Threads.available_cpu_count() == 13, "Should use os.process_cpu_count() if available"
     assert mock_process_cpu_count.called, "os.process_cpu_count() should be called"
-    assert not mock_sched_getaffinity.called, "os.sched_getaffinity() should not be called if os.process_cpu_count() is available"
+    assert (
+        not mock_sched_getaffinity.called
+    ), "os.sched_getaffinity() should not be called if os.process_cpu_count() is available"
     assert not mock_cpu_count.called, "os.cpu_count() should not be called if os.process_cpu_count() is available"
 
 
