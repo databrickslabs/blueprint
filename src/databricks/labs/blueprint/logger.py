@@ -4,6 +4,8 @@ import logging
 import sys
 from typing import TextIO
 
+from ._logging_context import LoggingContextFilter, current_context_repr
+
 
 class NiceFormatter(logging.Formatter):
     """A nice formatter for logging. It uses colors and bold text if the console supports it."""
@@ -88,7 +90,11 @@ class NiceFormatter(logging.Formatter):
         color_marker = self._msg_colors[record.levelno]
 
         thread_name = f"[{record.threadName}]" if record.threadName != "MainThread" else ""
-        return f"{self.GRAY}{timestamp}{self.RESET} {level} {color_marker}[{name}]{thread_name} {msg}{self.RESET}"
+
+        context_repr = current_context_repr()
+        context_msg = f" {self.GRAY}({context_repr}){self.RESET}" if context_repr else ""
+
+        return f"{self.GRAY}{timestamp}{self.RESET} {level} {color_marker}[{name}]{thread_name} {msg}{self.RESET}{context_msg}"
 
 
 def install_logger(
@@ -102,6 +108,7 @@ def install_logger(
      - All existing handlers will be removed.
      - A new handler will be installed with our custom formatter. It will be configured to emit logs at the given level
        (default: DEBUG) or higher, to the specified stream (default: sys.stderr).
+     - A new (injection) filter for adding logger_context will be added, that will add `context` with current context, to all logger messages.
 
     Args:
         level: The logging level to set for the console handler.
@@ -117,4 +124,5 @@ def install_logger(
     console_handler.setFormatter(NiceFormatter(stream=stream))
     console_handler.setLevel(level)
     root.addHandler(console_handler)
+    root.addFilter(LoggingContextFilter())
     return console_handler
