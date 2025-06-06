@@ -8,15 +8,19 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from functools import partial, wraps
 from types import MappingProxyType
-from typing import Annotated, Any, get_origin
+from typing import TYPE_CHECKING, Annotated, Any, TypeVar, get_origin
 
+if TYPE_CHECKING:
+    AnyType = TypeVar("AnyType")
+    SkipLogging = Annotated[AnyType, ...]  # SkipLogging[list[str]] will be treated by type checkers as list[str]
+else:
 
-@dataclasses.dataclass(slots=True)
-class SkipLogging:
-    """`@logging_context_params` will ignore parameters annotated with this class."""
+    @dataclasses.dataclass(slots=True)
+    class SkipLogging:
+        """`@logging_context_params` will ignore parameters annotated with this class."""
 
-    def __class_getitem__(cls, item: Any) -> Any:
-        return Annotated[item, SkipLogging()]
+        def __class_getitem__(cls, item: Any) -> Any:
+            return Annotated[item, SkipLogging()]
 
 
 _CTX: ContextVar = ContextVar("ctx", default={})
@@ -37,8 +41,12 @@ def _get_skip_logging_param_names(sig: inspect.Signature):
 
         # there can be many annotations for each param
         for meta in ann.__metadata__:
-            if isinstance(meta, SkipLogging):
-                yield name
+            try:
+                if meta and isinstance(meta, SkipLogging):
+                    yield name
+            except Exception:
+                # in case `meta` is not comptitble with isinstance, just ignore it and move to next meta
+                pass
 
 
 def _skip_dict_key(params: dict, keys_to_skip: set):
