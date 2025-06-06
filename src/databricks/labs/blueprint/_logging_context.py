@@ -11,8 +11,11 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, Annotated, Any, TypeVar, get_origin
 
 if TYPE_CHECKING:
-    AnyType = TypeVar("AnyType")
-    SkipLogging = Annotated[AnyType, ...]  # SkipLogging[list[str]] will be treated by type checkers as list[str]
+    T = TypeVar("T")
+    # SkipLogging[list[str]] will be treated by type checkers as list[str], because that's what Annotated is on runtime
+    # if this workaround is not in place, caller will complain about having wrong typing
+    # https://github.com/python/typing/discussions/1229
+    SkipLogging = Annotated[T, ...]
 else:
 
     @dataclasses.dataclass(slots=True)
@@ -41,9 +44,9 @@ def _get_skip_logging_param_names(sig: inspect.Signature):
 
         # there can be many annotations for each param
         for meta in ann.__metadata__:
-            if meta and isinstance(meta, SkipLogging):
+            # type checker thinks SkipLogging is a generic, despite it being Annotated
+            if meta and isinstance(meta, SkipLogging):  # type: ignore
                 yield name
-
 
 
 def _skip_dict_key(params: dict, keys_to_skip: set):

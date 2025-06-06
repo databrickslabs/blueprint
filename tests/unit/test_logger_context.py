@@ -114,7 +114,7 @@ def test_logging_function_skip_loggingl():
     logger = logging.getLogger(__name__)
 
     @logging_context_params
-    def do_math_verbose_test(a: SkipLogging[float], b):
+    def do_math_verbose_test(a: SkipLogging[int], b):
         r = pow(a, b)
         logger.info(f"result of {a}**{b} is {r}")
         assert current_context() == {"b": b}
