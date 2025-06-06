@@ -44,7 +44,7 @@ def _get_skip_logging_param_names(sig: inspect.Signature):
             try:
                 if meta and isinstance(meta, SkipLogging):
                     yield name
-            except Exception:
+            except Exception: # pylint: disable=broad-exception-caught
                 # in case `meta` is not comptitble with isinstance, just ignore it and move to next meta
                 pass
 
