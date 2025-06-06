@@ -8,46 +8,41 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from functools import partial, wraps
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Annotated, Any, TypeVar, get_origin
+from typing import Annotated, Any, get_origin
 
-AnyType = TypeVar("AnyType")
 
-if TYPE_CHECKING:
-    SkipLogging = Annotated[AnyType, ...]  # SkipLogging[list[str]] will be treated by type checkers as list[str]
-else:
+@dataclasses.dataclass(slots=True)
+class SkipLogging:
+    """`@logging_context_params` will ignore parameters annotated with this class."""
 
-    @dataclasses.dataclass(slots=True)
-    class SkipLogging:
-        """`@logging_context_params` will ignore parameters annotated with this class."""
-
-        def __class_getitem__(cls, item: Any) -> Any:
-            return Annotated[item, SkipLogging()]
+    def __class_getitem__(cls, item: Any) -> Any:
+        return Annotated[item, SkipLogging()]
 
 
 _CTX: ContextVar = ContextVar("ctx", default={})
 
 
-def _params_str(d):
-    return ", ".join(f"{k}={v!r}" for k, v in d.items())
+def _params_str(params: dict[str, Any]):
+    return ", ".join(f"{k}={v!r}" for k, v in params.items())
 
 
 def _get_skip_logging_param_names(sig: inspect.Signature):
     """Generates list of parameters names having SkipLogging annotation"""
     for name, param in sig.parameters.items():
-        a = param.annotation
+        ann = param.annotation
 
         # only consider annotation
-        if not a or get_origin(a) is not Annotated:
+        if not ann or get_origin(ann) is not Annotated:
             continue
 
         # there can be many annotations for each param
-        for m in a.__metadata__:
-            if isinstance(m, SkipLogging):
+        for meta in ann.__metadata__:
+            if isinstance(meta, SkipLogging):
                 yield name
 
 
-def _skip_dict_key(d: dict, keys_to_skip: set):
-    return {k: v for k, v in d.items() if k not in keys_to_skip}
+def _skip_dict_key(params: dict, keys_to_skip: set):
+    return {k: v for k, v in params.items() if k not in keys_to_skip}
 
 
 def current_context():
@@ -120,8 +115,7 @@ def logging_context_params(func=None, **extra_context):
     """
 
     if func is None:
-        p = partial(logging_context_params, **extra_context)
-        return p
+        return partial(logging_context_params, **extra_context)
 
     # will use function's singature to bind positional params to name of the param
     sig = inspect.signature(func)
@@ -134,8 +128,8 @@ def logging_context_params(func=None, **extra_context):
         # skip_params is used to filter out parameters that are annotated with SkipLogging
 
         if args:
-            b = sig.bind(*args, **kwds)
-            ctx_data = {**extra_context, **_skip_dict_key(b.arguments, skip_params)}
+            bound = sig.bind(*args, **kwds)
+            ctx_data = {**extra_context, **_skip_dict_key(bound.arguments, skip_params)}
         else:
             ctx_data = {**extra_context, **_skip_dict_key(kwds, skip_params)}
 
@@ -169,7 +163,6 @@ class LoggingThreadPoolExecutor(ThreadPoolExecutor):
         )
 
     def _logging_context_init(self, *args):
-        global _CTX
         _CTX.set(self.__current_context)
         if self.__wrapped_initializer:
             self.__wrapped_initializer(*args)
