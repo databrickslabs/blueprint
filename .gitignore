@@ -153,3 +153,5 @@ dev/cleanup.py
 
 .python-version
 .databricks-login.json
+
+.test_*.ipynb

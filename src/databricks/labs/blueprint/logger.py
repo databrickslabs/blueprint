@@ -5,10 +5,9 @@ import sys
 from typing import TextIO
 
 from ._logging_context import (
-    LoggingContextFilter,
+    LoggingContextInjectingFilter,
     SkipLogging,
     current_context,
-    current_context_repr,
     logging_context,
     logging_context_params,
 )
@@ -54,7 +53,7 @@ class NiceFormatter(logging.Formatter):
             stream: the output stream to which the formatter will write, used to check if it is a console.
             probe_tty: If true, the formatter will enable color support if the output stream appears to be a console.
         """
-        super().__init__(fmt="%(asctime)s %(levelname)s [%(name)s] %(message)s", datefmt="%H:%M:%S")
+        super().__init__(fmt="%(asctime)s %(levelname)s [%(name)s] %(message)s%(context_msg)s", datefmt="%H:%M:%S")
         # Used to colorize the level names.
         self._levels = {
             logging.DEBUG: self._bold(f"{self.CYAN}   DEBUG"),
@@ -107,7 +106,8 @@ class NiceFormatter(logging.Formatter):
 
         thread_name = f"[{record.threadName}]" if record.threadName != "MainThread" else ""
 
-        context_repr = current_context_repr()
+        # safe check, just in case injection filter is removed
+        context_repr = record.context if hasattr(record, "context") else ""
         context_msg = f" {self.GRAY}({context_repr}){self.RESET}" if context_repr else ""
 
         return f"{self.GRAY}{timestamp}{self.RESET} {level} {color_marker}[{name}]{thread_name} {msg}{self.RESET}{context_msg}"
@@ -138,7 +138,8 @@ def install_logger(
         root.removeHandler(handler)
     console_handler = logging.StreamHandler(stream)
     console_handler.setFormatter(NiceFormatter(stream=stream))
+    console_handler.addFilter(LoggingContextInjectingFilter())
     console_handler.setLevel(level)
+
     root.addHandler(console_handler)
-    root.addFilter(LoggingContextFilter())
     return console_handler

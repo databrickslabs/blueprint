@@ -147,12 +147,15 @@ def logging_context_params(func=None, **extra_context):
     return wrapper
 
 
-class LoggingContextFilter(logging.Filter):
-    """Adds curent_context() to the log record."""
+class LoggingContextInjectingFilter(logging.Filter):
+    """Adds current_context() to the log record."""
 
     def filter(self, record):
+        # https://docs.python.org/3/howto/logging-cookbook.html#using-filters-to-impart-contextual-information
+        # https://docs.python.org/3/howto/logging-cookbook.html#use-of-contextvars
         ctx = current_context()
-        record.context = f"({_params_str(ctx)})" if ctx else ""
+        record.context = f"{_params_str(ctx)}" if ctx else ""
+        record.context_msg = f" ({record.context})" if record.context else ""
         return True
 
 
