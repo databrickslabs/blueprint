@@ -1,10 +1,14 @@
 import logging
+import sys
 from functools import partial
 
 from databricks.sdk.core import DatabricksError
 
-from databricks.labs.blueprint.parallel import Threads
 from databricks.labs.blueprint.logger import logging_context_params
+from databricks.labs.blueprint.parallel import Threads
+
+# only python 3.11 supports notes in exceptions, hence test only on these version...
+SUPPORTS_NOTES = (sys.version_info[0], sys.version_info[1]) >= (3, 11)
 
 
 def _predictable_messages(caplog):
@@ -153,7 +157,7 @@ def test_odd_partial_failed(caplog):
 
     # not context, no notes
     for e in errors:
-        assert getattr(e, '__notes__', None) is None
+        assert getattr(e, "__notes__", None) is None
 
 
 def test_odd_partial_failed_with_context(caplog):
@@ -188,5 +192,6 @@ def test_odd_partial_failed_with_context(caplog):
         "testing(n=1) task failed: failed",
     ] == _predictable_messages(caplog)
 
-    for e in errors:
-        assert e.__notes__ is not None
+    if SUPPORTS_NOTES:
+        for e in errors:
+            assert e.__notes__ is not None

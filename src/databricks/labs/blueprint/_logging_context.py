@@ -41,12 +41,9 @@ def _get_skip_logging_param_names(sig: inspect.Signature):
 
         # there can be many annotations for each param
         for meta in ann.__metadata__:
-            try:
-                if meta and isinstance(meta, SkipLogging):
-                    yield name
-            except Exception: # pylint: disable=broad-exception-caught
-                # in case `meta` is not comptitble with isinstance, just ignore it and move to next meta
-                pass
+            if meta and isinstance(meta, SkipLogging):
+                yield name
+
 
 
 def _skip_dict_key(params: dict, keys_to_skip: set):

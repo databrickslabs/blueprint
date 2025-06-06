@@ -8,8 +8,8 @@ import os
 import re
 import threading
 from collections.abc import Callable, Collection, Sequence
-from concurrent.futures import ThreadPoolExecutor
 from typing import Generic, TypeVar
+
 from ._logging_context import LoggingThreadPoolExecutor
 
 MIN_THREADS = 8

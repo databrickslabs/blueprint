@@ -1,4 +1,5 @@
 import logging
+import sys
 
 from databricks.labs.blueprint._logging_context import LoggingThreadPoolExecutor
 from databricks.labs.blueprint.logger import (
@@ -7,6 +8,9 @@ from databricks.labs.blueprint.logger import (
     logging_context,
     logging_context_params,
 )
+
+# only python 3.11 supports notes in exceptions, hence assert only on these version...
+SUPPORTS_NOTES = (sys.version_info[0], sys.version_info[1]) >= (3, 11)
 
 
 def test_nested_logger_context():
@@ -47,7 +51,8 @@ def test_exception_with_notest_flat():
                 1 / 0
     except Exception as e:
         logger.exception(f"Exception! {e}")
-        assert e.__notes__ == ["Context: user='Alice', action='read', top_secret='47'"]
+        if SUPPORTS_NOTES:
+            assert e.__notes__ == ["Context: user='Alice', action='read', top_secret='47'"]
         assert str(e) == "division by zero"
 
 
@@ -66,7 +71,8 @@ def test_exception_with_notest_nested():
     except Exception as e:
         logger.exception(f"Exception! {e}")
         logger.error(f"Error! {e}")
-        assert e.__notes__ == ["Context: file='foo.txt', user='Alice', action='read'"]
+        if SUPPORTS_NOTES:
+            assert e.__notes__ == ["Context: file='foo.txt', user='Alice', action='read'"]
         assert str(e) == "division by zero"
 
 
