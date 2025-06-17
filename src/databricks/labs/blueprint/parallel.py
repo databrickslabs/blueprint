@@ -39,14 +39,24 @@ class Threads(Generic[Result]):
         self._default_log_every = 100
 
     @classmethod
+    def available_cpu_count(cls) -> int:
+        """Obtain the number of logical CPUs available for this process."""
+        # From Python 3.13, this is solved for us by the os module.
+        if hasattr(os, "process_cpu_count"):
+            return getattr(os, "process_cpu_count")()
+        # For earlier versions, on Linux we can use sched_getaffinity to get the set of available CPUs.
+        if hasattr(os, "sched_getaffinity"):
+            return len(os.sched_getaffinity(0))
+        # Otherwise use the number of CPUs in the system, if known, even if not all are available.
+        return os.cpu_count() or 1
+
+    @classmethod
     def gather(
         cls, name: str, tasks: Sequence[Task[Result]], num_threads: int | None = None
     ) -> tuple[Collection[Result], list[Exception]]:
         """Run tasks in parallel and return results and errors"""
         if num_threads is None:
-            num_cpus = os.cpu_count()
-            if num_cpus is None:
-                num_cpus = 1
+            num_cpus = cls.available_cpu_count()
             num_threads = max(num_cpus * 2, MIN_THREADS)
         return cls(name, tasks, num_threads=num_threads)._run()
 
