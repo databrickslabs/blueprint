@@ -5,9 +5,9 @@ from unittest.mock import create_autospec, patch
 
 import pytest
 from databricks.sdk import WorkspaceClient
-from databricks.sdk.errors import NotFound, ResourceDoesNotExist
+from databricks.sdk.errors import DatabricksError, NotFound, ResourceDoesNotExist
 from databricks.sdk.mixins.workspace import WorkspaceExt
-from databricks.sdk.service.files import FileInfo
+from databricks.sdk.service.files import FileInfo, DirectoryEntry, GetMetadataResponse
 from databricks.sdk.service.workspace import (
     ImportFormat,
     Language,
@@ -15,7 +15,12 @@ from databricks.sdk.service.workspace import (
     ObjectType,
 )
 
-from databricks.labs.blueprint.paths import DBFSPath, WorkspacePath
+from databricks.labs.blueprint.paths import (
+    DBFSPath,
+    VolumePath,
+    WorkspacePath,
+    create_path,
+)
 
 
 def test_empty_init() -> None:
@@ -1029,3 +1034,146 @@ def test_dbfs_path_stat_has_fields():
     stats = dbfs_path.stat()
     assert stats.st_mtime == info.modification_time / 1000.0
     assert stats.st_size == info.file_size
+
+
+# Test VolumePath
+
+
+def test_volume_init() -> None:
+    ws = create_autospec(WorkspaceClient)
+    assert VolumePath(ws, "a/b/c").as_posix() == "/Volumes/a/b/c"
+    assert VolumePath(ws, "a/b/c/d/e.f").as_posix() == "/Volumes/a/b/c/d/e.f"
+    assert VolumePath(ws, "/a/b/c/d/e.f").as_posix() == "/Volumes/a/b/c/d/e.f"
+    assert VolumePath(ws, "Volumes/a/b/c/d/e.f").as_posix() == "/Volumes/a/b/c/d/e.f"
+
+    # Not enough part for catalog/schema/volume
+    with pytest.raises(ValueError):
+        VolumePath(ws, "a")
+
+    with pytest.raises(ValueError):
+        VolumePath(ws, "a/b")
+
+
+def test_volume_conversions() -> None:
+    ws = create_autospec(WorkspaceClient)
+    ws.config.host = "https://example.org"
+    path = VolumePath(ws, "/Volumes/a/b/c/d/e.f")
+    assert path.as_posix() == "/Volumes/a/b/c/d/e.f"
+    assert path.as_uri() == "https://example.org/explore/data/volumes/a/b/c/?volumePath=/Volumes/a/b/c/d/e.f"
+    assert isinstance(path.as_fuse(), Path)
+    assert str(path.as_fuse()) == "/Volumes/a/b/c/d/e.f"
+
+
+def test_volume_uc_path() -> None:
+    ws = create_autospec(WorkspaceClient)
+    path = VolumePath(ws, "/Volumes/a/b/c/d/e.f")
+    assert path.get_catalog_name() == "a"
+    assert path.get_schema_name(False) == "b"
+    assert path.get_schema_name(True) == "a.b"
+    assert path.get_volume_name(True, True) == "a.b.c"
+    assert path.get_volume_name(True, False) == "a.b.c"
+    assert path.get_volume_name(False, True) == "b.c"
+    assert path.get_volume_name(False, False) == "c"
+
+
+def test_volume_exists() -> None:
+    ws = create_autospec(WorkspaceClient)
+    ws.files.get_directory_metadata.side_effect = NotFound("404")
+    ws.files.get_metadata.return_value = GetMetadataResponse()
+    assert VolumePath(ws, "/Volumes/a/b/c/d").exists()
+
+    ws.files.get_directory_metadata.side_effect = None
+    ws.files.get_directory_metadata.return_value = None
+    ws.files.get_metadata.side_effect = NotFound("404")
+    assert VolumePath(ws, "/Volumes/a/b/c/d").exists()
+
+    ws.files.get_directory_metadata.side_effect = NotFound("404")
+    ws.files.get_metadata.side_effect = NotFound("404")
+    assert not VolumePath(ws, "/Volumes/a/b/c/d").exists()
+
+    with pytest.raises(NotImplementedError):
+        VolumePath(ws, "a/b/c").exists(follow_symlinks=False)
+
+
+def test_volume_is_dir() -> None:
+    ws = create_autospec(WorkspaceClient)
+    # Volume's root should not require a request, it's a directory
+    path = VolumePath(ws, "/Volumes/a/b/c")
+    assert path.is_dir()
+    assert not path.is_file()
+
+    ws.files.get_directory_metadata.side_effect = NotFound("404")
+    ws.files.get_metadata.return_value = GetMetadataResponse()
+    path = VolumePath(ws, "/Volumes/a/b/c/d")
+    assert not path.is_dir()
+    assert path.is_file()
+
+    # Default value when the item not exists: file
+    ws.files.get_directory_metadata.side_effect = NotFound("404")
+    ws.files.get_metadata.side_effect = NotFound("404")
+    path = VolumePath(ws, "/Volumes/a/b/c/d")
+    assert not path.is_dir()
+    assert path.is_file()
+
+    # Default value when request error happens: file
+    ws.files.get_directory_metadata.side_effect = DatabricksError("err")
+    ws.files.get_metadata.side_effect = DatabricksError("err")
+    path = VolumePath(ws, "/Volumes/a/b/c/d")
+    assert not path.is_dir()
+    assert path.is_file()
+
+    ws.files.get_directory_metadata.side_effect = None
+    ws.files.get_directory_metadata.return_value = None
+    ws.files.get_metadata.side_effect = NotFound("404")
+    path = VolumePath(ws, "/Volumes/a/b/c/d")
+    assert path.is_dir()
+    assert not path.is_file()
+
+
+def test_volume_iterdir() -> None:
+    ws = create_autospec(WorkspaceClient)
+    ws.files.list_directory_contents.return_value = [
+        DirectoryEntry(path="a/b/c/d/e", is_directory=False),
+        DirectoryEntry(path="a/b/c/d/f", is_directory=True),
+    ]
+    path = VolumePath(ws, "/Volumes/a/b/c/d")
+    results = []
+    for subpath in path.iterdir():
+        assert isinstance(subpath, VolumePath)
+        assert subpath._cached_is_directory is not None
+        results.append(subpath.as_posix())
+    assert results == ["/Volumes/a/b/c/d/e", "/Volumes/a/b/c/d/f"]
+
+
+@pytest.mark.parametrize(
+    ("input_path", "class_instance", "posix_path"),
+    [
+        ("/Workspace/my/path/file.ext", WorkspacePath, "/Workspace/my/path/file.ext"),
+        ("file:/Workspace/my/path/file.ext", WorkspacePath, "/Workspace/my/path/file.ext"),
+        ("/Volumes/my/path/to/file.ext", VolumePath, "/Volumes/my/path/to/file.ext"),
+        ("file:/Volumes/my/path/to/file.ext", VolumePath, "/Volumes/my/path/to/file.ext"),
+        ("dbfs:/Volumes/my/path/to/file.ext", VolumePath, "/Volumes/my/path/to/file.ext"),
+        ("/dbfs/my/path/file.ext", DBFSPath, "/dbfs/my/path/file.ext"),
+        ("file:/dbfs/my/path/file.ext", DBFSPath, "/dbfs/my/path/file.ext"),
+        ("dbfs:/my/path/file.ext", DBFSPath, "/my/path/file.ext"),
+    ],
+)
+def test_valid_create_path(input_path: str, class_instance, posix_path: str) -> None:
+    ws = create_autospec(WorkspaceClient)
+    path = create_path(ws, input_path)
+    assert isinstance(path, class_instance)
+    assert path.as_posix() == posix_path
+
+
+def test_invalid_create_path() -> None:
+    ws = create_autospec(WorkspaceClient)
+    # Not supported scheme
+    with pytest.raises(ValueError):
+        create_path(ws, "s3:/Volumes/my/path/to/file.ext")
+
+    # Local file outside of Databricks
+    with pytest.raises(ValueError):
+        create_path(ws, "file:/my/path/to/file.ext")
+
+    with pytest.raises(ValueError):
+        create_path(ws, "/my/path/to/file.ext")
