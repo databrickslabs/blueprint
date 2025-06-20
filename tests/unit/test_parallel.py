@@ -1,6 +1,6 @@
 import logging
-import sys
 import os
+import sys
 from functools import partial
 from unittest.mock import MagicMock, patch
 
@@ -197,6 +197,7 @@ def test_odd_partial_failed_with_context(caplog):
     if SUPPORTS_NOTES:
         for e in errors:
             assert e.__notes__ is not None
+
 
 def test_cpu_count() -> None:
     """Verify a CPU count is available."""
