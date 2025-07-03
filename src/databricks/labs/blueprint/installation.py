@@ -676,7 +676,7 @@ class Installation:
         # Python 3.13/3.12.4+ made `recursive_guard` a kwarg, so name it explicitly to avoid:
         # TypeError: ForwardRef._evaluate() missing 1 required keyword-only argument: 'recursive_guard'
         if isinstance(type_ref, typing.ForwardRef):
-            type_ref = type_ref._evaluate(globalns = globals(), localns = locals(), recursive_guard=set())  # pylint: disable=protected-access
+            type_ref = type_ref._evaluate(globalns=globals(), localns=locals(), recursive_guard=set())  # pylint: disable=protected-access
         if dataclasses.is_dataclass(type_ref):
             return cls._unmarshal_dataclass(inst, path, type_ref)
         if isinstance(type_ref, enum.EnumMeta):
