@@ -673,8 +673,10 @@ class Installation:
         """The `_unmarshal` method is a private method that is used to deserialize a dictionary to an object of type
         `type_ref`. This method is called by the `load` method."""
         # Forward-references aren't always resolved, so we need to handle them. (Assumes reference is visible here.)
+        # Python 3.13/3.12.4+ made `recursive_guard` a kwarg, so name it explicitly to avoid:
+        # TypeError: ForwardRef._evaluate() missing 1 required keyword-only argument: 'recursive_guard'
         if isinstance(type_ref, typing.ForwardRef):
-            type_ref = type_ref._evaluate(globals(), locals(), frozenset())  # pylint: disable=protected-access
+            type_ref = type_ref._evaluate(globals(), locals(), frozenset(), recursive_guard=set())  # pylint: disable=protected-access
         if dataclasses.is_dataclass(type_ref):
             return cls._unmarshal_dataclass(inst, path, type_ref)
         if isinstance(type_ref, enum.EnumMeta):
