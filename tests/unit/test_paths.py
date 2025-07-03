@@ -1,4 +1,7 @@
+import codecs
 import os
+import sys
+import threading
 from collections.abc import Iterator
 from pathlib import Path, PurePath, PurePosixPath, PureWindowsPath
 from unittest.mock import create_autospec, patch
@@ -15,7 +18,7 @@ from databricks.sdk.service.workspace import (
     ObjectType,
 )
 
-from databricks.labs.blueprint.paths import DBFSPath, WorkspacePath
+from databricks.labs.blueprint.paths import DBFSPath, WorkspacePath, read_text
 
 
 def test_empty_init() -> None:
@@ -1029,3 +1032,87 @@ def test_dbfs_path_stat_has_fields():
     stats = dbfs_path.stat()
     assert stats.st_mtime == info.modification_time / 1000.0
     assert stats.st_size == info.file_size
+
+
+@pytest.mark.parametrize(
+    ("bom", "encoding"),
+    (
+        (codecs.BOM_UTF8, "utf-8"),
+        (codecs.BOM_UTF16_LE, "utf-16-le"),
+        (codecs.BOM_UTF16_BE, "utf-16-be"),
+        (codecs.BOM_UTF32_LE, "utf-32-le"),
+        (codecs.BOM_UTF32_BE, "utf-32-be"),
+    ),
+)
+def test_read_text_file_with_bom(tmp_path: Path, bom: bytes, encoding: str) -> None:
+    """Verify that we can read text files that include a BOM prefix."""
+    path = tmp_path / "file.py"
+    example = "a = 12 # \U0001f974"
+    path.write_bytes(bom + example.encode(encoding))
+
+    text = read_text(path)
+
+    assert text == example
+
+
+def test_read_text_file_with_size(tmp_path) -> None:
+    """Verify that if we specifify a size to read, its counted as characters."""
+    path = tmp_path / "file.py"
+
+    sample_text = "0123456789"
+    path.write_bytes(codecs.BOM_UTF32_LE + sample_text.encode("utf-32-le"))
+
+    text = read_text(path, size=2)
+
+    assert text == sample_text[:2]
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="Named pipes are not supported on Windows")
+@pytest.mark.timeout(2)
+def test_read_text_non_seekable_file_with_bom(tmp_path: Path) -> None:
+    """Verify that we can read text files from non-seekable file-like objects that include a BOM prefix."""
+    # For normal files we can seek and rewind, but for non-seekable files we can't.
+    path = tmp_path / "non_seekable_file"
+    os.mkfifo(path)
+
+    example = "a = 12 # \U0001f974"
+
+    # Write to the FIFO from a background thread.
+    def write_to_fifo():
+        encoded_example = codecs.BOM_UTF32_LE + example.encode("utf-32-le")
+        # This will block until the data is read from the other side of the FIFO.
+        path.write_bytes(encoded_example)
+
+    threading.Thread(target=write_to_fifo).start()
+
+    # Test reading.
+    text = read_text(path)
+    assert text == example
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="Named pipes are not supported on Windows")
+@pytest.mark.timeout(2)
+def test_read_text_non_seekable_file_with_sized_read(tmp_path: Path) -> None:
+    """Verify error on sized reads from non-seekable file-like objects."""
+    # For normal files we can seek and rewind, but for non-seekable files we can't.
+    path = tmp_path / "non_seekable_file"
+    os.mkfifo(path)
+
+    example = "a = 12 # \U0001f974"
+
+    # Write to the FIFO from a background thread.
+    def write_to_fifo():
+        encoded_example = codecs.BOM_UTF32_LE + example.encode("utf-32-le")
+        # We have to open the pipe and _try_ to write, or the read-side will block during the open.
+        # Writing will however eventually fail because the reader raises (an expected) exception and never reads.
+        try:
+            path.write_bytes(encoded_example)
+        except BrokenPipeError:
+            pass
+
+    threading.Thread(target=write_to_fifo).start()
+
+    # A sized read should fail because the current implementation has to read the entire file before
+    # decoding.
+    with pytest.raises(ValueError, match="Cannot specify read size for a non-seekable file"):
+        read_text(path, size=4)

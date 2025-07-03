@@ -4,9 +4,12 @@ import functools
 import inspect
 import json
 import logging
+import os
 import types
+import urllib.parse
 from collections.abc import Callable
 from dataclasses import dataclass
+from urllib.parse import ParseResult
 
 from databricks.sdk import AccountClient, WorkspaceClient
 from databricks.sdk.config import with_user_agent_extra
@@ -104,8 +107,10 @@ class App:
                     kwargs[kwarg] = float(kwargs[kwarg])
         try:
             if cmd.needs_workspace_client():
+                self._patch_databricks_host()
                 kwargs["w"] = self._workspace_client()
             elif cmd.is_account:
+                self._patch_databricks_host()
                 kwargs["a"] = self._account_client()
             prompts_argument = cmd.prompts_argument_name()
             if prompts_argument:
@@ -117,6 +122,54 @@ class App:
                 logger.error(f"Failed to call {command}", exc_info=err)
             else:
                 logger.error(f"{err.__class__.__name__}: {err}")
+
+    @classmethod
+    def fix_databricks_host(cls, host: str) -> str:
+        """Emulate the way the Go SDK fixes the Databricks host before using it.
+
+        Args:
+            host: The host URL to normalize.
+        Returns:
+            A normalized host URL.
+        Raises:
+            ValueError: If the host cannot be parsed as a URL.
+        """
+        parsed = urllib.parse.urlparse(host)
+
+        netloc = parsed.netloc
+        # If the netloc is empty, assume the scheme wasn't included.
+        if not netloc:
+            parsed = urllib.parse.urlparse(f"https://{host}")
+        if not parsed.hostname:
+            return host
+
+        # Create a new instance to ensure other fields are initialized as empty.
+        parsed = ParseResult(scheme=parsed.scheme, netloc=parsed.netloc, path="", params="", query="", fragment="")
+        return parsed.geturl()
+
+    def _patch_databricks_host(self) -> None:
+        """Patch the DATABRICKS_HOST environment variable if necessary, to work around a host normalization issue.
+
+        The normalization issue arises because the Go SDK normalizes the host differently to the Python SDK, and
+        labs CLI integration passes the host from the Go SDK to the Python SDK via DATABRICKS_HOST but (normally)
+        without normalizing it first. As such here we emulate the Go SDK's normalization, pending an update
+        to the Python SDK to behave the same way.
+        """
+        host = os.environ.get("DATABRICKS_HOST")
+        if not host:
+            return
+
+        try:
+            fixed_host = self.fix_databricks_host(host)
+        except ValueError as e:
+            self._logger.debug(f"Failed to parse DATABRICKS_HOST: {host}, will leave as-is.", exc_info=e)
+            return
+
+        if fixed_host == host:
+            self._logger.debug(f"Leaving DATABRICKS_HOST as-is: {host}")
+        else:
+            self._logger.warning(f"Working around DATABRICKS_HOST normalization issue: {host} -> {fixed_host}")
+            os.environ["DATABRICKS_HOST"] = fixed_host
 
     def _account_client(self):
         return AccountClient(

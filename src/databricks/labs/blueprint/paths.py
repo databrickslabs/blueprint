@@ -5,7 +5,6 @@ import builtins
 import codecs
 import fnmatch
 import io
-import locale
 import logging
 import os
 import re
@@ -15,7 +14,7 @@ from abc import abstractmethod
 from collections.abc import Generator, Iterable, Sequence
 from io import BytesIO, StringIO
 from pathlib import Path, PurePath
-from typing import NoReturn, TypeVar
+from typing import BinaryIO, Literal, NoReturn, TextIO, TypeVar
 from urllib.parse import quote_from_bytes as urlquote_from_bytes
 
 from databricks.sdk import WorkspaceClient
@@ -837,16 +836,7 @@ class WorkspacePath(_DatabricksPath):
         if "r" in mode:
             with self._ws.workspace.download(self.as_posix(), format=ExportFormat.AUTO) as f:
                 data = f.read()
-                if encoding is None:
-                    if data.startswith(codecs.BOM_UTF32_LE) or data.startswith(codecs.BOM_UTF32_BE):
-                        encoding = "utf-32"
-                    elif data.startswith(codecs.BOM_UTF16_LE) or data.startswith(codecs.BOM_UTF16_BE):
-                        encoding = "utf-16"
-                    elif data.startswith(codecs.BOM_UTF8):
-                        encoding = "utf-8-sig"
-                if encoding is None or encoding == "locale":
-                    encoding = locale.getpreferredencoding(False)
-                return StringIO(data.decode(encoding))
+            return decode_with_bom(BytesIO(data), encoding=encoding, errors=errors, newline=newline)
         if "w" in mode:
             return _TextUploadIO(self._ws, self.as_posix())
         raise ValueError(f"invalid mode: {mode}")
@@ -1043,3 +1033,76 @@ class _RecursivePatternSelector(_NonTerminalSelector):
                 if candidate not in yielded:
                     yielded.add(candidate)
                     yield candidate
+
+
+def _detect_encoding_bom(
+    binary_io: BinaryIO, *, preserve_position: bool
+) -> Literal["utf-32", "utf-16", "utf-8-sig"] | None:
+    # Peek at the first (up to) 4 bytes, preserving the file position if requested.
+    position = binary_io.tell() if preserve_position else None
+    try:
+        maybe_bom: bytes = binary_io.read(4)
+    finally:
+        if position is not None:
+            binary_io.seek(position)
+    # For these encodings, TextIOWrapper will skip over the BOM during decoding.
+    if maybe_bom.startswith(codecs.BOM_UTF32_LE) or maybe_bom.startswith(codecs.BOM_UTF32_BE):
+        return "utf-32"
+    if maybe_bom.startswith(codecs.BOM_UTF16_LE) or maybe_bom.startswith(codecs.BOM_UTF16_BE):
+        return "utf-16"
+    if maybe_bom.startswith(codecs.BOM_UTF8):
+        return "utf-8-sig"
+    return None
+
+
+def decode_with_bom(
+    file: BinaryIO, encoding: str | None = None, errors: str | None = None, newline: str | None = None
+) -> TextIO:
+    """Wrap an open binary file with a text decoder.
+
+    The arguments have the same semantics as the built-in `open()` call, except that if the encoding is not specified
+    and the file is seekable then it will be checked for a BOM. If a BOM marker is found, that encoding is used. When
+    neither an encoding nor a BOM are present the encoding of the system locale is used.
+
+    Args:
+          file: the open (binary) file to wrap in text mode.
+          encoding: force decoding with a specific locale. If not present the file BOM and system locale are used.
+          errors: how decoding errors should be handled, as per open().
+          newline: how newlines should be handled, as per open().
+    Raises:
+          ValueError: if the encoding should be detected via potential BOM marker but the file is not seekable.
+    Returns:
+          a text-based IO wrapper that will decode the underlying binary-mode file as text.
+    """
+    use_encoding = _detect_encoding_bom(file, preserve_position=True) if encoding is None else encoding
+    return io.TextIOWrapper(file, encoding=use_encoding, errors=errors, newline=newline)
+
+
+def _read_text_from_binary_io(binary_io: BinaryIO, size: int = -1) -> str:
+    with decode_with_bom(binary_io) as f:
+        return f.read(size)
+
+
+def read_text(path: Path, size: int = -1) -> str:
+    """Read a file as text, decoding according to the BOM marker if that is present.
+
+    This differs to the normal `.read_text()` method on path which does not support BOM markers.
+
+    Arguments:
+        path: the path to read text from.
+        size: how much text (measured in characters) to read. If negative, all text is read. Less may be read if the
+            file is smaller than the specified size.
+    Returns:
+        The string content of the file, up to the specified size.
+    """
+    with path.open("rb") as binary_io:
+        # If the open file is seekable, we can detect the BOM and decode without re-opening.
+        if binary_io.seekable():
+            return _read_text_from_binary_io(binary_io, size=size)
+        # If non-seekable, we can't rewind so we have to slurp it and do it from memory.
+        if size != -1:
+            msg = "Cannot specify read size for a non-seekable file"
+            raise ValueError(msg)
+        binary_content = binary_io.read()
+    with io.BytesIO(binary_content) as binary_io:
+        return _read_text_from_binary_io(binary_io, size=size)
