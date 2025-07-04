@@ -733,8 +733,10 @@ def test_loading_value_coercion_from_str() -> None:
     loaded = installation.load(SampleClass, filename="something.json")
     assert loaded == expected
 
+
 def test_forward_referencing_class() -> None:
     """Test that a class with forward-referenced fields. This simulates the behavior of future annotations."""
+
     @dataclass
     class ForwardReferencingClass:
         field_str: "str" = "foo"
