@@ -732,3 +732,26 @@ def test_loading_value_coercion_from_str() -> None:
     installation = MockInstallation({"something.json": raw_data})
     loaded = installation.load(SampleClass, filename="something.json")
     assert loaded == expected
+
+
+def test_forward_referencing_class() -> None:
+    """Test that a class with forward-referenced fields. This simulates the behavior of future annotations."""
+
+    @dataclass
+    class ForwardReferencingClass:
+        field_str: "str" = "foo"
+        field_int: "int" = 20
+        field_bool: "bool" = False
+        field_float: "float" = 2.3
+        field_dict: "dict[str, int]" = dataclasses.field(default_factory=dict)
+        field_list: "list[str]" = dataclasses.field(default_factory=list)
+        field_optional: "str | None" = None
+        field_json: "JsonValue" = None
+
+    instance = ForwardReferencingClass(field_dict={"a": 1, "b": 2}, field_list=["x", "y"], field_json={"key": "value"})
+
+    installation = MockInstallation()
+    installation.save(instance, filename="saved.yml")
+
+    loaded = installation.load(ForwardReferencingClass, filename="saved.yml")
+    assert instance == loaded
