@@ -669,19 +669,22 @@ class Installation:
         def from_dict(cls, raw: dict):
             pass
 
+    # Internal utility for evaluating forward references; mypy handles version checks, but only top-level.
     if sys.version_info >= (3, 12, 4):
         # Since Python 3.12.4, `ForwardRef._evaluate` requires recursive_guard as a keyword, and has an additional
         # parameter for type information.
         @staticmethod
         def _evaluate_forward_ref(type_ref: typing.ForwardRef) -> type:
             """Evaluate a forward reference to a type."""
-            return type_ref._evaluate(globals(), locals(), (), recursive_guard=frozenset())  # pylint: disable=protected-access
+            # pylint: disable-next=protected-access
+            return type_ref._evaluate(globals(), locals(), (), recursive_guard=frozenset())  # type: ignore[arg-type,misc,return-value]
     else:
         # Older versions of Python do
         @staticmethod
         def _evaluate_forward_ref(type_ref: typing.ForwardRef) -> type:
             """Evaluate a forward reference to a type."""
-            return type_ref._evaluate(globals(), locals(), recursive_guard=frozenset())  # pylint: disable=protected-access
+            # pylint: disable-next=protected-access
+            return type_ref._evaluate(globals(), locals(), recursive_guard=frozenset())  # type: ignore[return-value]
 
     @classmethod
     def _unmarshal(cls, inst: Any, path: list[str], type_ref: type[T]) -> T | None:
