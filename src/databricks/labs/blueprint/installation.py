@@ -9,6 +9,7 @@ import json
 import logging
 import os.path
 import re
+import sys
 import threading
 import types
 import typing
@@ -668,15 +669,27 @@ class Installation:
         def from_dict(cls, raw: dict):
             pass
 
+    if sys.version_info >= (3, 12, 4):
+        # Since Python 3.12.4, `ForwardRef._evaluate` requires recursive_guard as a keyword, and has an additional
+        # parameter for type information.
+        @staticmethod
+        def _evaluate_forward_ref(type_ref: typing.ForwardRef) -> type:
+            """Evaluate a forward reference to a type."""
+            return type_ref._evaluate(globals(), locals(), (), recursive_guard=frozenset())  # pylint: disable=protected-access
+    else:
+        # Older versions of Python do
+        @staticmethod
+        def _evaluate_forward_ref(type_ref: typing.ForwardRef) -> type:
+            """Evaluate a forward reference to a type."""
+            return type_ref._evaluate(globals(), locals(), recursive_guard=frozenset())  # pylint: disable=protected-access
+
     @classmethod
     def _unmarshal(cls, inst: Any, path: list[str], type_ref: type[T]) -> T | None:
         """The `_unmarshal` method is a private method that is used to deserialize a dictionary to an object of type
         `type_ref`. This method is called by the `load` method."""
         # Forward-references aren't always resolved, so we need to handle them. (Assumes reference is visible here.)
-        # Python 3.13/3.12.4+ made `recursive_guard` a kwarg, so name it explicitly to avoid:
-        # TypeError: ForwardRef._evaluate() missing 1 required keyword-only argument: 'recursive_guard'
         if isinstance(type_ref, typing.ForwardRef):
-            type_ref = type_ref._evaluate(globalns=globals(), localns=locals(), recursive_guard=set())  # pylint: disable=protected-access
+            type_ref = cls._evaluate_forward_ref(type_ref)
         if dataclasses.is_dataclass(type_ref):
             return cls._unmarshal_dataclass(inst, path, type_ref)
         if isinstance(type_ref, enum.EnumMeta):
