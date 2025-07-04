@@ -45,7 +45,7 @@ logger = logging.getLogger(__name__)
 JsonList: TypeAlias = List["JsonValue"]  # pylint: disable=deprecated-typing-alias
 JsonObject: TypeAlias = Dict[str, "JsonValue"]  # pylint: disable=deprecated-typing-alias
 RootJsonValue: TypeAlias = JsonObject | JsonList
-JsonValue: TypeAlias = None | bool | float | int | str | RootJsonValue
+JsonValue: TypeAlias = None | bool | int | float | str | RootJsonValue
 
 
 __all__ = ["Installation", "MockInstallation", "IllegalState", "NotInstalled", "SerdeError", "JsonValue"]
@@ -831,11 +831,15 @@ class Installation:
         # No coercion necessary.
         if isinstance(inst, type_ref):
             return inst
+
         # Only attempt coercion between primitive types.
         if type(inst) not in cls._PRIMITIVES:
             msg = f"{'.'.join(path)}: Expected {type_ref.__name__}, got: {inst}"
             raise SerdeError(msg)
-        # Special case for strings to bool
+
+        # Some special cases:
+        #  - str -> bool: only accept "true" or "false" (case-insensitive).
+        #  - float -> int: refuse to truncate
         if type_ref == bool:
             if isinstance(inst, str):
                 if inst.lower() == "true":
@@ -844,6 +848,10 @@ class Installation:
                     return False
             msg = f"{'.'.join(path)}: Expected bool, got: {inst}"
             raise SerdeError(msg)
+        if type_ref == int and isinstance(inst, float):
+            msg = f"{'.'.join(path)}: Expected int, got float: {inst}"
+            raise SerdeError(msg)
+
         # Everything else.
         try:
             converted = type_ref(inst)
