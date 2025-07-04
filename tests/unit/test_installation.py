@@ -468,6 +468,7 @@ def test_generic_dict_str() -> None:
     saved = SampleClass(field={"a": "b", "b": "c"})
     installation.save(saved, filename="backups/SampleClass.json")
     loaded = installation.load(SampleClass, filename="backups/SampleClass.json")
+    assert isinstance(loaded.field["a"], str)
     assert loaded == saved
 
 
@@ -480,6 +481,7 @@ def test_generic_dict_int() -> None:
     saved = SampleClass(field={"a": 1, "b": 1})
     installation.save(saved, filename="backups/SampleClass.json")
     loaded = installation.load(SampleClass, filename="backups/SampleClass.json")
+    assert isinstance(loaded.field["a"], int)
     assert loaded == saved
 
 
@@ -492,6 +494,7 @@ def test_generic_dict_float() -> None:
     saved = SampleClass(field={"a": 1.1, "b": 1.2})
     installation.save(saved, filename="backups/SampleClass.json")
     loaded = installation.load(SampleClass, filename="backups/SampleClass.json")
+    assert isinstance(loaded.field["a"], float)
     assert loaded == saved
 
 
@@ -518,6 +521,8 @@ def test_generic_dict_json_value() -> None:
     saved = SampleClass(field=json_like)
     installation.save(saved, filename="backups/SampleClass.json")
     loaded = installation.load(SampleClass, filename="backups/SampleClass.json")
+    assert isinstance(loaded.field["c"], int)
+    assert isinstance(loaded.field["f"], float)
     assert loaded == saved
 
 
