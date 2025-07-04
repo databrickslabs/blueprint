@@ -45,7 +45,7 @@ logger = logging.getLogger(__name__)
 JsonList: TypeAlias = List["JsonValue"]  # pylint: disable=deprecated-typing-alias
 JsonObject: TypeAlias = Dict[str, "JsonValue"]  # pylint: disable=deprecated-typing-alias
 RootJsonValue: TypeAlias = JsonObject | JsonList
-JsonValue: TypeAlias = None | bool | int | float | str | RootJsonValue
+JsonValue: TypeAlias = None | bool | float | int | str | RootJsonValue
 
 
 __all__ = ["Installation", "MockInstallation", "IllegalState", "NotInstalled", "SerdeError", "JsonValue"]

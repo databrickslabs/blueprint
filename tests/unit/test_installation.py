@@ -514,7 +514,7 @@ def test_generic_dict_json_value() -> None:
 
     installation = MockInstallation()
 
-    json_like: dict[str, JsonValue] = {"a": ["x", "y"], "b": [], "c": 3, "d": True, "e": {"a": "b"}}
+    json_like: dict[str, JsonValue] = {"a": ["x", "y"], "b": [], "c": 3, "d": True, "e": {"a": "b"}, "f": 0.1}
     saved = SampleClass(field=json_like)
     installation.save(saved, filename="backups/SampleClass.json")
     loaded = installation.load(SampleClass, filename="backups/SampleClass.json")
@@ -581,6 +581,7 @@ def test_generic_list_json() -> None:
         3,
         True,
         {"a": "b"},
+        0.1,
     ]
     saved = SampleClass(field=json_like)
     installation.save(saved, filename="backups/SampleClass.json")
