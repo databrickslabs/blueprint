@@ -1055,7 +1055,7 @@ def test_read_text_file_with_bom(tmp_path: Path, bom: bytes, encoding: str) -> N
     assert text == example
 
 
-def test_read_text_file_with_size(tmp_path) -> None:
+def test_read_text_file_with_size(tmp_path: Path) -> None:
     """Verify that if we specifify a size to read, its counted as characters."""
     path = tmp_path / "file.py"
 
