@@ -1098,9 +1098,9 @@ def _detect_encoding_xml(binary_io: BinaryIO, *, preserve_position: bool) -> str
                 # Something EBCDIC-ish, oh-my.
                 sniff_with = "cp037"
             case _:
-                logger.debug("No XML declaration detected in the first 4 bytes: %s", maybe_xml)
+                logger.debug(f"No XML declaration detected in the first 4 bytes: {maybe_xml!r}")
                 return None
-        logger.debug("XML declaration detected, sniffing further with encoding: %s", sniff_with)
+        logger.debug(f"XML declaration detected, sniffing further with encoding: {sniff_with}")
         maybe_xml += binary_io.read(_XML_ENCODING_SNIFF_LIMIT - 4)
     finally:
         if position is not None:
@@ -1112,7 +1112,7 @@ def _detect_encoding_xml(binary_io: BinaryIO, *, preserve_position: bool) -> str
     if match := _XML_DECLARATION_REGEX.match(sniffed_declaration):
         encoding = match.group("encoding")
         if encoding:
-            logger.debug("XML declaration encoding detected: %s", encoding)
+            logger.debug(f"XML declaration encoding detected: {encoding}")
             # TODO: XML encodings come from the IATA list, maybe they need to mapped/checked against Python's names.
         else:
             logger.debug("XML declaration without encoding detected, must be utf-8")
