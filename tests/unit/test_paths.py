@@ -1070,7 +1070,7 @@ def test_read_text_file_with_bom(tmp_path: Path, bom: bytes, encoding: str) -> N
 def test_read_xml_file_with_encoding(tmp_path: Path, encoding: str) -> None:
     """Verify that we can detect the encoding from an XML file using its encoding declaration."""
     path = tmp_path / "file.xml"
-    example = f"<?xml   version='1.0'\nencoding='{encoding}' standalone?>\n<root>[Something fanc\u00fd]</root>"
+    example = f"<?xml   version='1.0'\nencoding='{encoding}' ?>\n<root>[Something fanc\u00fd]</root>"
     path.write_text(example, encoding=encoding)
 
     text = read_text(path, detect_xml=True)
