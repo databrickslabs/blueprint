@@ -1082,11 +1082,11 @@ def test_read_xml_file_with_encoding_declaration(tmp_path: Path, encoding: str) 
 @pytest.mark.parametrize(
     ("bom", "encoding"),
     (
-            (codecs.BOM_UTF8, "utf-8"),
-            (codecs.BOM_UTF16_LE, "utf-16-le"),
-            (codecs.BOM_UTF16_BE, "utf-16-be"),
-            (codecs.BOM_UTF32_LE, "utf-32-le"),
-            (codecs.BOM_UTF32_BE, "utf-32-be"),
+        (codecs.BOM_UTF8, "utf-8"),
+        (codecs.BOM_UTF16_LE, "utf-16-le"),
+        (codecs.BOM_UTF16_BE, "utf-16-be"),
+        (codecs.BOM_UTF32_LE, "utf-32-le"),
+        (codecs.BOM_UTF32_BE, "utf-32-be"),
     ),
 )
 def test_read_xml_file_with_com(tmp_path: Path, bom: bytes, encoding: str) -> None:
