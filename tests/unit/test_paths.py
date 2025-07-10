@@ -1,4 +1,5 @@
 import codecs
+import locale
 import os
 import sys
 import threading
@@ -1067,7 +1068,7 @@ def test_read_text_file_with_bom(tmp_path: Path, bom: bytes, encoding: str) -> N
         "cp500",  # EBCDIC!
     ),
 )
-def test_read_xml_file_with_encoding(tmp_path: Path, encoding: str) -> None:
+def test_read_xml_file_with_encoding_declaration(tmp_path: Path, encoding: str) -> None:
     """Verify that we can detect the encoding from an XML file using its encoding declaration."""
     path = tmp_path / "file.xml"
     example = f"<?xml   version='1.0'\nencoding='{encoding}' ?>\n<root>[Something fanc\u00fd]</root>"
@@ -1075,6 +1076,43 @@ def test_read_xml_file_with_encoding(tmp_path: Path, encoding: str) -> None:
 
     text = read_text(path, detect_xml=True)
 
+    assert text == example
+
+
+@pytest.mark.parametrize(
+    ("bom", "encoding"),
+    (
+            (codecs.BOM_UTF8, "utf-8"),
+            (codecs.BOM_UTF16_LE, "utf-16-le"),
+            (codecs.BOM_UTF16_BE, "utf-16-be"),
+            (codecs.BOM_UTF32_LE, "utf-32-le"),
+            (codecs.BOM_UTF32_BE, "utf-32-be"),
+    ),
+)
+def test_read_xml_file_with_com(tmp_path: Path, bom: bytes, encoding: str) -> None:
+    """Verify that we can read text files that include a BOM prefix."""
+    path = tmp_path / "file.xml"
+    example = "<?xml version='1.1'?>\n<root>[Something fanc\u00fd]</root>"
+    path.write_bytes(bom + example.encode(encoding))
+
+    text = read_text(path)
+
+    assert text == example
+
+
+def test_read_xml_file_default_utf8(tmp_path: Path, monkeypatch) -> None:
+    """Verify that XML files without a BOM or encoding declaration are read as UTF-8."""
+    path = tmp_path / "file.xml"
+    example = "<?xml version='1.1'?>\n<root>[Something fanc\u00fd]</root>"
+    path.write_text(example, encoding="utf-8")
+
+    # Verify the monkey-patching means we're not defaulting to UTF-8.
+    monkeypatch.setattr(locale, "getpreferredencoding", lambda: "Windows-1252")
+    assert locale.getpreferredencoding() != "UTF-8"
+    assert read_text(path, detect_xml=False) != example
+
+    # Now read it as XML, which should force UTF-8.
+    text = read_text(path, detect_xml=True)
     assert text == example
 
 

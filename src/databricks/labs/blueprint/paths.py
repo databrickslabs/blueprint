@@ -5,6 +5,7 @@ import builtins
 import codecs
 import fnmatch
 import io
+import locale
 import logging
 import os
 import re
@@ -1059,7 +1060,7 @@ _XML_ENCODING_SNIFF_LIMIT = 1024
 """The maximum number of bytes to read from the start of a file when sniffing for a potential XML encoding."""
 _XML_DECLARATION_REGEX = re.compile(
     # Not perfect, but matches valid XML declarations. (Plus some invalid ones.)
-    r'^<\?xml\s+version\s*=\s*["\'][0-9.]*["\']\s+encoding\s*=\s*["\'](?P<encoding>[^"\']+)["\']'
+    r'^<\?xml\s+version\s*=\s*["\'][0-9.]*["\'](:?\s+encoding\s*=\s*["\'](?P<encoding>[^"\']+)["\'])?\s*\?>',
 )
 
 
@@ -1110,8 +1111,12 @@ def _detect_encoding_xml(binary_io: BinaryIO, *, preserve_position: bool) -> str
     sniffed_declaration = maybe_xml.decode(sniff_with, errors="replace")
     if match := _XML_DECLARATION_REGEX.match(sniffed_declaration):
         encoding = match.group("encoding")
-        logger.debug("XML declaration encoding detected: %s", encoding)
-        # TODO: XML encodings come from the IATA list, maybe they need to mapped/checked against Python's names.
+        if encoding:
+            logger.debug("XML declaration encoding detected: %s", encoding)
+            # TODO: XML encodings come from the IATA list, maybe they need to mapped/checked against Python's names.
+        else:
+            logger.debug("XML declaration without encoding detected, must be utf-8")
+            encoding = "utf-8"
         return encoding
     return None
 
@@ -1147,6 +1152,8 @@ def decode_with_bom(
         use_encoding = _detect_encoding_bom(file, preserve_position=True)
         if use_encoding is None and detect_xml:
             use_encoding = _detect_encoding_xml(file, preserve_position=True)
+    if use_encoding is None:
+        use_encoding = locale.getpreferredencoding()
     return io.TextIOWrapper(file, encoding=use_encoding, errors=errors, newline=newline)
 
 
