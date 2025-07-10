@@ -1086,7 +1086,8 @@ def _read_text_from_binary_io(binary_io: BinaryIO, size: int = -1) -> str:
 def read_text(path: Path, size: int = -1) -> str:
     """Read a file as text, decoding according to the BOM marker if that is present.
 
-    This differs to the normal `.read_text()` method on path which does not support BOM markers.
+    This differs to the normal `.read_text()` method on `Path` which supports neither BOM markers nor detecting the
+    encoding via the XML declaration.
 
     Arguments:
         path: the path to read text from.
