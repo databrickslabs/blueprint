@@ -1111,6 +1111,7 @@ def _detect_encoding_xml(binary_io: BinaryIO, *, preserve_position: bool) -> str
     if match := _XML_DECLARATION_REGEX.match(sniffed_declaration):
         encoding = match.group("encoding")
         logger.debug("XML declaration encoding detected: %s", encoding)
+        # TODO: XML encodings come from the IATA list, maybe they need to mapped/checked against Python's names.
         return encoding
     return None
 
