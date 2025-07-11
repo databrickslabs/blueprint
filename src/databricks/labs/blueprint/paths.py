@@ -5,6 +5,7 @@ import builtins
 import codecs
 import fnmatch
 import io
+import locale
 import logging
 import os
 import re
@@ -1055,8 +1056,77 @@ def _detect_encoding_bom(
     return None
 
 
+_XML_ENCODING_SNIFF_LIMIT = 1024
+"""The maximum number of bytes to read from the start of a file when sniffing for a potential XML encoding."""
+_XML_DECLARATION_REGEX = re.compile(
+    # Not perfect, but matches valid XML declarations. (Plus some invalid ones.)
+    r'^<\?xml\s+version\s*=\s*["\'][0-9.]*["\'](:?\s+encoding\s*=\s*["\'](?P<encoding>[^"\']+)["\'])?\s*\?>',
+)
+
+
+def _detect_encoding_xml(binary_io: BinaryIO, *, preserve_position: bool) -> str | None:
+    position = binary_io.tell() if preserve_position else None
+    try:
+        maybe_xml: bytes = binary_io.read(4)
+        # Useful to know here, an XML declaration must start with '<?xml', and:
+        #  - '<' is 0x3C.
+        #  - '?' is 0x3F.
+        # References:
+        #  - https://www.w3.org/TR/xml/#sec-guessing-no-ext-info
+        #  - https://www.w3.org/TR/2006/REC-xml11-20060816/#sec-guessing-no-ext-info
+        match maybe_xml:
+            case b"\0\0\0\x3c":
+                # Potentially 32-bit BE (1234) encoding.
+                sniff_with = "utf-32-be"
+            case b"\x3c\0\0\0":
+                # Potentially 32-bit LE (4321) encoding.
+                sniff_with = "utf-32-le"
+            case b"\0\0\x3c\0" | b"\0\x3c\0\0":
+                # Potentially non-standard 32-bit encodings.
+                logger.warning("XML declaration with non-standard 32-bit encoding detected; not supported.")
+                return None
+            case b"\x00\x3c\x00\x3f":
+                # Potentially 16-bit BE (12) encoding.
+                sniff_with = "utf-16-be"
+            case b"\x3c\x00\x3f\x00":
+                # Potentially 16-bit LE (21) encoding.
+                sniff_with = "utf-16-le"
+            case b"\x3c\x3f\x78\x6d":
+                # Potentially 8-bit, UTF-8 or other ASCII-compatible encoding.
+                sniff_with = "us-ascii"
+            case b"\x4c\x6f\xa7\x94":
+                # Something EBCDIC-ish, oh-my.
+                sniff_with = "cp037"
+            case _:
+                logger.debug(f"No XML declaration detected in the first 4 bytes: {maybe_xml!r}")
+                return None
+        logger.debug(f"XML declaration detected, sniffing further with encoding: {sniff_with}")
+        maybe_xml += binary_io.read(_XML_ENCODING_SNIFF_LIMIT - 4)
+    finally:
+        if position is not None:
+            binary_io.seek(position)
+
+    # Try to decode the XML declaration with the sniffed encoding; XML is designed so that the declaration can be
+    # read with the common subset of related encodings, up to where the actual encoding is specified.
+    sniffed_declaration = maybe_xml.decode(sniff_with, errors="replace")
+    if match := _XML_DECLARATION_REGEX.match(sniffed_declaration):
+        encoding = match.group("encoding")
+        if encoding:
+            logger.debug(f"XML declaration encoding detected: {encoding}")
+            # TODO: XML encodings come from the IATA list, maybe they need to mapped/checked against Python's names.
+        else:
+            logger.debug("XML declaration without encoding detected, must be utf-8")
+            encoding = "utf-8"
+        return encoding
+    return None
+
+
 def decode_with_bom(
-    file: BinaryIO, encoding: str | None = None, errors: str | None = None, newline: str | None = None
+    file: BinaryIO,
+    encoding: str | None = None,
+    errors: str | None = None,
+    newline: str | None = None,
+    detect_xml: bool = False,
 ) -> TextIO:
     """Wrap an open binary file with a text decoder.
 
@@ -1069,40 +1139,51 @@ def decode_with_bom(
           encoding: force decoding with a specific locale. If not present the file BOM and system locale are used.
           errors: how decoding errors should be handled, as per open().
           newline: how newlines should be handled, as per open().
+          detect_xml: if True, the file is checked for an XML text declaration that specifies the encoding.
     Raises:
           ValueError: if the encoding should be detected via potential BOM marker but the file is not seekable.
     Returns:
           a text-based IO wrapper that will decode the underlying binary-mode file as text.
     """
-    use_encoding = _detect_encoding_bom(file, preserve_position=True) if encoding is None else encoding
+    use_encoding: str | None
+    if encoding is not None:
+        use_encoding = encoding
+    else:
+        use_encoding = _detect_encoding_bom(file, preserve_position=True)
+        if use_encoding is None and detect_xml:
+            use_encoding = _detect_encoding_xml(file, preserve_position=True)
+    if use_encoding is None:
+        use_encoding = locale.getpreferredencoding()
     return io.TextIOWrapper(file, encoding=use_encoding, errors=errors, newline=newline)
 
 
-def _read_text_from_binary_io(binary_io: BinaryIO, size: int = -1) -> str:
-    with decode_with_bom(binary_io) as f:
+def _read_text_from_binary_io(binary_io: BinaryIO, size: int = -1, *, detect_xml: bool = False) -> str:
+    with decode_with_bom(binary_io, detect_xml=detect_xml) as f:
         return f.read(size)
 
 
-def read_text(path: Path, size: int = -1) -> str:
+def read_text(path: Path, size: int = -1, *, detect_xml: bool = False) -> str:
     """Read a file as text, decoding according to the BOM marker if that is present.
 
-    This differs to the normal `.read_text()` method on path which does not support BOM markers.
+    This differs to the normal `.read_text()` method on `Path` which supports neither BOM markers nor detecting the
+    encoding via the XML declaration.
 
     Arguments:
         path: the path to read text from.
         size: how much text (measured in characters) to read. If negative, all text is read. Less may be read if the
             file is smaller than the specified size.
+        detect_xml: if True, the file is checked for an XML declaration and the encoding is set accordingly.
     Returns:
         The string content of the file, up to the specified size.
     """
     with path.open("rb") as binary_io:
         # If the open file is seekable, we can detect the BOM and decode without re-opening.
         if binary_io.seekable():
-            return _read_text_from_binary_io(binary_io, size=size)
+            return _read_text_from_binary_io(binary_io, size=size, detect_xml=detect_xml)
         # If non-seekable, we can't rewind so we have to slurp it and do it from memory.
         if size != -1:
             msg = "Cannot specify read size for a non-seekable file"
             raise ValueError(msg)
         binary_content = binary_io.read()
     with io.BytesIO(binary_content) as binary_io:
-        return _read_text_from_binary_io(binary_io, size=size)
+        return _read_text_from_binary_io(binary_io, size=size, detect_xml=detect_xml)
