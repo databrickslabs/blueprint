@@ -11,7 +11,12 @@ from contextlib import contextmanager
 
 import pytest
 
-from databricks.labs.blueprint.logger import NiceFormatter, install_logger
+from databricks.labs.blueprint._logging_context import LoggingContextInjectingFilter
+from databricks.labs.blueprint.logger import (
+    NiceFormatter,
+    install_logger,
+    logging_context,
+)
 
 
 class LogCaptureHandler(logging.Handler):
@@ -32,6 +37,7 @@ class LogCaptureHandler(logging.Handler):
     def record_capturing(cls, logger: logging.Logger) -> Generator[LogCaptureHandler, None, None]:
         """Temporarily capture all log records, in addition to existing handling."""
         handler = LogCaptureHandler()
+        handler.addFilter(LoggingContextInjectingFilter())
         logger.addHandler(handler)
         try:
             yield handler
@@ -49,7 +55,9 @@ class LoggingSystemFixture:
     def __init__(self) -> None:
         self.output_buffer = io.StringIO()
         self.root = logging.RootLogger(logging.WARNING)
-        self.root.addHandler(logging.StreamHandler(self.output_buffer))
+        handler = logging.StreamHandler(self.output_buffer)
+        handler.addFilter(LoggingContextInjectingFilter())
+        self.root.addHandler(handler)
         self.manager = logging.Manager(self.root)
 
     def getLogger(self, name: str) -> logging.Logger:
@@ -84,6 +92,8 @@ def test_install_logger(logging_system) -> None:
     # Verify that the root logger was configured as expected.
     assert root.level == logging.FATAL  # remains unchanged
     assert root.handlers == [handler]
+    assert len(handler.filters) == 1
+    assert isinstance(handler.filters[0], LoggingContextInjectingFilter)
     assert handler.level == logging.INFO
     assert isinstance(handler.formatter, NiceFormatter)
 
@@ -98,7 +108,8 @@ def test_installed_logger_logging(logging_system) -> None:
     logger = logging_system.getLogger(__file__)
     logger.debug("This is a debug message")
     logger.info("This is an info message")
-    logger.warning("This is a warning message")
+    with logging_context(foo="bar-warning"):
+        logger.warning("This is a warning message")
     logger.error("This is an error message", exc_info=KeyError(123))
     logger.critical("This is a critical message")
 
@@ -107,6 +118,7 @@ def test_installed_logger_logging(logging_system) -> None:
     assert "This is a debug message" in output
     assert "This is an info message" in output
     assert "This is a warning message" in output
+    assert "(foo='bar-warning')" in output
     assert "This is an error message\nKeyError: 123" in output
     assert "This is a critical message" in output
 
@@ -348,3 +360,22 @@ def test_formatter_format_exception(use_colors: bool) -> None:
         "    raise RuntimeError(exception_message)",
     ]
     assert exception == "RuntimeError: Test exception."
+
+
+@pytest.mark.parametrize("use_colors", (True, False), ids=("with_colors", "without_colors"))
+def test_formatter_with_logging_context(use_colors: bool) -> None:
+    """Ensure the formatter correctly formats message when logging_context is used"""
+    formatter = NiceFormatter()
+    formatter.colors = use_colors
+
+    with logging_context(foo="bar", baz="zak"):
+        record = create_record(logging.DEBUG, " This is a test message for logging context")
+        assert hasattr(record, "context")
+        assert record.context == "foo='bar', baz='zak'"
+        formatted = formatter.format(record)
+        assert record.context in formatted, "record context not in formatted"
+        stripped = _strip_sgr_sequences(formatted) if use_colors else formatted
+        assert record.context in stripped, "record context not in stripped"
+
+        # H:M:S LEVEL [logger_name] message (logging_context)
+        assert stripped.endswith(" This is a test message for logging context (foo='bar', baz='zak')")
