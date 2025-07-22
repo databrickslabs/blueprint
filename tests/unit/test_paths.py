@@ -1089,7 +1089,7 @@ def test_read_xml_file_with_encoding_declaration(tmp_path: Path, encoding: str) 
         (codecs.BOM_UTF32_BE, "utf-32-be"),
     ),
 )
-def test_read_xml_file_with_com(tmp_path: Path, bom: bytes, encoding: str) -> None:
+def test_read_xml_file_with_bom(tmp_path: Path, bom: bytes, encoding: str) -> None:
     """Verify that we can read text files that include a BOM prefix."""
     path = tmp_path / "file.xml"
     example = "<?xml version='1.1'?>\n<root>[Something fanc\u00fd]</root>"
