@@ -1060,7 +1060,11 @@ _XML_ENCODING_SNIFF_LIMIT = 1024
 """The maximum number of bytes to read from the start of a file when sniffing for a potential XML encoding."""
 _XML_DECLARATION_REGEX = re.compile(
     # Not perfect, but matches valid XML declarations. (Plus some invalid ones.)
-    r'^<\?xml\s+version\s*=\s*["\'][0-9.]*["\'](:?\s+encoding\s*=\s*["\'](?P<encoding>[^"\']+)["\'])?\s*\?>',
+    r"^<\?xml"
+    r'\s+version\s*=\s*["\'][0-9.]*["\']'
+    r'(:?\s+encoding\s*=\s*["\'](?P<encoding>[^"\']+)["\'])?'
+    r'(:?\s+standalone\s*=\s*["\'](:?yes|no)["\'])?'
+    r"\s*\?>",
 )
 
 

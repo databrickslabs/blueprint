@@ -1089,13 +1089,34 @@ def test_read_xml_file_with_encoding_declaration(tmp_path: Path, encoding: str) 
         (codecs.BOM_UTF32_BE, "utf-32-be"),
     ),
 )
-def test_read_xml_file_with_com(tmp_path: Path, bom: bytes, encoding: str) -> None:
+def test_read_xml_file_with_bom(tmp_path: Path, bom: bytes, encoding: str) -> None:
     """Verify that we can read text files that include a BOM prefix."""
     path = tmp_path / "file.xml"
     example = "<?xml version='1.1'?>\n<root>[Something fanc\u00fd]</root>"
     path.write_bytes(bom + example.encode(encoding))
 
     text = read_text(path)
+
+    assert text == example
+
+
+@pytest.mark.parametrize("is_standalone", [True, False])
+def test_read_xml_file_standalone(tmp_path: Path, is_standalone: bool) -> None:
+    """Verify that we can read the encoding directive from a file with an XML standalone declaration."""
+    path = tmp_path / "file.xml"
+    standalone_value = "yes" if is_standalone else "no"
+    # Use an encoding that can't be detected any other way than via the XML declaration.
+    example = (
+        f"<?xml version='1.0'\n"
+        f"      encoding='Windows-1252'\n"
+        f"      standalone='{standalone_value}'?>\n"
+        f"<root>\n"
+        f"  <!-- Sensitive chàráçters -->\n"
+        f"</root>\n"
+    )
+    path.write_text(example, encoding="Windows-1252")
+
+    text = read_text(path, detect_xml=True)
 
     assert text == example
 
