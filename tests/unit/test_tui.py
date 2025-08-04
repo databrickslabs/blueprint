@@ -49,3 +49,28 @@ def test_extend_prompts():
     # Test that new question is still not mocked in the original prompts
     with pytest.raises(ValueError, match="not mocked: new_question"):
         prompts.question("new_question")
+
+
+def test_choice_uses_pagination(mocker):
+    """Test that choice() uses pagination when list > 10 items"""
+    prompts = Prompts()
+    # Test that pagination is show and input n will change to page 2 and select option 11
+    mocker.patch("builtins.input", side_effect=["n", "12"])
+
+    choices = [
+        "a",
+        "b",
+        "c",
+        "d",
+        "e",
+        "f",
+        "g",
+        "h",
+        "i",
+        "j",
+        "k",
+        "l",
+        "m",
+    ]
+    res = prompts.choice("foo", choices)
+    assert "m" == res
