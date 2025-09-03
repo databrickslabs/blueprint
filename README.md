@@ -386,6 +386,23 @@ print(f'Answer is: {answer}')
 
 [[back to top](#databricks-labs-blueprint)]
 
+### Secret Prompt
+
+Use to Password prompt to redact what user is typing from the command line
+
+```python
+from databricks.labs.blueprint.tui import Prompts
+
+prompts = Prompts()
+secret = prompts.password('Enter a password')
+print(f'Secret without redaction: {secret}')
+```
+
+![secret_prompt](docs/prompt-password.gif)
+
+[[back to top](#databricks-labs-blueprint)]
+
+
 ### Unit Testing Prompts
 
 Use `MockPrompts` with regular expressions as keys and values as answers. The longest key takes precedence.
