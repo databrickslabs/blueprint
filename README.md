@@ -386,9 +386,11 @@ print(f'Answer is: {answer}')
 
 [[back to top](#databricks-labs-blueprint)]
 
-### Secret Prompt
+### Hidden (Password) Prompt
 
-Use to Password prompt to redact what user is typing from the command line
+Use to prompt for text without showing the response in the terminal.
+
+Example:
 
 ```python
 from databricks.labs.blueprint.tui import Prompts

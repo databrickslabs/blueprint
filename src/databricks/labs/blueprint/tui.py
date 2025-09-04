@@ -138,7 +138,7 @@ class Prompts:
         attempt = 0
         while attempt < max_attempts:
             attempt += 1
-            passwd = getpass.getpass(f"\033[1m{text}\033[0m: ")
+            passwd = getpass.getpass(f"\033[1m{text}\033[0m:")
             if passwd:
                 return passwd
         raise ValueError(f"cannot get password within {max_attempts} attempts")
