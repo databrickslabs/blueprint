@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import getpass
 import logging
 import re
 from collections.abc import Callable
@@ -128,6 +129,20 @@ class Prompts:
             return res
         raise ValueError(f"cannot get answer within {max_attempts} attempt")
 
+    def password(self, text: str, *, max_attempts: int = 10) -> str:
+        """
+        Secure input for passwords (hidden input).
+        :param text: str: Prompt message
+        :param max_attempts: int: Max attempts before failing
+        """
+        attempt = 0
+        while attempt < max_attempts:
+            attempt += 1
+            passwd = getpass.getpass(f"\033[1m{text}\033[0m:")
+            if passwd:
+                return passwd
+        raise ValueError(f"cannot get password within {max_attempts} attempts")
+
 
 class MockPrompts(Prompts):
     """Testing utility for prompts"""
@@ -153,3 +168,7 @@ class MockPrompts(Prompts):
             **patterns_to_answers,
         }
         return MockPrompts(new_patterns_to_answers)
+
+    def password(self, text: str, **_) -> str:
+        logger.info(f"Mock password prompt: {text}")
+        return self.question(text, **_)

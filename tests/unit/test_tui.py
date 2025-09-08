@@ -49,3 +49,17 @@ def test_extend_prompts():
     # Test that new question is still not mocked in the original prompts
     with pytest.raises(ValueError, match="not mocked: new_question"):
         prompts.question("new_question")
+
+
+def test_password_happy(mocker):
+    prompts = Prompts()
+    mocker.patch("getpass.getpass", return_value="secret")
+    res = prompts.password("Enter password")
+    assert res == "secret"
+
+
+def test_password_max_attempts(mocker):
+    prompts = Prompts()
+    mocker.patch("getpass.getpass", return_value="")
+    with pytest.raises(ValueError, match="cannot get password within 10 attempts"):
+        prompts.password("Enter password")
