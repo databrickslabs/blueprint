@@ -114,7 +114,7 @@ def test_databricks_host_workaround_error_handling(erroneous: str) -> None:
         App.fix_databricks_host(erroneous)
 
 
-class TestApp(App):
+class _TestApp(App):
     def __init__(self) -> None:
         super().__init__(inspect.getfile(App))
 
@@ -131,7 +131,7 @@ class TestApp(App):
 def test_databricks_workspace_host_patch(monkeypatch, caplog) -> None:
     """Test that the patching of the DATABRICKS_HOST environment variable works for the CLI when a workspace client is used."""
 
-    test_app = TestApp()
+    test_app = _TestApp()
     captured_databricks_host: list[str | None] = []
 
     @test_app.command
@@ -158,7 +158,7 @@ def test_databricks_workspace_host_patch(monkeypatch, caplog) -> None:
 def test_databricks_account_host_patch(monkeypatch, caplog) -> None:
     """Test that the patching of the DATABRICKS_HOST environment variable works for the CLI when an account client is used."""
 
-    test_app = TestApp()
+    test_app = _TestApp()
     captured_databricks_host: list[str | None] = []
 
     @test_app.command(is_account=True)
