@@ -17,6 +17,9 @@ T = TypeVar("T")
 class Prompts:
     """`input()` builtin on steroids"""
 
+    _REGEX_NUMBER = re.compile(r"^\d+$")
+    _REGEX_YES_NO = re.compile(r"[Yy][Ee][Ss]|[Nn][Oo]")
+
     def multiple_choice_from_dict(self, item_prompt: str, choices: Mapping[str, T]) -> Sequence[T]:
         """Use to select multiple items from a mapping.
 
@@ -83,7 +86,7 @@ class Prompts:
         :param max_attempts: int:  (Default value = 10)
 
         """
-        answer = self.question(text, valid_regex=r"[Yy][Ee][Ss]|[Nn][Oo]", default="no", max_attempts=max_attempts)
+        answer = self.question(text, valid_regex=self._REGEX_YES_NO, default="no", max_attempts=max_attempts)
         return answer.lower() == "yes"
 
     def question(
@@ -93,7 +96,7 @@ class Prompts:
         default: str | None = None,
         max_attempts: int = 10,
         valid_number: bool = False,
-        valid_regex: str | None = None,
+        valid_regex: str | re.Pattern | None = None,
         validate: Callable[[str], bool] | None = None,
     ) -> str:
         """Use as testable alternative to `input()` builtin
@@ -109,11 +112,13 @@ class Prompts:
         """
         default_help = "" if default is None else f"\033[36m (default: {default})\033[0m"
         prompt = f"\033[1m{text}{default_help}: \033[0m"
-        match_regex = None
+        match_regex: re.Pattern | None
         if valid_number:
-            valid_regex = r"^\d+$"
-        if valid_regex:
+            match_regex = self._REGEX_NUMBER
+        elif isinstance(valid_regex, str):
             match_regex = re.compile(valid_regex)
+        else:
+            match_regex = valid_regex
         attempt = 0
         while attempt < max_attempts:
             attempt += 1
@@ -123,7 +128,7 @@ class Prompts:
                     continue
             if res and match_regex:
                 if not match_regex.match(res):
-                    print(f"\033[31m[ERROR] Not a '{valid_regex}' match: {res}\033[0m\n")
+                    print(f"\033[31m[ERROR] Not a '{match_regex.pattern}' match: {res}\033[0m\n")
                     continue
                 return res
             if not res and default:
