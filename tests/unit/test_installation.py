@@ -762,8 +762,8 @@ def test_forward_referencing_class() -> None:
     loaded = installation.load(ForwardReferencingClass, filename="saved.yml")
     assert instance == loaded
 
-def test_bool_attribute() -> None:
 
+def test_bool_attribute() -> None:
     @dataclass
     class MissingAttributeClass:
         __file__ = "config.yml"
