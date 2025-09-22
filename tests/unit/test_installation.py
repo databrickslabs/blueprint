@@ -762,13 +762,13 @@ def test_forward_referencing_class() -> None:
     loaded = installation.load(ForwardReferencingClass, filename="saved.yml")
     assert instance == loaded
 
-def test_missing_attribute() -> None:
+def test_bool_attribute() -> None:
 
     @dataclass
     class MissingAttributeClass:
         __file__ = "config.yml"
         __version__ = 3
-        skip_validation: bool = False
+        skip_validation: bool = True
         sdk_config: JsonValue = None
 
     instance = MissingAttributeClass(False, {"warehouse_id": "8xc123456"})

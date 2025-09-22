@@ -632,7 +632,8 @@ class Installation:
             value, ok = self._marshal(hint, [*path, field], raw)
             if not ok:
                 raise SerdeError(self._explain_why(hint, [*path, field], raw))
-            if not value:
+            # Earlier for boolean fields when the value was False, we would skip it. Which was incorrect
+            if value is None:
                 continue
             as_dict[field] = value
         return as_dict, True
