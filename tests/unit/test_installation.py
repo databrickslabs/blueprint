@@ -771,9 +771,15 @@ def test_bool_attribute() -> None:
         skip_validation: bool = True
         sdk_config: JsonValue = None
 
-    instance = MissingAttributeClass(False, {"warehouse_id": "8xc123456"})
+    instance_false = MissingAttributeClass(False, {"warehouse_id": "8xc123456"})
     installation = MockInstallation()
-    installation.save(instance)
+    installation.save(instance_false)
 
-    loaded = installation.load(MissingAttributeClass)
-    assert instance == loaded
+    loaded_false = installation.load(MissingAttributeClass)
+    assert instance_false == loaded_false
+
+    instance_true = MissingAttributeClass(True, {"warehouse_id": "9xc1234567"})
+    installation.save(instance_true)
+
+    loaded_true = installation.load(MissingAttributeClass)
+    assert instance_true == loaded_true
