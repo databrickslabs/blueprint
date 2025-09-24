@@ -765,21 +765,21 @@ def test_forward_referencing_class() -> None:
 
 def test_bool_attribute() -> None:
     @dataclass
-    class MissingAttributeClass:
+    class BooleanAttributeClass:
         __file__ = "config.yml"
         __version__ = 3
         skip_validation: bool = True
         sdk_config: JsonValue = None
 
-    instance_false = MissingAttributeClass(False, {"warehouse_id": "8xc123456"})
+    instance_false = BooleanAttributeClass(False, {"warehouse_id": "8xc123456"})
     installation = MockInstallation()
     installation.save(instance_false)
 
-    loaded_false = installation.load(MissingAttributeClass)
+    loaded_false = installation.load(BooleanAttributeClass)
     assert instance_false == loaded_false
 
-    instance_true = MissingAttributeClass(True, {"warehouse_id": "9xc1234567"})
+    instance_true = BooleanAttributeClass(True, {"warehouse_id": "9xc1234567"})
     installation.save(instance_true)
 
-    loaded_true = installation.load(MissingAttributeClass)
+    loaded_true = installation.load(BooleanAttributeClass)
     assert instance_true == loaded_true
