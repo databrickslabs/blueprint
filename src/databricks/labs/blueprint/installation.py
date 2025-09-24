@@ -633,9 +633,8 @@ class Installation:
             if not ok:
                 raise SerdeError(self._explain_why(hint, [*path, field], raw))
             # Earlier for boolean fields when the value was False, we would skip it. Which was incorrect
-            if not value:
-                if hint is not bool:
-                    continue
+            if not value and hint is not bool:
+                continue
             as_dict[field] = value
         return as_dict, True
 
