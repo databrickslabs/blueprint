@@ -937,7 +937,7 @@ class Installation:
             if not isinstance(as_dict, dict):
                 raise SerdeError(f"Expecting a list of dictionaries. Got {as_dict}")
             for k, v in as_dict.items():
-                if not v:
+                if not v and v is not False:
                     continue
                 non_empty_keys.add(k)
         buffer = io.StringIO()
