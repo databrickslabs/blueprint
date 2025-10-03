@@ -1128,6 +1128,7 @@ def test_read_xml_file_default_utf8(tmp_path: Path, monkeypatch) -> None:
     path.write_text(example, encoding="utf-8")
 
     # Verify the monkey-patching means we're not defaulting to UTF-8.
+    # with chardet this would likely work, unless the confidence score is less than 0.6 for this example it is 0.506
     monkeypatch.setattr(locale, "getpreferredencoding", lambda: "Windows-1252")
     assert locale.getpreferredencoding() != "UTF-8"
     assert read_text(path, detect_xml=False) != example
