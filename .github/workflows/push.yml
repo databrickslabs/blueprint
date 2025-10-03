@@ -15,7 +15,7 @@ on:
       - main
 
 env:
-  HATCH_VERSION: 1.9.4
+  HATCH_VERSION: 1.14.2
 
 jobs:
   ci:
@@ -60,7 +60,7 @@ jobs:
           python-version: '3.10'
 
       - name: Install hatch
-        run: pip install hatch==$HATCH_VERSION 'click<8.3.0' # https://github.com/pallets/click/issues/3065
+        run: pip install hatch==$HATCH_VERSION
 
       - name: Format all files
         run: make dev fmt
