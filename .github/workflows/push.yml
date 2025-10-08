@@ -36,7 +36,7 @@ jobs:
           python-version: ${{ matrix.pyVersion }}
 
       - name: Install hatch
-        run: pip install hatch==$HATCH_VERSION 'click<8.3.0' # https://github.com/pallets/click/issues/3065
+        run: pip install hatch==$HATCH_VERSION
 
       - name: Run unit tests
         run: |
