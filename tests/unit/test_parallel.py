@@ -1,11 +1,16 @@
 import logging
 import os
+import sys
 from functools import partial
 from unittest.mock import MagicMock, patch
 
 from databricks.sdk.core import DatabricksError
 
+from databricks.labs.blueprint.logger import logging_context_params
 from databricks.labs.blueprint.parallel import Threads
+
+# only python 3.11 supports notes in exceptions, hence test only on these version...
+SUPPORTS_NOTES = (sys.version_info[0], sys.version_info[1]) >= (3, 11)
 
 
 def _predictable_messages(caplog):
@@ -151,6 +156,47 @@ def test_odd_partial_failed(caplog):
         "testing(n='aaa') task failed: strings are not supported!",
         "testing(n=1) task failed: failed",
     ] == _predictable_messages(caplog)
+
+    # not context, no notes
+    for e in errors:
+        assert getattr(e, "__notes__", None) is None
+
+
+def test_odd_partial_failed_with_context(caplog):
+    caplog.set_level(logging.INFO)
+
+    # it will push context information into notes into Execeptions
+    @logging_context_params
+    def fails_on_odd(n=1, dummy=None):
+        if isinstance(n, str):
+            raise RuntimeError("strings are not supported!")
+
+        if n % 2:
+            msg = "failed"
+            raise DatabricksError(msg)
+
+    tasks = [
+        partial(fails_on_odd, n=1),
+        partial(fails_on_odd, 1, dummy="6"),
+        partial(fails_on_odd),
+        partial(fails_on_odd, n="aaa"),
+    ]
+
+    results, errors = Threads.gather("testing", tasks)
+
+    assert [] == results
+    assert 4 == len(errors)
+    assert [
+        "All 'testing' tasks failed!!!",
+        "testing task failed: failed",
+        "testing(1, dummy='6') task failed: failed",
+        "testing(n='aaa') task failed: strings are not supported!",
+        "testing(n=1) task failed: failed",
+    ] == _predictable_messages(caplog)
+
+    if SUPPORTS_NOTES:
+        for e in errors:
+            assert e.__notes__ is not None
 
 
 def test_cpu_count() -> None:
