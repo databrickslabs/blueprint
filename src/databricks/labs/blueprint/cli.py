@@ -78,8 +78,7 @@ class App:
         register(fn)
         return fn
 
-    @staticmethod
-    def _log_level(raw: str) -> int:
+    def _log_level(self, raw: str) -> int:
         """Convert the log-level provided by the Databricks CLI into a logging level supported by Python."""
         # Log levels at the time of writing:
         # https://github.com/databricks/cli/blob/071b584105d42034a05fd8c3f8a81fb2d9760f54/libs/log/levels.go#L6
@@ -93,6 +92,7 @@ class App:
             case other:
                 log_level = logging.getLevelName(other)
                 if not isinstance(log_level, int):
+                    self._logger.warning(f"Assuming INFO-level logging due to unrecognized log-level: {raw}")
                     log_level = logging.INFO
         return log_level
 
