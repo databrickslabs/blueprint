@@ -236,7 +236,7 @@ class _DatabricksPath(Path, abc.ABC):  # pylint: disable=too-many-public-methods
     def unlink(self, missing_ok: bool = False) -> None: ...
 
     @abstractmethod
-    def open(
+    def open(  # pylint: disable=too-many-positional-arguments
         self,
         mode: str = "r",
         buffering: int = -1,
@@ -681,7 +681,7 @@ class DBFSPath(_DatabricksPath):
             raise FileNotFoundError(f"{self.as_posix()} does not exist")
         self._ws.dbfs.delete(self.as_posix())
 
-    def open(
+    def open(  # pylint: disable=too-many-positional-arguments
         self,
         mode: str = "r",
         buffering: int = -1,
@@ -831,7 +831,7 @@ class WorkspacePath(_DatabricksPath):
             if not missing_ok:
                 raise FileNotFoundError(f"{self.as_posix()} does not exist") from e
 
-    def open(
+    def open(  # pylint: disable=too-many-positional-arguments
         self,
         mode: str = "r",
         buffering: int = -1,
