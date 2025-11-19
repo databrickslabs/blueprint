@@ -1082,47 +1082,56 @@ _XML_DECLARATION_REGEX = re.compile(
 )
 
 
+def _read_xml_encoding(binary_io: BinaryIO) -> tuple[bytes, str] | None:
+    """Read the XML encoding from the start of a binary file, if present."""
+    maybe_xml: bytes = binary_io.read(4)
+    # Useful to know here, an XML declaration must start with '<?xml', and:
+    #  - '<' is 0x3C.
+    #  - '?' is 0x3F.
+    # References:
+    #  - https://www.w3.org/TR/xml/#sec-guessing-no-ext-info
+    #  - https://www.w3.org/TR/2006/REC-xml11-20060816/#sec-guessing-no-ext-info
+    match maybe_xml:
+        case b"\0\0\0\x3c":
+            # Potentially 32-bit BE (1234) encoding.
+            sniff_with = "utf-32-be"
+        case b"\x3c\0\0\0":
+            # Potentially 32-bit LE (4321) encoding.
+            sniff_with = "utf-32-le"
+        case b"\0\0\x3c\0" | b"\0\x3c\0\0":
+            # Potentially non-standard 32-bit encodings.
+            logger.warning("XML declaration with non-standard 32-bit encoding detected; not supported.")
+            return None
+        case b"\x00\x3c\x00\x3f":
+            # Potentially 16-bit BE (12) encoding.
+            sniff_with = "utf-16-be"
+        case b"\x3c\x00\x3f\x00":
+            # Potentially 16-bit LE (21) encoding.
+            sniff_with = "utf-16-le"
+        case b"\x3c\x3f\x78\x6d":
+            # Potentially 8-bit, UTF-8 or other ASCII-compatible encoding.
+            sniff_with = "us-ascii"
+        case b"\x4c\x6f\xa7\x94":
+            # Something EBCDIC-ish, oh-my.
+            sniff_with = "cp037"
+        case _:
+            logger.debug(f"No XML declaration detected in the first 4 bytes: {maybe_xml!r}")
+            return None
+    logger.debug(f"XML declaration detected, sniffing further with encoding: {sniff_with}")
+    maybe_xml += binary_io.read(_XML_ENCODING_SNIFF_LIMIT - 4)
+    return maybe_xml, sniff_with
+
+
 def _detect_encoding_xml(binary_io: BinaryIO, *, preserve_position: bool) -> str | None:
     position = binary_io.tell() if preserve_position else None
     try:
-        maybe_xml: bytes = binary_io.read(4)
-        # Useful to know here, an XML declaration must start with '<?xml', and:
-        #  - '<' is 0x3C.
-        #  - '?' is 0x3F.
-        # References:
-        #  - https://www.w3.org/TR/xml/#sec-guessing-no-ext-info
-        #  - https://www.w3.org/TR/2006/REC-xml11-20060816/#sec-guessing-no-ext-info
-        match maybe_xml:
-            case b"\0\0\0\x3c":
-                # Potentially 32-bit BE (1234) encoding.
-                sniff_with = "utf-32-be"
-            case b"\x3c\0\0\0":
-                # Potentially 32-bit LE (4321) encoding.
-                sniff_with = "utf-32-le"
-            case b"\0\0\x3c\0" | b"\0\x3c\0\0":
-                # Potentially non-standard 32-bit encodings.
-                logger.warning("XML declaration with non-standard 32-bit encoding detected; not supported.")
-                return None
-            case b"\x00\x3c\x00\x3f":
-                # Potentially 16-bit BE (12) encoding.
-                sniff_with = "utf-16-be"
-            case b"\x3c\x00\x3f\x00":
-                # Potentially 16-bit LE (21) encoding.
-                sniff_with = "utf-16-le"
-            case b"\x3c\x3f\x78\x6d":
-                # Potentially 8-bit, UTF-8 or other ASCII-compatible encoding.
-                sniff_with = "us-ascii"
-            case b"\x4c\x6f\xa7\x94":
-                # Something EBCDIC-ish, oh-my.
-                sniff_with = "cp037"
-            case _:
-                logger.debug(f"No XML declaration detected in the first 4 bytes: {maybe_xml!r}")
-                return None
-        logger.debug(f"XML declaration detected, sniffing further with encoding: {sniff_with}")
-        maybe_xml += binary_io.read(_XML_ENCODING_SNIFF_LIMIT - 4)
+        read_sample = _read_xml_encoding(binary_io)
     finally:
         if position is not None:
             binary_io.seek(position)
+    if read_sample is None:
+        return None
+    maybe_xml, sniff_with = read_sample
 
     # Try to decode the XML declaration with the sniffed encoding; XML is designed so that the declaration can be
     # read with the common subset of related encodings, up to where the actual encoding is specified.
@@ -1132,10 +1141,9 @@ def _detect_encoding_xml(binary_io: BinaryIO, *, preserve_position: bool) -> str
         if encoding:
             logger.debug(f"XML declaration encoding detected: {encoding}")
             # TODO: XML encodings come from the IATA list, maybe they need to mapped/checked against Python's names.
-        else:
-            logger.debug("XML declaration without encoding detected, must be utf-8")
-            encoding = "utf-8"
-        return encoding
+            return encoding
+        logger.debug("XML declaration without encoding detected, must be utf-8")
+        return "utf-8"
     return None
 
 
