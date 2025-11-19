@@ -246,10 +246,10 @@ class _DatabricksPath(Path, abc.ABC):  # pylint: disable=too-many-public-methods
     ): ...
 
     @abstractmethod
-    def is_dir(self) -> bool: ...
+    def is_dir(self, *, follow_symlinks: bool = True) -> bool: ...
 
     @abstractmethod
-    def is_file(self) -> bool: ...
+    def is_file(self, *, follow_symlinks: bool = True) -> bool: ...
 
     @abstractmethod
     def rename(self: P, target: str | bytes | os.PathLike) -> P: ...
@@ -587,7 +587,10 @@ class _DatabricksPath(Path, abc.ABC):  # pylint: disable=too-many-public-methods
         pattern: str | bytes | os.PathLike,
         *,
         case_sensitive: bool | None = None,
+        recurse_symlinks: bool = False,
     ) -> Generator[P, None, None]:
+        if recurse_symlinks:
+            raise NotImplementedError("recurse_symlinks is not supported for Databricks paths")
         pattern_parts = self._prepare_pattern(pattern)
         if case_sensitive is None:
             case_sensitive = True
@@ -599,7 +602,10 @@ class _DatabricksPath(Path, abc.ABC):  # pylint: disable=too-many-public-methods
         pattern: str | bytes | os.PathLike,
         *,
         case_sensitive: bool | None = None,
+        recurse_symlinks: bool = False,
     ) -> Generator[P, None, None]:
+        if recurse_symlinks:
+            raise NotImplementedError("recurse_symlinks is not supported for Databricks paths")
         pattern_parts = ("**", *self._prepare_pattern(pattern))
         if case_sensitive is None:
             case_sensitive = True
@@ -731,15 +737,19 @@ class DBFSPath(_DatabricksPath):
         )  # 8
         return os.stat_result(seq)
 
-    def is_dir(self) -> bool:
+    def is_dir(self, *, follow_symlinks: bool = True) -> bool:
         """Return True if the path points to a DBFS directory."""
+        if not follow_symlinks:
+            raise NotImplementedError("follow_symlinks is not supported for DBFS paths")
         try:
             return bool(self._file_info.is_dir)
         except DatabricksError:
             return False
 
-    def is_file(self) -> bool:
+    def is_file(self, *, follow_symlinks: bool = True) -> bool:
         """Return True if the path points to a file in Databricks Workspace."""
+        if not follow_symlinks:
+            raise NotImplementedError("follow_symlinks is not supported for DBFS paths")
         return not self.is_dir()
 
     def iterdir(self) -> Generator[DBFSPath, None, None]:
@@ -842,8 +852,8 @@ class WorkspacePath(_DatabricksPath):
             return _TextUploadIO(self._ws, self.as_posix())
         raise ValueError(f"invalid mode: {mode}")
 
-    def read_text(self, encoding=None, errors=None):
-        with self.open(mode="r", encoding=encoding, errors=errors) as f:
+    def read_text(self, encoding=None, errors=None, newline=None) -> str:
+        with self.open(mode="r", encoding=encoding, errors=errors, newline=newline) as f:
             return f.read()
 
     @property
@@ -881,15 +891,19 @@ class WorkspacePath(_DatabricksPath):
         seq[stat.ST_CTIME] = float(self._object_info.created_at) / 1000.0 if self._object_info.created_at else -1.0  # 9
         return os.stat_result(seq)
 
-    def is_dir(self) -> bool:
+    def is_dir(self, *, follow_symlinks: bool = True) -> bool:
         """Return True if the path points to a directory in Databricks Workspace."""
+        if not follow_symlinks:
+            raise NotImplementedError("follow_symlinks is not supported for Workspace paths")
         try:
             return self._object_info.object_type == ObjectType.DIRECTORY
         except DatabricksError:
             return False
 
-    def is_file(self) -> bool:
+    def is_file(self, *, follow_symlinks: bool = True) -> bool:
         """Return True if the path points to a file in Databricks Workspace."""
+        if not follow_symlinks:
+            raise NotImplementedError("follow_symlinks is not supported for Workspace paths")
         try:
             return self._object_info.object_type == ObjectType.FILE
         except DatabricksError:
