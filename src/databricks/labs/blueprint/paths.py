@@ -258,7 +258,7 @@ class _DatabricksPath(Path, abc.ABC):  # pylint: disable=too-many-public-methods
     def replace(self: P, target: str | bytes | os.PathLike) -> P: ...
 
     @abstractmethod
-    def iterdir(self: P) -> Generator[P, None, None]: ...
+    def iterdir(self: P) -> Generator[P]: ...
 
     def __reduce__(self) -> NoReturn:
         # Cannot support pickling because we can't pickle the workspace client.
@@ -588,7 +588,7 @@ class _DatabricksPath(Path, abc.ABC):  # pylint: disable=too-many-public-methods
         *,
         case_sensitive: bool | None = None,
         recurse_symlinks: bool = False,
-    ) -> Generator[P, None, None]:
+    ) -> Generator[P]:
         if recurse_symlinks:
             raise NotImplementedError("recurse_symlinks is not supported for Databricks paths")
         pattern_parts = self._prepare_pattern(pattern)
@@ -603,7 +603,7 @@ class _DatabricksPath(Path, abc.ABC):  # pylint: disable=too-many-public-methods
         *,
         case_sensitive: bool | None = None,
         recurse_symlinks: bool = False,
-    ) -> Generator[P, None, None]:
+    ) -> Generator[P]:
         if recurse_symlinks:
             raise NotImplementedError("recurse_symlinks is not supported for Databricks paths")
         pattern_parts = ("**", *self._prepare_pattern(pattern))
@@ -752,7 +752,7 @@ class DBFSPath(_DatabricksPath):
             raise NotImplementedError("follow_symlinks is not supported for DBFS paths")
         return not self.is_dir()
 
-    def iterdir(self) -> Generator[DBFSPath, None, None]:
+    def iterdir(self) -> Generator[DBFSPath]:
         for child in self._ws.dbfs.list(self.as_posix()):
             yield self._from_file_info(self._ws, child)
 
@@ -916,7 +916,7 @@ class WorkspacePath(_DatabricksPath):
         except DatabricksError:
             return False
 
-    def iterdir(self) -> Generator[WorkspacePath, None, None]:
+    def iterdir(self) -> Generator[WorkspacePath]:
         for child in self._ws.workspace.list(self.as_posix()):
             yield self._from_object_info(self._ws, child)
 
