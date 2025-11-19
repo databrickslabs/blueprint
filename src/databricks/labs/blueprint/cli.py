@@ -51,6 +51,10 @@ class Command:
         return annotation.__name__
 
 
+# The types of arguments that can be passed to commands.
+_CommandArg = int | str | bool | float | WorkspaceClient | AccountClient | Prompts
+
+
 class App:
     def __init__(self, __file: str):
         self._mapping: dict[str, Command] = {}
@@ -94,27 +98,9 @@ class App:
             log_level = "info"
         databricks_logger = logging.getLogger("databricks")
         databricks_logger.setLevel(log_level.upper())
-        kwargs = {k.replace("-", "_"): v for k, v in flags.items() if v != ""}
         cmd = self._mapping[command]
-        # modify kwargs to match the type of the argument
-        for kwarg in list(kwargs.keys()):
-            match cmd.get_argument_type(kwarg):
-                case "int":
-                    kwargs[kwarg] = int(kwargs[kwarg])
-                case "bool":
-                    kwargs[kwarg] = kwargs[kwarg].lower() == "true"
-                case "float":
-                    kwargs[kwarg] = float(kwargs[kwarg])
+        kwargs = self._build_args(cmd, flags)
         try:
-            if cmd.needs_workspace_client():
-                self._patch_databricks_host()
-                kwargs["w"] = self._workspace_client()
-            elif cmd.is_account:
-                self._patch_databricks_host()
-                kwargs["a"] = self._account_client()
-            prompts_argument = cmd.prompts_argument_name()
-            if prompts_argument:
-                kwargs[prompts_argument] = Prompts()
             cmd.fn(**kwargs)
         except Exception as err:  # pylint: disable=broad-exception-caught
             logger = self._logger.getChild(command)
@@ -122,6 +108,31 @@ class App:
                 logger.error(f"Failed to call {command}", exc_info=err)
             else:
                 logger.error(f"{err.__class__.__name__}: {err}")
+
+    def _build_args(self, cmd: Command, flags: dict[str, str]) -> dict[str, _CommandArg]:
+        kwargs: dict[str, _CommandArg] = {k.replace("-", "_"): v for k, v in flags.items() if v != ""}
+        # modify kwargs to match the type of the argument
+        for kwarg in list(kwargs.keys()):
+            value = kwargs[kwarg]
+            if not isinstance(value, str):
+                continue
+            match cmd.get_argument_type(kwarg):
+                case "int":
+                    kwargs[kwarg] = int(value)
+                case "bool":
+                    kwargs[kwarg] = value.lower() == "true"
+                case "float":
+                    kwargs[kwarg] = float(value)
+        if cmd.needs_workspace_client():
+            self._patch_databricks_host()
+            kwargs["w"] = self._workspace_client()
+        elif cmd.is_account:
+            self._patch_databricks_host()
+            kwargs["a"] = self._account_client()
+        prompts_argument = cmd.prompts_argument_name()
+        if prompts_argument:
+            kwargs[prompts_argument] = Prompts()
+        return kwargs
 
     @classmethod
     def fix_databricks_host(cls, host: str) -> str:
