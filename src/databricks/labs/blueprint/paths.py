@@ -15,7 +15,7 @@ from abc import abstractmethod
 from collections.abc import Generator, Iterable, Sequence
 from io import BytesIO, StringIO
 from pathlib import Path, PurePath
-from typing import BinaryIO, Literal, NoReturn, TextIO, TypeVar
+from typing import BinaryIO, ClassVar, Literal, NoReturn, TextIO, TypeVar
 from urllib.parse import quote_from_bytes as urlquote_from_bytes
 
 from databricks.sdk import WorkspaceClient
@@ -127,7 +127,7 @@ class _DatabricksPath(Path, abc.ABC):  # pylint: disable=too-many-public-methods
     _str: str
     _hash: int
 
-    parser = _posixpath
+    parser: ClassVar = _posixpath
 
     # Compatibility attribute, for when superclass implementations get invoked on python <= 3.11.
     _flavour = object()
