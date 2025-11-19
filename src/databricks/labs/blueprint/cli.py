@@ -171,13 +171,13 @@ class App:
             self._logger.warning(f"Working around DATABRICKS_HOST normalization issue: {host} -> {fixed_host}")
             os.environ["DATABRICKS_HOST"] = fixed_host
 
-    def _account_client(self):
+    def _account_client(self) -> AccountClient:
         return AccountClient(
             product=self._product_info.product_name(),
             product_version=self._product_info.version(),
         )
 
-    def _workspace_client(self):
+    def _workspace_client(self) -> WorkspaceClient:
         return WorkspaceClient(
             product=self._product_info.product_name(),
             product_version=self._product_info.version(),
