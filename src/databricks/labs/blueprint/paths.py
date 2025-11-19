@@ -747,7 +747,7 @@ class DBFSPath(_DatabricksPath):
             return False
 
     def is_file(self, *, follow_symlinks: bool = True) -> bool:
-        """Return True if the path points to a file in Databricks Workspace."""
+        """Return True if the path points to a DBFS file."""
         if not follow_symlinks:
             raise NotImplementedError("follow_symlinks is not supported for DBFS paths")
         return not self.is_dir()
