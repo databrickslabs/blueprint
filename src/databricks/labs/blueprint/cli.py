@@ -78,6 +78,24 @@ class App:
         register(fn)
         return fn
 
+    def _log_level(self, raw: str) -> int:
+        """Convert the log-level provided by the Databricks CLI into a logging level supported by Python."""
+        # Log levels at the time of writing:
+        # https://github.com/databricks/cli/blob/071b584105d42034a05fd8c3f8a81fb2d9760f54/libs/log/levels.go#L6
+        log_level: int
+        match raw.upper():
+            case "DISABLED":
+                # Default from the Databricks CLI when nothing has been explicitly set by the user.
+                log_level = logging.INFO
+            case "TRACE":
+                log_level = logging.DEBUG
+            case other:
+                log_level = logging.getLevelName(other)
+                if not isinstance(log_level, int):
+                    self._logger.warning(f"Assuming INFO-level logging due to unrecognized log-level: {raw}")
+                    log_level = logging.INFO
+        return log_level
+
     def _route(self, raw):
         """Route the command. This is the entry point for the CLI."""
         payload = json.loads(raw)
@@ -89,11 +107,9 @@ class App:
         # see https://github.com/databricks/cli/blob/main/cmd/root/user_agent_command.go#L35-L37
         with_user_agent_extra("cmd", command)
         flags = payload["flags"]
-        log_level = flags.pop("log_level")
-        if log_level == "disabled":
-            log_level = "info"
+        log_level = self._log_level(flags.pop("log_level"))
         databricks_logger = logging.getLogger("databricks")
-        databricks_logger.setLevel(log_level.upper())
+        databricks_logger.setLevel(log_level)
         kwargs = {k.replace("-", "_"): v for k, v in flags.items() if v != ""}
         cmd = self._mapping[command]
         # modify kwargs to match the type of the argument
@@ -118,7 +134,7 @@ class App:
             cmd.fn(**kwargs)
         except Exception as err:  # pylint: disable=broad-exception-caught
             logger = self._logger.getChild(command)
-            if log_level.lower() in {"debug", "trace"}:
+            if log_level == logging.DEBUG:
                 logger.error(f"Failed to call {command}", exc_info=err)
             else:
                 logger.error(f"{err.__class__.__name__}: {err}")
