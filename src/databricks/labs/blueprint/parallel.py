@@ -8,8 +8,9 @@ import os
 import re
 import threading
 from collections.abc import Callable, Collection, Sequence
-from concurrent.futures import ThreadPoolExecutor
 from typing import Generic, TypeVar
+
+from ._logging_context import LoggingThreadPoolExecutor
 
 MIN_THREADS = 8
 
@@ -61,12 +62,12 @@ class Threads(Generic[Result]):
         return cls(name, tasks, num_threads=num_threads)._run()
 
     @classmethod
-    def strict(cls, name: str, tasks: Sequence[Task[Result]]) -> Collection[Result]:
+    def strict(cls, name: str, tasks: Sequence[Task[Result]], num_threads: int | None = None) -> Collection[Result]:
         """Run tasks in parallel and raise ManyError if any task fails"""
         # this dunder variable is hiding this method from tracebacks, making it cleaner
         # for the user to see the actual error without too much noise.
         __tracebackhide__ = True  # pylint: disable=unused-variable
-        collected, errs = cls.gather(name, tasks)
+        collected, errs = cls.gather(name, tasks, num_threads)
         if errs:
             if len(errs) == 1:
                 raise errs[0]
@@ -114,7 +115,7 @@ class Threads(Generic[Result]):
     def _execute(self):
         """Run tasks in parallel and return futures"""
         thread_name_prefix = re.sub(r"\W+", "_", self._name)
-        with ThreadPoolExecutor(self._num_threads, thread_name_prefix) as pool:
+        with LoggingThreadPoolExecutor(self._num_threads, thread_name_prefix) as pool:
             futures = []
             for task in self._tasks:
                 if task is None:

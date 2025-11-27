@@ -4,6 +4,23 @@ import logging
 import sys
 from typing import TextIO
 
+from ._logging_context import (
+    LoggingContextInjectingFilter,
+    SkipLogging,
+    current_context,
+    logging_context,
+    logging_context_params,
+)
+
+__all__ = [
+    "NiceFormatter",
+    "install_logger",
+    "current_context",
+    "SkipLogging",
+    "logging_context_params",
+    "logging_context",
+]
+
 
 class NiceFormatter(logging.Formatter):
     """A nice formatter for logging. It uses colors and bold text if the console supports it."""
@@ -36,7 +53,7 @@ class NiceFormatter(logging.Formatter):
             stream: the output stream to which the formatter will write, used to check if it is a console.
             probe_tty: If true, the formatter will enable color support if the output stream appears to be a console.
         """
-        super().__init__(fmt="%(asctime)s %(levelname)s [%(name)s] %(message)s", datefmt="%H:%M:%S")
+        super().__init__(fmt="%(asctime)s %(levelname)s [%(name)s] %(message)s%(context_msg)s", datefmt="%H:%M:%S")
         # Used to colorize the level names.
         self._levels = {
             logging.DEBUG: self._bold(f"{self.CYAN}   DEBUG"),
@@ -88,7 +105,12 @@ class NiceFormatter(logging.Formatter):
         color_marker = self._msg_colors[record.levelno]
 
         thread_name = f"[{record.threadName}]" if record.threadName != "MainThread" else ""
-        return f"{self.GRAY}{timestamp}{self.RESET} {level} {color_marker}[{name}]{thread_name} {msg}{self.RESET}"
+
+        # safe check, just in case injection filter is removed
+        context_repr = record.context if hasattr(record, "context") else ""
+        context_msg = f" {self.GRAY}({context_repr}){self.RESET}" if context_repr else ""
+
+        return f"{self.GRAY}{timestamp}{self.RESET} {level} {color_marker}[{name}]{thread_name} {msg}{self.RESET}{context_msg}"
 
 
 def install_logger(
@@ -102,6 +124,7 @@ def install_logger(
      - All existing handlers will be removed.
      - A new handler will be installed with our custom formatter. It will be configured to emit logs at the given level
        (default: DEBUG) or higher, to the specified stream (default: sys.stderr).
+     - A new (injection) filter for adding logger_context will be added, that will add `context` with current context, to all logger messages.
 
     Args:
         level: The logging level to set for the console handler.
@@ -115,6 +138,8 @@ def install_logger(
         root.removeHandler(handler)
     console_handler = logging.StreamHandler(stream)
     console_handler.setFormatter(NiceFormatter(stream=stream))
+    console_handler.addFilter(LoggingContextInjectingFilter())
     console_handler.setLevel(level)
+
     root.addHandler(console_handler)
     return console_handler
