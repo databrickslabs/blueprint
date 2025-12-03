@@ -504,7 +504,7 @@ async def test_readlines_invalid_utf8() -> None:
         # A line with invalid UTF-8 bytes in it.
         b"bad[\xc0\xc0]utf8\n",
         # An unterminated UTF-8 sequence at the end of the file.
-        b"incomplete\xc3"
+        b"incomplete\xc3",
     )
     expected_messages = ("bad[\ufffd\ufffd]utf8", "incomplete\ufffd!")
     await MockStreamReader.assert_readlines_with_chunks_yields_lines(data_chunks, expected_messages, limit=16)
