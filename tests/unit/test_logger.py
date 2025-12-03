@@ -503,10 +503,18 @@ async def test_readlines_invalid_utf8() -> None:
     data_chunks = (
         # A line with invalid UTF-8 bytes in it.
         b"bad[\xc0\xc0]utf8\n",
-        # A long line, that will be split across the utf-8 sequence.
-        "123456789abcd\U0001f596efgh\n".encode("utf-8"),
+        # An unterminated UTF-8 sequence at the end of the file.
+        b"incomplete\xc3"
     )
-    expected_messages = ("bad[\ufffd\ufffd]utf8", "123456789abcd\ufffd+", "\ufffdefgh")
+    expected_messages = ("bad[\ufffd\ufffd]utf8", "incomplete\ufffd!")
+    await MockStreamReader.assert_readlines_with_chunks_yields_lines(data_chunks, expected_messages, limit=16)
+
+
+async def test_readlines_split_utf8() -> None:
+    """Test that UTF-8 sequence split across limit-based chunks is handled properly."""
+    # A long line, that will be split across the utf-8 sequence: the character will be deferred until the line.
+    data_chunks = ("123456789abcd\U0001f596efgh\n".encode("utf-8"),)
+    expected_messages = ("123456789abcd+", "\U0001f596efgh")
     await MockStreamReader.assert_readlines_with_chunks_yields_lines(data_chunks, expected_messages, limit=16)
 
 
