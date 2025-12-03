@@ -1,7 +1,10 @@
 """A nice formatter for logging. It uses colors and bold text if the console supports it."""
 
+import asyncio
 import logging
 import sys
+from collections.abc import AsyncGenerator
+from dataclasses import dataclass
 from typing import TextIO
 
 
@@ -118,3 +121,107 @@ def install_logger(
     console_handler.setLevel(level)
     root.addHandler(console_handler)
     return console_handler
+
+
+@dataclass(frozen=True, kw_only=True)
+class Line:
+    """Represent a single line of (potentially truncated) log output."""
+
+    text: str
+    """The text of the line."""
+
+    is_truncated: bool = False
+    """Whether the line was truncated, with the remainder pending."""
+
+    is_final: bool = False
+    """Whether this is the final (incomplete) line in the stream."""
+
+    def __str__(self) -> str:
+        """Return the text of the line, appending an ellipsis if it was truncated."""
+        # This is for display purposes only.
+        suffix = ""
+        if self.is_truncated:
+            suffix += "[\u2026]"
+        if self.is_final:
+            suffix += "[no eol]"
+        return f"{self.text}{suffix}"
+
+
+async def readlines(*, stream: asyncio.StreamReader, limit: int) -> AsyncGenerator[Line, None]:
+    """Read lines from the given stream, yielding them as they arrive.
+
+    The lines will be yielded in real-time as they arrive, once the newline character is seen. Semi-universal
+    newlines are supported: "\n" and "\r\n" both terminate lines (but not "\r" alone).
+
+    On EOF any pending line will be yielded, even if it is incomplete (i.e. does not end with a newline).
+
+    The stream being read is treated as UTF-8, with invalid byte sequences replaced with the Unicode replacement
+    character.
+
+    Long lines will be split into chunks with a maximum length. If the split falls in the middle of a multibyte UTF-8
+    character, the bytes on either side of the boundary will likely be invalid and logged as such.
+
+    Args:
+          stream: The stream to mirror as logger output.
+          limit: The maximum number of bytes for a line before it is yielded anyway even though a newline has not been
+            encountered. Longer lines will therefore be split into chunks (as they arrive) no larger than this limit.
+    """
+    if limit < 2:
+        msg = f"Limit must be at least 2 to allow for meaningful line reading, but got {limit}."
+        raise ValueError(msg)
+    # Maximum size of pending buffer is the limit argument.
+    pending_buffer = bytearray()
+
+    # Implementation note: the buffer management here is a bit intricate because we want to ensure that:
+    #  - We don't copy data around more than necessary. (Where possible we use memoryview() to avoid copies.)
+    #  - We never want to have more than 'limit' bytes pending at any time; this is to avoid unbounded memory usage.
+    #  - Temporary memory usage is kept to a minimum, again to avoid excessive memory usage. The various dels are
+    #    present to ensure that potentially large data chunks are released as soon as possible.
+
+    # TODO: Use an incremental UTF-8 decoder to avoid splitting multibyte characters across reads.
+
+    # Loop reading whatever data is available as it arrives, being careful to never have more than `limit` bytes pending.
+    while chunk := await stream.read(limit - len(pending_buffer)):
+        # Process the chunk we've read, which may contain multiple lines, line by line.
+        line_from = 0
+        while -1 != (idx := chunk.find(b"\n", line_from)):
+            # Step 1: Figure out the slice corresponding to this line, handling any pending data from the last read.
+            line_chunk = memoryview(chunk)[line_from:idx]
+            line_bytes: bytearray | bytes
+            if pending_buffer:
+                pending_buffer.extend(line_chunk)
+                line_bytes = pending_buffer
+            else:
+                line_bytes = bytes(line_chunk)
+            del line_chunk
+
+            # Step 2: Decode the line and yield it.
+            line = Line(text=line_bytes.decode("utf-8", errors="replace").rstrip("\r"))
+            del line_bytes
+            yield line
+            del line
+
+            # Step 3: Set up for handling the next line of this chunk.
+            pending_buffer.clear()
+            line_from = idx + 1
+
+        # Anything remaining in this chunk is pending data for the next read, but some corner cases need to be handled:
+        #  - This chunk may not have any newlines, and we may already have pending data from the previous chunk we read.
+        #  - We may be at the limit (including any pending data from earlier reads) and need to yield an incomplete
+        #    line.
+        if remaining := memoryview(chunk)[line_from:]:
+            pending_buffer.extend(remaining)
+            if len(pending_buffer) >= limit:
+                # Line too long, yield what we have and reset.
+                # (As a special case, postpone handling a trailing \r: it could be part of a \r\n newline sequence.)
+                yield_through = (limit - 1) if pending_buffer.endswith(b"\r") else limit
+                yield_now = pending_buffer[:yield_through]
+                line = Line(text=yield_now.decode("utf-8", errors="replace"), is_truncated=True)
+                del yield_now
+                yield line
+                del line, pending_buffer[:yield_through]
+        del remaining
+    if pending_buffer:
+        # Here we've hit EOF but have an incomplete line pending. We need to yield it.
+        line = Line(text=pending_buffer.decode("utf-8", errors="replace"), is_final=True)
+        yield line
