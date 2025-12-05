@@ -15,7 +15,7 @@ from abc import abstractmethod
 from collections.abc import Generator, Iterable, Sequence
 from io import BytesIO, StringIO
 from pathlib import Path, PurePath
-from typing import BinaryIO, Literal, NoReturn, TextIO, TypeVar
+from typing import BinaryIO, ClassVar, Literal, NoReturn, TextIO, TypeVar
 from urllib.parse import quote_from_bytes as urlquote_from_bytes
 
 from databricks.sdk import WorkspaceClient
@@ -127,7 +127,7 @@ class _DatabricksPath(Path, abc.ABC):  # pylint: disable=too-many-public-methods
     _str: str
     _hash: int
 
-    parser = _posixpath
+    parser: ClassVar = _posixpath
 
     # Compatibility attribute, for when superclass implementations get invoked on python <= 3.11.
     _flavour = object()
@@ -236,7 +236,7 @@ class _DatabricksPath(Path, abc.ABC):  # pylint: disable=too-many-public-methods
     def unlink(self, missing_ok: bool = False) -> None: ...
 
     @abstractmethod
-    def open(
+    def open(  # pylint: disable=too-many-positional-arguments
         self,
         mode: str = "r",
         buffering: int = -1,
@@ -246,10 +246,10 @@ class _DatabricksPath(Path, abc.ABC):  # pylint: disable=too-many-public-methods
     ): ...
 
     @abstractmethod
-    def is_dir(self) -> bool: ...
+    def is_dir(self, *, follow_symlinks: bool = True) -> bool: ...
 
     @abstractmethod
-    def is_file(self) -> bool: ...
+    def is_file(self, *, follow_symlinks: bool = True) -> bool: ...
 
     @abstractmethod
     def rename(self: P, target: str | bytes | os.PathLike) -> P: ...
@@ -258,7 +258,7 @@ class _DatabricksPath(Path, abc.ABC):  # pylint: disable=too-many-public-methods
     def replace(self: P, target: str | bytes | os.PathLike) -> P: ...
 
     @abstractmethod
-    def iterdir(self: P) -> Generator[P, None, None]: ...
+    def iterdir(self: P) -> Generator[P]: ...
 
     def __reduce__(self) -> NoReturn:
         # Cannot support pickling because we can't pickle the workspace client.
@@ -587,7 +587,10 @@ class _DatabricksPath(Path, abc.ABC):  # pylint: disable=too-many-public-methods
         pattern: str | bytes | os.PathLike,
         *,
         case_sensitive: bool | None = None,
-    ) -> Generator[P, None, None]:
+        recurse_symlinks: bool = False,
+    ) -> Generator[P]:
+        if recurse_symlinks:
+            raise NotImplementedError("recurse_symlinks is not supported for Databricks paths")
         pattern_parts = self._prepare_pattern(pattern)
         if case_sensitive is None:
             case_sensitive = True
@@ -599,7 +602,10 @@ class _DatabricksPath(Path, abc.ABC):  # pylint: disable=too-many-public-methods
         pattern: str | bytes | os.PathLike,
         *,
         case_sensitive: bool | None = None,
-    ) -> Generator[P, None, None]:
+        recurse_symlinks: bool = False,
+    ) -> Generator[P]:
+        if recurse_symlinks:
+            raise NotImplementedError("recurse_symlinks is not supported for Databricks paths")
         pattern_parts = ("**", *self._prepare_pattern(pattern))
         if case_sensitive is None:
             case_sensitive = True
@@ -675,7 +681,7 @@ class DBFSPath(_DatabricksPath):
             raise FileNotFoundError(f"{self.as_posix()} does not exist")
         self._ws.dbfs.delete(self.as_posix())
 
-    def open(
+    def open(  # pylint: disable=too-many-positional-arguments
         self,
         mode: str = "r",
         buffering: int = -1,
@@ -731,18 +737,22 @@ class DBFSPath(_DatabricksPath):
         )  # 8
         return os.stat_result(seq)
 
-    def is_dir(self) -> bool:
+    def is_dir(self, *, follow_symlinks: bool = True) -> bool:
         """Return True if the path points to a DBFS directory."""
+        if not follow_symlinks:
+            raise NotImplementedError("follow_symlinks is not supported for DBFS paths")
         try:
             return bool(self._file_info.is_dir)
         except DatabricksError:
             return False
 
-    def is_file(self) -> bool:
-        """Return True if the path points to a file in Databricks Workspace."""
+    def is_file(self, *, follow_symlinks: bool = True) -> bool:
+        """Return True if the path points to a DBFS file."""
+        if not follow_symlinks:
+            raise NotImplementedError("follow_symlinks is not supported for DBFS paths")
         return not self.is_dir()
 
-    def iterdir(self) -> Generator[DBFSPath, None, None]:
+    def iterdir(self) -> Generator[DBFSPath]:
         for child in self._ws.dbfs.list(self.as_posix()):
             yield self._from_file_info(self._ws, child)
 
@@ -821,7 +831,7 @@ class WorkspacePath(_DatabricksPath):
             if not missing_ok:
                 raise FileNotFoundError(f"{self.as_posix()} does not exist") from e
 
-    def open(
+    def open(  # pylint: disable=too-many-positional-arguments
         self,
         mode: str = "r",
         buffering: int = -1,
@@ -842,8 +852,8 @@ class WorkspacePath(_DatabricksPath):
             return _TextUploadIO(self._ws, self.as_posix())
         raise ValueError(f"invalid mode: {mode}")
 
-    def read_text(self, encoding=None, errors=None):
-        with self.open(mode="r", encoding=encoding, errors=errors) as f:
+    def read_text(self, encoding=None, errors=None, newline=None) -> str:
+        with self.open(mode="r", encoding=encoding, errors=errors, newline=newline) as f:
             return f.read()
 
     @property
@@ -881,15 +891,19 @@ class WorkspacePath(_DatabricksPath):
         seq[stat.ST_CTIME] = float(self._object_info.created_at) / 1000.0 if self._object_info.created_at else -1.0  # 9
         return os.stat_result(seq)
 
-    def is_dir(self) -> bool:
+    def is_dir(self, *, follow_symlinks: bool = True) -> bool:
         """Return True if the path points to a directory in Databricks Workspace."""
+        if not follow_symlinks:
+            raise NotImplementedError("follow_symlinks is not supported for Workspace paths")
         try:
             return self._object_info.object_type == ObjectType.DIRECTORY
         except DatabricksError:
             return False
 
-    def is_file(self) -> bool:
+    def is_file(self, *, follow_symlinks: bool = True) -> bool:
         """Return True if the path points to a file in Databricks Workspace."""
+        if not follow_symlinks:
+            raise NotImplementedError("follow_symlinks is not supported for Workspace paths")
         try:
             return self._object_info.object_type == ObjectType.FILE
         except DatabricksError:
@@ -902,7 +916,7 @@ class WorkspacePath(_DatabricksPath):
         except DatabricksError:
             return False
 
-    def iterdir(self) -> Generator[WorkspacePath, None, None]:
+    def iterdir(self) -> Generator[WorkspacePath]:
         for child in self._ws.workspace.list(self.as_posix()):
             yield self._from_object_info(self._ws, child)
 
@@ -1068,47 +1082,56 @@ _XML_DECLARATION_REGEX = re.compile(
 )
 
 
+def _read_xml_encoding(binary_io: BinaryIO) -> tuple[bytes, str] | None:
+    """Read the XML encoding from the start of a binary file, if present."""
+    maybe_xml: bytes = binary_io.read(4)
+    # Useful to know here, an XML declaration must start with '<?xml', and:
+    #  - '<' is 0x3C.
+    #  - '?' is 0x3F.
+    # References:
+    #  - https://www.w3.org/TR/xml/#sec-guessing-no-ext-info
+    #  - https://www.w3.org/TR/2006/REC-xml11-20060816/#sec-guessing-no-ext-info
+    match maybe_xml:
+        case b"\0\0\0\x3c":
+            # Potentially 32-bit BE (1234) encoding.
+            sniff_with = "utf-32-be"
+        case b"\x3c\0\0\0":
+            # Potentially 32-bit LE (4321) encoding.
+            sniff_with = "utf-32-le"
+        case b"\0\0\x3c\0" | b"\0\x3c\0\0":
+            # Potentially non-standard 32-bit encodings.
+            logger.warning("XML declaration with non-standard 32-bit encoding detected; not supported.")
+            return None
+        case b"\x00\x3c\x00\x3f":
+            # Potentially 16-bit BE (12) encoding.
+            sniff_with = "utf-16-be"
+        case b"\x3c\x00\x3f\x00":
+            # Potentially 16-bit LE (21) encoding.
+            sniff_with = "utf-16-le"
+        case b"\x3c\x3f\x78\x6d":
+            # Potentially 8-bit, UTF-8 or other ASCII-compatible encoding.
+            sniff_with = "us-ascii"
+        case b"\x4c\x6f\xa7\x94":
+            # Something EBCDIC-ish, oh-my.
+            sniff_with = "cp037"
+        case _:
+            logger.debug(f"No XML declaration detected in the first 4 bytes: {maybe_xml!r}")
+            return None
+    logger.debug(f"XML declaration detected, sniffing further with encoding: {sniff_with}")
+    maybe_xml += binary_io.read(_XML_ENCODING_SNIFF_LIMIT - 4)
+    return maybe_xml, sniff_with
+
+
 def _detect_encoding_xml(binary_io: BinaryIO, *, preserve_position: bool) -> str | None:
     position = binary_io.tell() if preserve_position else None
     try:
-        maybe_xml: bytes = binary_io.read(4)
-        # Useful to know here, an XML declaration must start with '<?xml', and:
-        #  - '<' is 0x3C.
-        #  - '?' is 0x3F.
-        # References:
-        #  - https://www.w3.org/TR/xml/#sec-guessing-no-ext-info
-        #  - https://www.w3.org/TR/2006/REC-xml11-20060816/#sec-guessing-no-ext-info
-        match maybe_xml:
-            case b"\0\0\0\x3c":
-                # Potentially 32-bit BE (1234) encoding.
-                sniff_with = "utf-32-be"
-            case b"\x3c\0\0\0":
-                # Potentially 32-bit LE (4321) encoding.
-                sniff_with = "utf-32-le"
-            case b"\0\0\x3c\0" | b"\0\x3c\0\0":
-                # Potentially non-standard 32-bit encodings.
-                logger.warning("XML declaration with non-standard 32-bit encoding detected; not supported.")
-                return None
-            case b"\x00\x3c\x00\x3f":
-                # Potentially 16-bit BE (12) encoding.
-                sniff_with = "utf-16-be"
-            case b"\x3c\x00\x3f\x00":
-                # Potentially 16-bit LE (21) encoding.
-                sniff_with = "utf-16-le"
-            case b"\x3c\x3f\x78\x6d":
-                # Potentially 8-bit, UTF-8 or other ASCII-compatible encoding.
-                sniff_with = "us-ascii"
-            case b"\x4c\x6f\xa7\x94":
-                # Something EBCDIC-ish, oh-my.
-                sniff_with = "cp037"
-            case _:
-                logger.debug(f"No XML declaration detected in the first 4 bytes: {maybe_xml!r}")
-                return None
-        logger.debug(f"XML declaration detected, sniffing further with encoding: {sniff_with}")
-        maybe_xml += binary_io.read(_XML_ENCODING_SNIFF_LIMIT - 4)
+        read_sample = _read_xml_encoding(binary_io)
     finally:
         if position is not None:
             binary_io.seek(position)
+    if read_sample is None:
+        return None
+    maybe_xml, sniff_with = read_sample
 
     # Try to decode the XML declaration with the sniffed encoding; XML is designed so that the declaration can be
     # read with the common subset of related encodings, up to where the actual encoding is specified.
@@ -1118,10 +1141,9 @@ def _detect_encoding_xml(binary_io: BinaryIO, *, preserve_position: bool) -> str
         if encoding:
             logger.debug(f"XML declaration encoding detected: {encoding}")
             # TODO: XML encodings come from the IATA list, maybe they need to mapped/checked against Python's names.
-        else:
-            logger.debug("XML declaration without encoding detected, must be utf-8")
-            encoding = "utf-8"
-        return encoding
+            return encoding
+        logger.debug("XML declaration without encoding detected, must be utf-8")
+        return "utf-8"
     return None
 
 
