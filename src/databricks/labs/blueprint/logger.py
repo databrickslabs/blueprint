@@ -148,7 +148,7 @@ class Line:
         return f"{self.text}{suffix}"
 
 
-async def readlines(*, stream: asyncio.StreamReader, limit: int) -> AsyncGenerator[Line, None]:
+async def readlines(*, stream: asyncio.StreamReader, limit: int = 8192) -> AsyncGenerator[Line, None]:
     """Read lines from the given stream, yielding them as they arrive.
 
     The lines will be yielded in real-time as they arrive, once the newline character is seen. Semi-universal
@@ -165,6 +165,7 @@ async def readlines(*, stream: asyncio.StreamReader, limit: int) -> AsyncGenerat
           stream: The stream to mirror as logger output.
           limit: The maximum number of bytes for a line before it is yielded anyway even though a newline has not been
             encountered. Longer lines will therefore be split into chunks (as they arrive) no larger than this limit.
+            Default: 8192.
     """
     if limit < 2:
         msg = f"Limit must be at least 2 to allow for meaningful line reading, but got {limit}."
