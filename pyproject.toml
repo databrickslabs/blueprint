@@ -46,6 +46,7 @@ dependencies = [
     # "pylint-pytest==2.0.0a0"  # Incorrect dependency constraint (pylint<4), installed separately below.
     "databricks-labs-pylint~=0.3.0",
     "pytest~=8.1.0",
+    "pytest-asyncio~=0.23.0",
     "pytest-cov~=4.1.0",
     "pytest-mock~=3.14.0",
     "pytest-timeout~=2.3.1",
@@ -83,6 +84,7 @@ profile = "black"
 [tool.pytest.ini_options]
 addopts = "--no-header"
 cache_dir = ".venv/pytest-cache"
+asyncio_mode = "auto"
 
 [tool.black]
 target-version = ["py310"]
