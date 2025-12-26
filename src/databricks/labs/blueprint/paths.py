@@ -18,6 +18,7 @@ from pathlib import Path, PurePath
 from typing import BinaryIO, ClassVar, Literal, NoReturn, TextIO, TypeVar
 from urllib.parse import quote_from_bytes as urlquote_from_bytes
 
+import chardet
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.errors import DatabricksError, ResourceDoesNotExist
 from databricks.sdk.service.files import FileInfo
@@ -1172,6 +1173,7 @@ def decode_with_bom(
           a text-based IO wrapper that will decode the underlying binary-mode file as text.
     """
     use_encoding: str | None
+    _chardet_confidence_threshold: float = 0.6
     if encoding is not None:
         use_encoding = encoding
     else:
@@ -1179,7 +1181,12 @@ def decode_with_bom(
         if use_encoding is None and detect_xml:
             use_encoding = _detect_encoding_xml(file, preserve_position=True)
     if use_encoding is None:
-        use_encoding = locale.getpreferredencoding()
+        result = chardet.detect(file.read())
+        use_encoding = result["encoding"] or locale.getpreferredencoding()
+        if result["confidence"] < _chardet_confidence_threshold:
+            logger.debug(f"Low confidence ({result['confidence']}) in detected encoding: {result}")
+            use_encoding = locale.getpreferredencoding()
+        file.seek(0)
     return io.TextIOWrapper(file, encoding=use_encoding, errors=errors, newline=newline)
 
 
