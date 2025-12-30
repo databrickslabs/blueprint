@@ -395,10 +395,10 @@ class MockStreamReader(asyncio.StreamReader):
     async def readline(self) -> bytes:
         raise NotImplementedError("This is a mock; not implemented.")
 
-    async def readexactly(self, n: int) -> bytes:
+    async def readexactly(self, n) -> bytes:
         raise NotImplementedError("This is a mock; not implemented.")
 
-    async def readuntil(self, separator: bytes = b"\n") -> bytes:
+    async def readuntil(self, separator=b"\n") -> bytes:
         raise NotImplementedError("This is a mock; not implemented.")
 
     def at_eof(self) -> bool:
