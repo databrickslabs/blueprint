@@ -1,5 +1,19 @@
 # Version changelog
 
+## 0.12.0
+
+- **TRACE-level logging support** [#318](https://github.com/databrickslabs/blueprint/issues/318)
+    Added support for `TRACE`-level logs by mapping them to `DEBUG`, since Python lacks native `TRACE` support. Introduced a new method to translate Databricks CLI log levels to Python levels, defaulting to `INFO` when unknown. Improved error logging for better debugging and reporting.
+    
+- **Python 3.14 compatibility** [#315](https://github.com/databrickslabs/blueprint/issues/315)
+    The project now supports Python 3.10–3.14. CI tests have been updated accordingly, and project metadata now reflects Python 3.14 and beta development status. Minimum requirements remain: Python 3.10+ and `databricks-sdk` 0.16.0+.
+    
+- **Line-based subprocess streaming** [#320](https://github.com/databrickslabs/blueprint/issues/320)
+    Added real-time, line-based reading of subprocess output via a new `readlines` function. It decodes UTF-8 safely, manages memory efficiently, and handles very long lines without blocking. Also added `pytest-asyncio` to improve async code testing.
+    
+- **Hatch upgrade** [#311](https://github.com/databrickslabs/blueprint/issues/311)
+    Upgraded Hatch from 1.9.4 → 1.14.2 to fix compatibility issues (notably with Click 8.3.0) and improve build performance. Removed the old Click version constraint so newer versions can be installed.
+
 ## 0.11.4
 
 * Added Password Prompt to operate with echo off in terminal ([#265](https://github.com/databrickslabs/blueprint/issues/265)). The command-line interface now includes a secure password prompt feature, allowing users to enter sensitive information without it being visible on the screen. This is achieved through a new method that utilizes the `getpass` library to hide user input when entering passwords, taking a prompt message and an optional maximum number of attempts as parameters. The method repeatedly prompts the user for a password until a valid input is provided or the maximum number of attempts is reached, at which point it raises a `ValueError`. This addition enhances the security and usability of the interface, and its functionality is validated through new test methods that cover both successful password entry and the scenario where the maximum number of attempts is exceeded, ensuring the feature behaves as expected in various situations.
