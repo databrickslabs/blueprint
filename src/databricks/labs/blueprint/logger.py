@@ -148,7 +148,7 @@ class Line:
         return f"{self.text}{suffix}"
 
 
-async def readlines(*, stream: asyncio.StreamReader, limit: int = 8192) -> AsyncGenerator[Line, None]:
+async def readlines(*, stream: asyncio.StreamReader, limit: int = 8192) -> AsyncGenerator[Line]:
     """Read lines from the given stream, yielding them as they arrive.
 
     The lines will be yielded in real-time as they arrive, once the newline character is seen. Semi-universal
