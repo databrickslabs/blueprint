@@ -632,7 +632,8 @@ class Installation:
             value, ok = self._marshal(hint, [*path, field], raw)
             if not ok:
                 raise SerdeError(self._explain_why(hint, [*path, field], raw))
-            if not value:
+            # Earlier for boolean fields when the value was False, we would skip it. Which was incorrect
+            if not value and hint is not bool:
                 continue
             as_dict[field] = value
         return as_dict, True
@@ -936,7 +937,7 @@ class Installation:
             if not isinstance(as_dict, dict):
                 raise SerdeError(f"Expecting a list of dictionaries. Got {as_dict}")
             for k, v in as_dict.items():
-                if not v:
+                if not v and v is not False:
                     continue
                 non_empty_keys.add(k)
         buffer = io.StringIO()
