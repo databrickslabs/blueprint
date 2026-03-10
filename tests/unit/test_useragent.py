@@ -1,11 +1,13 @@
 import contextlib
-import functools
 import inspect
 import json
 import os
 import sys
+import types
 import typing
-from http.server import BaseHTTPRequestHandler
+from collections.abc import Generator
+from http.server import BaseHTTPRequestHandler, HTTPServer
+from threading import Thread
 from unittest import mock
 
 from databricks.sdk import WorkspaceClient
@@ -30,22 +32,19 @@ FOO_COMMAND = json.dumps(
 
 
 @contextlib.contextmanager
-def http_fixture_server(handler: typing.Callable[[BaseHTTPRequestHandler], None]):
-    from http.server import HTTPServer
-    from threading import Thread
+def http_fixture_server(handler: typing.Callable[[BaseHTTPRequestHandler], None]) -> Generator[str]:
 
-    class _handler(BaseHTTPRequestHandler):
-        def __init__(self, handler: typing.Callable[[BaseHTTPRequestHandler], None], *args):
-            self._handler = handler
+    class _Handler(BaseHTTPRequestHandler):
+        def __init__(self, *args) -> None:
+            self._do_ALL = types.MethodType(handler, self)
             super().__init__(*args)
 
-        def __getattr__(self, item):
-            if "do_" != item[0:3]:
+        def __getattr__(self, item: str) -> typing.Callable[[BaseHTTPRequestHandler], None]:
+            if not item.startswith("do_"):
                 raise AttributeError(f"method {item} not found")
-            return functools.partial(self._handler, self)
+            return self._do_ALL
 
-    handler_factory = functools.partial(_handler, handler)
-    srv = HTTPServer(("localhost", 0), handler_factory)
+    srv = HTTPServer(("localhost", 0), _Handler)
     t = Thread(target=srv.serve_forever)
     try:
         t.daemon = True
@@ -55,8 +54,8 @@ def http_fixture_server(handler: typing.Callable[[BaseHTTPRequestHandler], None]
         srv.shutdown()
 
 
-def test_user_agent_is_propagated():
-    user_agent = {}
+def test_user_agent_is_propagated() -> None:
+    user_agent: dict[str, list[str]] = {}
     app = App(inspect.getfile(App))
 
     def inner(h: BaseHTTPRequestHandler):
@@ -64,7 +63,7 @@ def test_user_agent_is_propagated():
             if "/" not in pair:
                 continue
             k, v = pair.split("/")
-            user_agent[k] = v
+            user_agent.setdefault(k, []).append(v)
         h.send_response(200)
         h.send_header("Content-Type", "application/json")
         h.end_headers()
@@ -83,5 +82,5 @@ def test_user_agent_is_propagated():
 
     assert "blueprint" in user_agent
     assert "cmd" in user_agent
-    assert user_agent["blueprint"] == __version__
-    assert user_agent["cmd"] == "foo"
+    assert __version__ in user_agent["blueprint"]
+    assert "foo" in user_agent["cmd"]
