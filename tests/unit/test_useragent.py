@@ -33,7 +33,6 @@ FOO_COMMAND = json.dumps(
 
 @contextlib.contextmanager
 def http_fixture_server(handler: typing.Callable[[BaseHTTPRequestHandler], None]) -> Generator[str]:
-
     class _Handler(BaseHTTPRequestHandler):
         def __init__(self, *args) -> None:
             self._do_ALL = types.MethodType(handler, self)
