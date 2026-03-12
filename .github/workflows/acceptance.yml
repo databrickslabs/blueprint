@@ -9,6 +9,10 @@ permissions:
   contents: read
   pull-requests: write
 
+env:
+  HATCH_VERBOSE: "2"
+  HATCH_VERSION: "1.16.5"
+
 jobs:
   integration:
     if: github.event_name == 'pull_request' && github.event.pull_request.draft == false
@@ -22,14 +26,14 @@ jobs:
         run: git fetch --prune --unshallow
 
       - name: Install Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           cache: 'pip'
           cache-dependency-path: '**/pyproject.toml'
           python-version: '3.10'
 
       - name: Install Hatch
-        run: pip install hatch==1.14.2
+        run: pip install "hatch==${HATCH_VERSION}"
 
       - name: Acceptance
         uses: databrickslabs/sandbox/acceptance@acceptance/v0.4.2
