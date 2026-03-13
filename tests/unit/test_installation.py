@@ -761,3 +761,25 @@ def test_forward_referencing_class() -> None:
 
     loaded = installation.load(ForwardReferencingClass, filename="saved.yml")
     assert instance == loaded
+
+
+def test_bool_attribute() -> None:
+    @dataclass(kw_only=True)
+    class BooleanAttributeClass:
+        __file__ = "config.yml"
+        __version__ = 3
+        skip_validation: bool
+        sdk_config: JsonValue
+
+    instance_false = BooleanAttributeClass(skip_validation=False, sdk_config={"warehouse_id": "8xc123456"})
+    installation = MockInstallation()
+    installation.save(instance_false)
+
+    loaded_false = installation.load(BooleanAttributeClass)
+    assert instance_false == loaded_false
+
+    instance_true = BooleanAttributeClass(skip_validation=True, sdk_config={"warehouse_id": "9xc1234567"})
+    installation.save(instance_true)
+
+    loaded_true = installation.load(BooleanAttributeClass)
+    assert instance_true == loaded_true
