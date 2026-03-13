@@ -15,28 +15,29 @@ on:
       - main
 
 env:
-  HATCH_VERSION: 1.9.4
+  HATCH_VERBOSE: "2"
+  HATCH_VERSION: "1.16.5"
 
 jobs:
   ci:
     strategy:
       fail-fast: false
       matrix:
-        pyVersion: [ '3.10', '3.11', '3.12', '3.13' ]
+        pyVersion: [ '3.10', '3.11', '3.12', '3.13', '3.14' ]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4.2.2
 
       - name: Install Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           cache: 'pip'
           cache-dependency-path: '**/pyproject.toml'
           python-version: ${{ matrix.pyVersion }}
 
       - name: Install hatch
-        run: pip install hatch==$HATCH_VERSION 'click<8.3.0' # https://github.com/pallets/click/issues/3065
+        run: pip install "hatch==${HATCH_VERSION}"
 
       - name: Run unit tests
         run: |
@@ -60,7 +61,7 @@ jobs:
           python-version: '3.10'
 
       - name: Install hatch
-        run: pip install hatch==$HATCH_VERSION 'click<8.3.0' # https://github.com/pallets/click/issues/3065
+        run: pip install "hatch==${HATCH_VERSION}"
 
       - name: Format all files
         run: make dev fmt

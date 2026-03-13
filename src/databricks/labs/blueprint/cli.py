@@ -51,6 +51,10 @@ class Command:
         return annotation.__name__
 
 
+# The types of arguments that can be passed to commands.
+_CommandArg = int | str | bool | float | WorkspaceClient | AccountClient | Prompts
+
+
 class App:
     def __init__(self, __file: str):
         self._mapping: dict[str, Command] = {}
@@ -78,6 +82,24 @@ class App:
         register(fn)
         return fn
 
+    def _log_level(self, raw: str) -> int:
+        """Convert the log-level provided by the Databricks CLI into a logging level supported by Python."""
+        # Log levels at the time of writing:
+        # https://github.com/databricks/cli/blob/071b584105d42034a05fd8c3f8a81fb2d9760f54/libs/log/levels.go#L6
+        log_level: int
+        match raw.upper():
+            case "DISABLED":
+                # Default from the Databricks CLI when nothing has been explicitly set by the user.
+                log_level = logging.INFO
+            case "TRACE":
+                log_level = logging.DEBUG
+            case other:
+                log_level = logging.getLevelName(other)
+                if not isinstance(log_level, int):
+                    self._logger.warning(f"Assuming INFO-level logging due to unrecognized log-level: {raw}")
+                    log_level = logging.INFO
+        return log_level
+
     def _route(self, raw):
         """Route the command. This is the entry point for the CLI."""
         payload = json.loads(raw)
@@ -89,39 +111,44 @@ class App:
         # see https://github.com/databricks/cli/blob/main/cmd/root/user_agent_command.go#L35-L37
         with_user_agent_extra("cmd", command)
         flags = payload["flags"]
-        log_level = flags.pop("log_level")
-        if log_level == "disabled":
-            log_level = "info"
+        log_level = self._log_level(flags.pop("log_level"))
         databricks_logger = logging.getLogger("databricks")
-        databricks_logger.setLevel(log_level.upper())
-        kwargs = {k.replace("-", "_"): v for k, v in flags.items() if v != ""}
+        databricks_logger.setLevel(log_level)
         cmd = self._mapping[command]
-        # modify kwargs to match the type of the argument
-        for kwarg in list(kwargs.keys()):
-            match cmd.get_argument_type(kwarg):
-                case "int":
-                    kwargs[kwarg] = int(kwargs[kwarg])
-                case "bool":
-                    kwargs[kwarg] = kwargs[kwarg].lower() == "true"
-                case "float":
-                    kwargs[kwarg] = float(kwargs[kwarg])
+        kwargs = self._build_args(cmd, flags)
         try:
-            if cmd.needs_workspace_client():
-                self._patch_databricks_host()
-                kwargs["w"] = self._workspace_client()
-            elif cmd.is_account:
-                self._patch_databricks_host()
-                kwargs["a"] = self._account_client()
-            prompts_argument = cmd.prompts_argument_name()
-            if prompts_argument:
-                kwargs[prompts_argument] = Prompts()
             cmd.fn(**kwargs)
         except Exception as err:  # pylint: disable=broad-exception-caught
             logger = self._logger.getChild(command)
-            if log_level.lower() in {"debug", "trace"}:
+            if log_level == logging.DEBUG:
                 logger.error(f"Failed to call {command}", exc_info=err)
             else:
                 logger.error(f"{err.__class__.__name__}: {err}")
+
+    def _build_args(self, cmd: Command, flags: dict[str, str]) -> dict[str, _CommandArg]:
+        kwargs: dict[str, _CommandArg] = {k.replace("-", "_"): v for k, v in flags.items() if v != ""}
+        # modify kwargs to match the type of the argument
+        for kwarg in list(kwargs.keys()):
+            value = kwargs[kwarg]
+            if not isinstance(value, str):
+                continue
+            match cmd.get_argument_type(kwarg):
+                case "int":
+                    kwargs[kwarg] = int(value)
+                case "bool":
+                    kwargs[kwarg] = value.lower() == "true"
+                case "float":
+                    kwargs[kwarg] = float(value)
+        if cmd.needs_workspace_client():
+            self._patch_databricks_host()
+            kwargs["w"] = self._workspace_client()
+        elif cmd.is_account:
+            self._patch_databricks_host()
+            kwargs["a"] = self._account_client()
+        prompts_argument = cmd.prompts_argument_name()
+        if prompts_argument:
+            kwargs[prompts_argument] = Prompts()
+        return kwargs
 
     @classmethod
     def fix_databricks_host(cls, host: str) -> str:
@@ -171,13 +198,13 @@ class App:
             self._logger.warning(f"Working around DATABRICKS_HOST normalization issue: {host} -> {fixed_host}")
             os.environ["DATABRICKS_HOST"] = fixed_host
 
-    def _account_client(self):
+    def _account_client(self) -> AccountClient:
         return AccountClient(
             product=self._product_info.product_name(),
             product_version=self._product_info.version(),
         )
 
-    def _workspace_client(self):
+    def _workspace_client(self) -> WorkspaceClient:
         return WorkspaceClient(
             product=self._product_info.product_name(),
             product_version=self._product_info.version(),

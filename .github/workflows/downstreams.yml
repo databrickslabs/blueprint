@@ -19,6 +19,10 @@ permissions:
   contents: read
   pull-requests: write
 
+env:
+  HATCH_VERBOSE: "2"
+  HATCH_VERSION: "1.16.5"
+
 jobs:
   compatibility:
     strategy:
@@ -36,15 +40,14 @@ jobs:
           fetch-depth: 0
 
       - name: Install Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           cache: 'pip'
           cache-dependency-path: '**/pyproject.toml'
           python-version: '3.10'
 
       - name: Install toolchain
-        run: |
-          pip install hatch==1.9.4 'click<8.3.0' # https://github.com/pallets/click/issues/3065
+        run: pip install "hatch==${HATCH_VERSION}"
 
       - name: Acceptance
         uses: databrickslabs/sandbox/downstreams@acceptance/v0.4.2
