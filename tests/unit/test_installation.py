@@ -24,6 +24,21 @@ from databricks.labs.blueprint.installation import (
 )
 
 
+@pytest.fixture
+def suspend_config_host_metadata_lookup(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Suspend host metadata lookups from the SDKs Config class.
+
+    As of version 0.102.0 of the Databricks SDK, the `Config` class during __init__() makes a network call with a
+    timeout of 5 minutes if the target host does not exist. For unit tests, it never does. This fixture therefore
+    patches over that lookup to ensure it doesn't get in the way of our tests.
+    """
+
+    def _fake_resolve_host_metadata(self) -> None:
+        return
+
+    monkeypatch.setattr(Config, "_resolve_host_metadata", _fake_resolve_host_metadata)
+
+
 def test_current_not_found() -> None:
     ws = create_autospec(WorkspaceClient)
     ws.current_user.me().user_name = "foo"
@@ -180,7 +195,7 @@ def test_save_typed_file_array_csv() -> None:
     )
 
 
-def test_load_typed_file() -> None:
+def test_load_typed_file(suspend_config_host_metadata_lookup: None) -> None:
     ws = create_autospec(WorkspaceClient)
     ws.current_user.me().user_name = "foo"
     ws.workspace.download.return_value = io.StringIO(
