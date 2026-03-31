@@ -3,8 +3,8 @@
     "src/databricks/labs/blueprint/__about__.py": "__version__ = \"$VERSION\""
   },
   "toolchain": {
-    "required": ["python3", "hatch"],
-    "pre_setup": ["hatch env create"],
+    "required": ["uv"],
+    "pre_setup": ["uv sync --locked"],
     "prepend_path": ".venv/bin",
     "acceptance_path": "tests/integration",
     "test": [
