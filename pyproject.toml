@@ -61,27 +61,6 @@ test = [
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
-[tool.hatch.envs.default]
-dependency-groups = ["dev"]
-
-# store virtual env as the child of this folder. Helps VSCode (and PyCharm) to run better
-path = ".venv"
-
-[tool.hatch.envs.default.scripts]
-test        = "pytest -n 2 --cov src --cov-report=xml --timeout 30 tests/unit --durations 20"
-coverage    = "pytest -n 2 --cov src tests/unit --timeout 30 --cov-report=html --durations 20"
-integration = "pytest -n 10 --cov src tests/integration --durations 20"
-fmt         = ["isort .",
-               "ruff format",
-               "ruff check . --fix",
-               "mypy .",
-               "pylint --output-format=colorized -j 0 src"]
-verify      = ["isort . --check-only",
-               "ruff format --check --diff",
-               "ruff check .",
-               "mypy .",
-               "pylint --output-format=colorized -j 0 src"]
-
 [tool.hatch.build]
 sources = ["src"]
 include = ["src"]
