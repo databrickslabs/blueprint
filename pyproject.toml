@@ -30,13 +30,6 @@ Source = "https://github.com/databrickslabs/blueprint"
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
-[tool.hatch.build]
-sources = ["src"]
-include = ["src"]
-
-[tool.hatch.version]
-path = "src/databricks/labs/blueprint/__about__.py"
-
 [tool.hatch.envs.default]
 dependencies = [
     "databricks-labs-blueprint[yaml]",
@@ -74,26 +67,17 @@ verify      = ["isort . --check-only",
                "mypy .",
                "pylint --output-format=colorized -j 0 src"]
 
-[tool.isort]
-profile = "black"
+[tool.hatch.build]
+sources = ["src"]
+include = ["src"]
 
-[tool.pytest.ini_options]
-addopts = "--no-header"
-cache_dir = ".venv/pytest-cache"
-asyncio_mode = "auto"
+[tool.hatch.version]
+path = "src/databricks/labs/blueprint/__about__.py"
 
 [tool.black]
 target-version = ["py310"]
 line-length = 120
 skip-string-normalization = true
-
-[tool.ruff]
-cache-dir = ".venv/ruff-cache"
-target-version = "py310"
-line-length = 120
-
-[tool.ruff.lint.isort]
-known-first-party = ["databricks.labs.blueprint"]
 
 [tool.coverage.run]
 branch = true
@@ -106,6 +90,25 @@ exclude_lines = [
     "if __name__ == .__main__.:",
     "if TYPE_CHECKING:",
 ]
+
+[tool.isort]
+profile = "black"
+
+[tool.mypy]
+cache_dir = ".venv/mypy-cache"
+
+[tool.pytest.ini_options]
+addopts = "--no-header"
+cache_dir = ".venv/pytest-cache"
+asyncio_mode = "auto"
+
+[tool.ruff]
+cache-dir = ".venv/ruff-cache"
+target-version = "py310"
+line-length = 120
+
+[tool.ruff.lint.isort]
+known-first-party = ["databricks.labs.blueprint"]
 
 [tool.pylint.main]
 # PyLint configuration is adapted from Google Python Style Guide with modifications.
