@@ -25,3 +25,5 @@ integration:
 coverage:
 	hatch run coverage && open htmlcov/index.html
 
+.DEFAULT: all
+.PHONY: all clean dev lint fmt test integration coverage
