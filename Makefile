@@ -2,7 +2,7 @@ all: clean lint fmt test coverage
 
 clean:
 	rm -fr .venv clean htmlcov .mypy_cache .pytest_cache .ruff_cache .coverage coverage.xml
-	rm -fr **/*.pyc
+	find . -name '__pycache__' -print0 | xargs -0 rm -fr
 
 .venv/bin/python:
 	hatch env create
