@@ -125,6 +125,11 @@ line-length = 120
 [tool.ruff.lint.isort]
 known-first-party = ["databricks.labs.blueprint"]
 
+[tool.uv]
+exclude-newer = "7 days"
+exclude-newer-package = { "databricks-sdk" = false }
+required-version = "~= 0.11.0"
+
 [tool.pylint.main]
 # PyLint configuration is adapted from Google Python Style Guide with modifications.
 # Sources https://google.github.io/styleguide/pylintrc
