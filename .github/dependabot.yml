@@ -8,7 +8,9 @@ updates:
         - "databricks*"
     schedule:
       interval: "daily"
-  - package-ecosystem: "github-actions"
-    directory: "/"
-    schedule:
-      interval: "daily"
+
+  # Disabled for now, pending
+  #- package-ecosystem: "github-actions"
+  #  directory: "/"
+  #  schedule:
+  #    interval: "daily"
