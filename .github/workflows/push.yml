@@ -37,8 +37,7 @@ jobs:
         run: make dev
 
       - name: Run unit tests
-        run: |
-          make test
+        run: make test
 
       - name: Publish test coverage
         uses: codecov/codecov-action@671740ac38dd9b0130fbe1cec585b89eea48d3de  # v5.5.2
@@ -57,8 +56,11 @@ jobs:
           version: "0.11.2"
           checksum: "7ac2ca0449c8d68dae9b99e635cd3bc9b22a4cb1de64b7c43716398447d42981"  # uv-x86_64-unknown-linux-gnu.tar.gz
 
+      - name: Initialize the project
+        run: make dev
+
       - name: Format all files
-        run: make dev fmt
+        run: make fmt
 
       - name: Fail on differences
         run: git diff --exit-code
