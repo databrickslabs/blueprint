@@ -39,6 +39,7 @@ def test_build_and_upload_wheel():
     assert not os.path.exists(wheels._local_wheel)
 
 
+@pytest.mark.timeout(60)  # Seconds. (Default of 30 is too slow if dependencies need to be downloaded.)
 def test_build_and_dependencies_upload_wheel():
     installation = MockInstallation()
     product_info = ProductInfo.from_class(MockInstallation)

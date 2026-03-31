@@ -1,27 +1,41 @@
 all: clean lint fmt test coverage
 
+# Ensure that all uv commands are locked and don't automatically update the lock file.
+export UV_LOCKED := 1
+
+UV_RUN := uv run
+UV_TEST := $(UV_RUN) pytest -n 2 --timeout 30 --durations 20
+
 clean:
 	rm -fr .venv clean htmlcov .mypy_cache .pytest_cache .ruff_cache .coverage coverage.xml
-	rm -fr **/*.pyc
+	find . -name '__pycache__' -print0 | xargs -0 rm -fr
 
-.venv/bin/python:
-	hatch env create
-
-dev: .venv/bin/python
-	@hatch run which python
+dev:
+	uv sync
 
 lint:
-	hatch run verify
+	$(UV_RUN) isort . --check-only
+	$(UV_RUN) ruff format --check --diff
+	$(UV_RUN) ruff check .
+	$(UV_RUN) mypy .
+	$(UV_RUN) pylint --output-format=colorized -j 0 src
 
 fmt:
-	hatch run fmt
+	$(UV_RUN) isort .
+	$(UV_RUN) ruff format
+	$(UV_RUN) ruff check . --fix
+	$(UV_RUN) mypy .
+	$(UV_RUN) pylint --output-format=colorized -j 0 src
 
 test:
-	hatch run test
+	$(UV_TEST) --cov src --cov-report=xml tests/unit
 
 integration:
-	hatch run integration
+	$(UV_TEST) --cov src --cov-report=xml tests/integration
 
 coverage:
-	hatch run coverage && open htmlcov/index.html
+	$(UV_TEST) --cov src --cov-report=html tests/unit
+	open htmlcov/index.html
 
+.DEFAULT: all
+.PHONY: all clean dev lint fmt test integration coverage
