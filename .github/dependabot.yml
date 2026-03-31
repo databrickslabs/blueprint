@@ -2,6 +2,10 @@ version: 2
 updates:
   - package-ecosystem: "pip"
     directory: "/"
+    cooldown:
+      default-days: 7
+      exclude:
+        - "databricks*"
     schedule:
       interval: "daily"
   - package-ecosystem: "github-actions"
