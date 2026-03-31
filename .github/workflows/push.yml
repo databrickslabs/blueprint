@@ -14,6 +14,9 @@ on:
     branches:
       - main
 
+permissions:
+  contents: read
+
 env:
   HATCH_VERBOSE: "2"
   HATCH_VERSION: "1.16.5"
