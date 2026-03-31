@@ -66,7 +66,7 @@ def viz_type(self) -> str:
 ## Local Setup
 
 This section provides a step-by-step guide to set up and start working on the project. These steps will help you set up your project environment and dependencies for efficient development.
-Please note that hatch is a prerequisite. You can install hatch using `pip install hatch`.
+Please note that [uv](https://docs.astral.sh/uv/) is a prerequisite. You can install uv using `brew install hatch`.
 To begin, run `make dev` to create the default environment and install development dependencies, assuming you've already cloned the github repo.
 
 ```shell
