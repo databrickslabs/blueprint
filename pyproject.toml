@@ -54,7 +54,6 @@ pytest = [
 ]
 test = [
     { include-group = "pytest" },
-    "databricks-labs-blueprint[yaml]",
 ]
 
 [build-system]

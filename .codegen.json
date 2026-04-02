@@ -4,7 +4,7 @@
   },
   "toolchain": {
     "required": ["uv"],
-    "pre_setup": ["uv sync --locked"],
+    "pre_setup": ["uv sync --locked --all-extras"],
     "prepend_path": ".venv/bin",
     "acceptance_path": "tests/integration",
     "test": [

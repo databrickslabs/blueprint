@@ -434,7 +434,6 @@ yaml = [
 [package.dev-dependencies]
 dev = [
     { name = "coverage", extra = ["toml"] },
-    { name = "databricks-labs-blueprint", extra = ["yaml"] },
     { name = "databricks-labs-pylint" },
     { name = "mypy" },
     { name = "pylint" },
@@ -469,7 +468,6 @@ pytest = [
 ]
 test = [
     { name = "coverage", extra = ["toml"] },
-    { name = "databricks-labs-blueprint", extra = ["yaml"] },
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "pytest-cov" },
@@ -489,7 +487,6 @@ provides-extras = ["yaml"]
 [package.metadata.requires-dev]
 dev = [
     { name = "coverage", extras = ["toml"], specifier = "~=7.13.4" },
-    { name = "databricks-labs-blueprint", extras = ["yaml"] },
     { name = "databricks-labs-pylint", specifier = "~=0.3.0" },
     { name = "mypy", specifier = "~=1.19.1" },
     { name = "pylint", specifier = "~=4.0.5" },
@@ -524,7 +521,6 @@ pytest = [
 ]
 test = [
     { name = "coverage", extras = ["toml"], specifier = "~=7.13.4" },
-    { name = "databricks-labs-blueprint", extras = ["yaml"] },
     { name = "pytest", specifier = "~=9.0.2" },
     { name = "pytest-asyncio", specifier = "~=1.3.0" },
     { name = "pytest-cov", specifier = "~=7.0.0" },
