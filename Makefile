@@ -37,5 +37,14 @@ coverage:
 	$(UV_TEST) --cov src --cov-report=html tests/unit
 	open htmlcov/index.html
 
+build:
+	uv build --require-hashes --build-constraints=.build-constraints.txt
+
+lock-dependencies: UV_LOCKED := 0
+lock-dependencies:
+	uv lock
+	$(UV_RUN) --group yq tomlq -r '.["build-system"].requires[]' pyproject.toml | \
+	    uv pip compile --generate-hashes --no-header - > .build-constraints.txt
+
 .DEFAULT: all
-.PHONY: all clean dev lint fmt test integration coverage
+.PHONY: all clean dev lint fmt test integration coverage build lock-dependencies
