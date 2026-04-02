@@ -3,7 +3,7 @@ all: clean lint fmt test coverage
 # Ensure that all uv commands are locked and don't automatically update the lock file.
 export UV_LOCKED := 1
 
-UV_RUN := uv run
+UV_RUN := uv run --exact
 UV_TEST := $(UV_RUN) pytest -n 2 --timeout 30 --durations 20
 
 clean:
