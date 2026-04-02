@@ -4,7 +4,7 @@ all: clean lint fmt test coverage
 export UV_LOCKED := 1
 
 UV_RUN := uv run --exact --all-extras
-UV_TEST := $(UV_RUN) pytest -n 2 --timeout 30 --durations 20
+UV_TEST := $(UV_RUN) pytest -n 4 --timeout 30 --durations 20
 
 clean:
 	rm -fr .venv clean htmlcov .mypy_cache .pytest_cache .ruff_cache .coverage coverage.xml
