@@ -3,12 +3,12 @@
     "src/databricks/labs/blueprint/__about__.py": "__version__ = \"$VERSION\""
   },
   "toolchain": {
-    "required": ["uv"],
-    "pre_setup": ["uv sync --locked"],
+    "required": ["make","uv"],
+    "pre_setup": ["make dev"],
     "prepend_path": ".venv/bin",
     "acceptance_path": "tests/integration",
     "test": [
-      "pytest -n 4 --cov src --cov-report=xml --timeout 30 tests/unit --durations 20"
+      "make test"
     ]
   }
 }

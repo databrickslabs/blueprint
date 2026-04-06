@@ -54,11 +54,16 @@ pytest = [
 ]
 test = [
     { include-group = "pytest" },
-    "databricks-labs-blueprint[yaml]",
+]
+# Ensure we can use yq in a way that it (and dependencies) are subject to the cooldown policy.
+yq = [
+    "yq~=3.4.3"
 ]
 
 [build-system]
-requires = ["hatchling"]
+requires = [
+    "hatchling~=1.29.0"
+]
 build-backend = "hatchling.build"
 
 [tool.hatch.build]
