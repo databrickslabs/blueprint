@@ -27,6 +27,7 @@ jobs:
           - name: lsql
           - name: remorph
     runs-on: ubuntu-latest
+    environment: runtime
     permissions:
       # Access to the integration testing infrastructure.
       id-token: write
