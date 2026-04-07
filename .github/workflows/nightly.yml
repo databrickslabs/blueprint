@@ -6,8 +6,6 @@ on:
     - cron: '30 4 * * *'
 
 permissions:
-  id-token: write
-  issues: write
   contents: read
   pull-requests: read
 
@@ -17,6 +15,11 @@ concurrency:
 jobs:
   integration:
     environment: runtime
+    permissions:
+      # Access to the integration testing infrastructure.
+      id-token: write
+      # Create issues for failing tests
+      issues: write
     runs-on: larger
     steps:
       - name: Checkout Code

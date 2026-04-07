@@ -5,14 +5,17 @@ on:
     types: [opened, synchronize, ready_for_review]
 
 permissions:
-  id-token: write
   contents: read
-  pull-requests: write
 
 jobs:
   integration:
     if: github.event_name == 'pull_request' && github.event.pull_request.draft == false
     environment: runtime
+    permissions:
+      # Access to the integration testing infrastructure.
+      id-token: write
+      # Write test results to the PR.
+      pull-requests: write
     runs-on: larger
     steps:
       - name: Checkout Code
