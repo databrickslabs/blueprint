@@ -9,7 +9,7 @@ updates:
     schedule:
       interval: "daily"
 
-  # Disabled for now, pending
+  # Disabled for now, pending guidance on how GHA-updates need to be handled.
   #- package-ecosystem: "github-actions"
   #  directory: "/"
   #  schedule:
