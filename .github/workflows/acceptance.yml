@@ -40,7 +40,7 @@ jobs:
         env:
           JFROG_ACCESS_TOKEN: "${{ steps.jfrog-auth.outputs.jfrog-access-token }}"
         run: |
-          uv login "${UV_INDEX_URL}" --token "${JFROG_ACCESS_TOKEN}"
+          uv auth login "${UV_INDEX_URL}" --token "${JFROG_ACCESS_TOKEN}"
 
       - name: Debug pre_setup
         run: |
