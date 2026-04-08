@@ -1,0 +1,13 @@
+name: 'Authenticate for JFrog'
+description: 'Authenticate with JFrog using OIDC based on the GitHub repository.'
+outputs:
+  jfrog-access-token:
+    description: "Access token for JFrog"
+    value: "${{ steps.jfrog-auth.outputs.jfrog-access-token }}"
+runs:
+  using: "composite"
+  steps:
+    - id: jfrog-auth
+      name: Authenticate against JFrog
+      shell: bash
+      run: "${GITHUB_ACTION_PATH}/jfrog-auth" "${ACTIONS_ID_TOKEN_REQUEST_URL}" "${ACTIONS_ID_TOKEN_REQUEST_TOKEN}"

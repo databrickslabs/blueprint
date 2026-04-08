@@ -12,7 +12,7 @@ jobs:
     if: github.event_name == 'pull_request' && github.event.pull_request.draft == false
     environment: runtime
     permissions:
-      # Access to the integration testing infrastructure.
+      # Access to JFrog and the integration testing infrastructure.
       id-token: write
       # Write test results to the PR.
       pull-requests: write
@@ -30,6 +30,16 @@ jobs:
         with:
           version: "0.11.2"
           checksum: "7ac2ca0449c8d68dae9b99e635cd3bc9b22a4cb1de64b7c43716398447d42981"  # uv-x86_64-unknown-linux-gnu.tar.gz
+
+      - name: Authenticate against JFrog
+        id: jfrog-auth
+        uses: ./.github/actions/jfrog-auth
+
+      - name: Test uv configuration
+        env:
+          JFROG_ACCESS_TOKEN: "${{ steps.jfrog-auth.outputs.jfrog-access-token }}"
+        run: |
+          printf "%s=%s\n" "UV_INDEX_URL" "https://gha-service-account:${JFROG_ACCESS_TOKEN}@databricks.jfrog.io/artifactory/api/pypi/db-pypi/simple" >> "${GITHUB_ENV}"
 
       - name: Debug pre_setup
         run: |
