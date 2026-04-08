@@ -40,7 +40,9 @@ jobs:
         env:
           JFROG_ACCESS_TOKEN: "${{ steps.jfrog-auth.outputs.jfrog-access-token }}"
         run: |
+          find "$(uv auth dir)" -ls
           uv auth login "${UV_INDEX_URL}" --username gha-service-account --password "${JFROG_ACCESS_TOKEN}"
+          find "$(uv auth dir)" -ls
 
       - name: Debug pre_setup
         run: |
