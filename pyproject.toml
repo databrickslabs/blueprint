@@ -110,8 +110,6 @@ line-length = 120
 known-first-party = ["databricks.labs.blueprint"]
 
 [tool.uv]
-exclude-newer = "7 days"
-exclude-newer-package = { "databricks-sdk" = false }
 required-version = "~= 0.11.0"
 
 [tool.pylint.main]
