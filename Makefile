@@ -13,7 +13,7 @@ clean:
 	find . -name '__pycache__' -print0 | xargs -0 rm -fr
 
 dev:
-	UV_LOCKED=0 UV_FROZEN=1 uv sync --all-extras
+	uv sync --all-extras
 
 lint:
 	$(UV_RUN) isort . --check-only
