@@ -4,7 +4,7 @@
   },
   "toolchain": {
     "required": ["make","uv"],
-    "pre_setup": ["make", "dev"],
+    "pre_setup": ["make dev"],
     "prepend_path": ".venv/bin",
     "acceptance_path": "tests/integration",
     "test": [
