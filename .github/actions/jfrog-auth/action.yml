@@ -11,4 +11,4 @@ runs:
       name: Authenticate against JFrog
       shell: bash
       run: |
-        "${GITHUB_ACTION_PATH}/jfrog-auth" "${ACTIONS_ID_TOKEN_REQUEST_URL}" "${ACTIONS_ID_TOKEN_REQUEST_TOKEN}"'
+        "${GITHUB_ACTION_PATH}/jfrog-auth" "${ACTIONS_ID_TOKEN_REQUEST_URL}" "${ACTIONS_ID_TOKEN_REQUEST_TOKEN}"
