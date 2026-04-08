@@ -29,24 +29,6 @@ jobs:
           version: "0.11.2"
           checksum: "7ac2ca0449c8d68dae9b99e635cd3bc9b22a4cb1de64b7c43716398447d42981"  # uv-x86_64-unknown-linux-gnu.tar.gz
 
-      - name: Debug pre_setup
-        run: |
-          set -ex
-          which make
-          which uv
-          uv --version
-          make dev
-          ls -la .venv/bin/python
-          .venv/bin/python -c "import pytest; print(pytest.__version__)"
-          .venv/bin/python -c "import databricks.labs.blueprint; print('project importable')"
-          cd tests/integration && ../.venv/bin/python -c "
-          import pytest
-          class C:
-              def pytest_sessionfinish(self, session):
-                  print(f'Collected {len(session.items)} tests')
-          pytest.main(['--collect-only', '-q'], plugins=[C()])
-          "
-
       - name: Acceptance
         uses: databrickslabs/sandbox/acceptance@3313d06ce86227537b3f37f5974f7eecb2a8e59a  # acceptance/v0.4.4
         with:
