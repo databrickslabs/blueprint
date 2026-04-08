@@ -17,6 +17,8 @@ jobs:
       # Write test results to the PR.
       pull-requests: write
     runs-on: larger
+    env:
+      UV_INDEX_URL: https://pypi-proxy.dev.databricks.com/simple/
     steps:
       - name: Checkout Code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
@@ -37,4 +39,3 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
           ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
-          UV_INDEX_URL: https://pypi-proxy.dev.databricks.com/simple/
