@@ -2,6 +2,8 @@ all: clean lint fmt test coverage
 
 # Ensure that all uv commands are locked and don't automatically update the lock file.
 export UV_LOCKED := 1
+# Ensure that hatchling is pinned when builds are needed.
+export UV_BUILD_CONSTRAINT := .build-constraints.txt
 
 UV_RUN := uv run --exact --all-extras
 UV_TEST := $(UV_RUN) pytest -n 4 --timeout 30 --durations 20
