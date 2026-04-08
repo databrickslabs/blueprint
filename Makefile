@@ -12,8 +12,9 @@ clean:
 	rm -fr .venv clean htmlcov .mypy_cache .pytest_cache .ruff_cache .coverage coverage.xml
 	find . -name '__pycache__' -print0 | xargs -0 rm -fr
 
+dev: UV_LOCKED := 0
 dev:
-	uv sync --all-extras
+	uv sync --all-extras --frozen
 
 lint:
 	$(UV_RUN) isort . --check-only
