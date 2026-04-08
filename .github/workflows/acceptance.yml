@@ -18,7 +18,8 @@ jobs:
       pull-requests: write
     runs-on: larger
     env:
-      UV_INDEX_URL: https://pypi-proxy.dev.databricks.com/simple/
+      # Note: needs authentication, configured below.
+      UV_INDEX_URL: https://databricks.jfrog.io/artifactory/api/pypi/db-pypi/simple
     steps:
       - name: Checkout Code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
@@ -39,7 +40,7 @@ jobs:
         env:
           JFROG_ACCESS_TOKEN: "${{ steps.jfrog-auth.outputs.jfrog-access-token }}"
         run: |
-          printf "%s=%s\n" "UV_INDEX_URL" "https://gha-service-account:${JFROG_ACCESS_TOKEN}@databricks.jfrog.io/artifactory/api/pypi/db-pypi/simple" >> "${GITHUB_ENV}"
+          uv login "${UV_INDEX_URL}" --token "${JFROG_ACCESS_TOKEN}"
 
       - name: Debug pre_setup
         run: |
