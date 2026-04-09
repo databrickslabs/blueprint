@@ -1,7 +1,11 @@
 all: clean lint fmt test coverage
 
-# Ensure that all uv commands are locked and don't automatically update the lock file.
+# Ensure that all uv commands don't automatically update the lock file. If UV_FROZEN=1 (from the environment)
+# then UV_LOCKED should _not_ be set, but otherwise it needs to be set to ensure the lock-file is only ever
+# deliberately updated.
+ifneq ($(UV_FROZEN),1)
 export UV_LOCKED := 1
+endif
 # Ensure that hatchling is pinned when builds are needed.
 export UV_BUILD_CONSTRAINT := .build-constraints.txt
 
@@ -12,9 +16,8 @@ clean:
 	rm -fr .venv clean htmlcov .mypy_cache .pytest_cache .ruff_cache .coverage coverage.xml
 	find . -name '__pycache__' -print0 | xargs -0 rm -fr
 
-dev: UV_LOCKED := 0
 dev:
-	uv sync --all-extras --frozen
+	uv sync --all-extras
 
 lint:
 	$(UV_RUN) isort . --check-only

@@ -36,6 +36,7 @@ jobs:
       # Write test results to the PR.
       pull-requests: write
     env:
+      UV_FROZEN: 1
       UV_INDEX_URL: https://databricks.jfrog.io/artifactory/api/pypi/db-pypi/simple  # Authentication needed, below.
     steps:
       - name: Checkout

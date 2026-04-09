@@ -29,8 +29,9 @@ jobs:
     permissions:
       id-token: write  # JFrog OIDC
     env:
-      UV_PYTHON: "${{ matrix.python }}"
+      UI_FROZEN: 1
       UV_INDEX_URL: https://databricks.jfrog.io/artifactory/api/pypi/db-pypi/simple  # Authentication needed, below.
+      UV_PYTHON: "${{ matrix.python }}"
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
@@ -68,6 +69,7 @@ jobs:
     permissions:
       id-token: write  # JFrog OIDC
     env:
+      UI_FROZEN: 1
       UV_INDEX_URL: https://databricks.jfrog.io/artifactory/api/pypi/db-pypi/simple  # Authentication needed, below.
     steps:
       - name: Checkout
