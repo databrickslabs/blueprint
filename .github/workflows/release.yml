@@ -16,7 +16,7 @@ jobs:
       labels: linux-ubuntu-latest
     environment: release
     permissions:
-      # Used to authenticate to PyPI via OIDC and sign the release's artifacts with sigstore-python.
+      # Used to access JFrog, authenticate to PyPI via OIDC and sign the release's artifacts with sigstore-python.
       id-token: write
       # Used to attach signing artifacts to the published release.
       contents: write

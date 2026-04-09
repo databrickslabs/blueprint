@@ -16,7 +16,7 @@ jobs:
   integration:
     environment: runtime
     permissions:
-      # Access to the integration testing infrastructure.
+      # Access to JFrog and the integration testing infrastructure.
       id-token: write
       # Create issues for failing tests
       issues: write

@@ -26,6 +26,8 @@ jobs:
     runs-on:
       group: databrickslabs-protected-runner-group
       labels: linux-ubuntu-latest
+    permissions:
+      id-token: write  # JFrog OIDC
     env:
       UV_PYTHON: "${{ matrix.python }}"
       UV_INDEX_URL: https://databricks.jfrog.io/artifactory/api/pypi/db-pypi/simple  # Authentication needed, below.
@@ -63,6 +65,8 @@ jobs:
     runs-on:
       group: databrickslabs-protected-runner-group
       labels: linux-ubuntu-latest
+    permissions:
+      id-token: write  # JFrog OIDC
     env:
       UV_INDEX_URL: https://databricks.jfrog.io/artifactory/api/pypi/db-pypi/simple  # Authentication needed, below.
     steps:

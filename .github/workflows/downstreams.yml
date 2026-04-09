@@ -31,7 +31,7 @@ jobs:
       labels: linux-ubuntu-latest
     environment: runtime
     permissions:
-      # Access to the integration testing infrastructure.
+      # Access to JFrog and the integration testing infrastructure.
       id-token: write
       # Write test results to the PR.
       pull-requests: write
