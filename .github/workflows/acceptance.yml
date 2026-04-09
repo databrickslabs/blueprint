@@ -20,8 +20,7 @@ jobs:
       group: larger-runners
       labels: larger
     env:
-      # Note: needs authentication, configured below.
-      UV_INDEX_URL: https://databricks.jfrog.io/artifactory/api/pypi/db-pypi/simple
+      UV_INDEX_URL: https://databricks.jfrog.io/artifactory/api/pypi/db-pypi/simple  # Authentication needed, below.
     steps:
       - name: Checkout Code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
