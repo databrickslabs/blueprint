@@ -20,7 +20,9 @@ jobs:
       id-token: write
       # Create issues for failing tests
       issues: write
-    runs-on: larger
+    runs-on:
+      group: larger-runners
+      labels: larger
     steps:
       - name: Checkout Code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2

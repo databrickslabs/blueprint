@@ -16,7 +16,9 @@ jobs:
       id-token: write
       # Write test results to the PR.
       pull-requests: write
-    runs-on: larger
+    runs-on:
+      group: larger-runners
+      labels: larger
     env:
       # Note: needs authentication, configured below.
       UV_INDEX_URL: https://databricks.jfrog.io/artifactory/api/pypi/db-pypi/simple
