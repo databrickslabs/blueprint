@@ -25,7 +25,7 @@ jobs:
         python: [ '3.10', '3.11', '3.12', '3.13', '3.14' ]
     runs-on:
       group: databrickslabs-protected-runner-group
-      labels: ubuntu-latest
+      labels: linux-ubuntu-latest
     env:
       UV_PYTHON: "${{ matrix.python }}"
     steps:

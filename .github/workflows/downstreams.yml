@@ -28,7 +28,7 @@ jobs:
           - name: remorph
     runs-on:
       group: databrickslabs-protected-runner-group
-      labels: ubuntu-latest
+      labels: linux-ubuntu-latest
     environment: runtime
     permissions:
       # Access to the integration testing infrastructure.
