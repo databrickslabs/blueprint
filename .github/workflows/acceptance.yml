@@ -37,7 +37,7 @@ jobs:
         id: jfrog-auth
         uses: ./.github/actions/jfrog-auth
 
-      - name: Test uv configuration
+      - name: Configure uv authentication for JFrog
         env:
           JFROG_ACCESS_TOKEN: "${{ steps.jfrog-auth.outputs.jfrog-access-token }}"
         run: |
