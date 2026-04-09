@@ -44,7 +44,8 @@ lock-dependencies: UV_LOCKED := 0
 lock-dependencies:
 	uv lock
 	$(UV_RUN) --group yq tomlq -r '.["build-system"].requires[]' pyproject.toml | \
-	    uv pip compile --generate-hashes --no-header - > .build-constraints.txt
+	    uv pip compile --generate-hashes --universal --no-header - > build-constraints-new.txt
+	mv build-constraints-new.txt .build-constraints.txt
 
 .DEFAULT: all
 .PHONY: all clean dev lint fmt test integration coverage build lock-dependencies
