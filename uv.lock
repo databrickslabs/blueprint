@@ -7,13 +7,6 @@ resolution-markers = [
     "python_full_version < '3.11'",
 ]
 
-[options]
-exclude-newer = "2026-03-26T11:56:54.165855Z"
-exclude-newer-span = "P7D"
-
-[options.exclude-newer-package]
-databricks-sdk = false
-
 [[package]]
 name = "argcomplete"
 version = "3.6.3"
