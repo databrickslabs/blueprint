@@ -26,7 +26,9 @@ jobs:
           - name: ucx
           - name: lsql
           - name: remorph
-    runs-on: ubuntu-latest
+    runs-on:
+      group: databrickslabs-protected-runner-group
+      labels: linux-ubuntu-latest
     environment: runtime
     permissions:
       # Access to the integration testing infrastructure.
