@@ -55,7 +55,7 @@ pytest = [
 test = [
     { include-group = "pytest" },
 ]
-# Ensure we can use yq in a way that it (and dependencies) are subject to the cooldown policy.
+# Ensure we can use yq in a way that it (and dependencies) are pinned.
 yq = [
     "yq~=3.4.3"
 ]
@@ -110,8 +110,6 @@ line-length = 120
 known-first-party = ["databricks.labs.blueprint"]
 
 [tool.uv]
-exclude-newer = "7 days"
-exclude-newer-package = { "databricks-sdk" = false }
 required-version = "~= 0.11.0"
 
 [tool.pylint.main]
