@@ -35,8 +35,7 @@ jobs:
           version: "0.11.2"
           checksum: "7ac2ca0449c8d68dae9b99e635cd3bc9b22a4cb1de64b7c43716398447d42981"  # uv-x86_64-unknown-linux-gnu.tar.gz
 
-      - name: Authenticate against JFrog
-        id: jfrog-auth
+      - name: Setup for JFrog
         uses: ./.github/actions/jfrog-auth
 
       - name: Run nightly tests
