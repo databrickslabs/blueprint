@@ -26,13 +26,18 @@ jobs:
           - name: ucx
           - name: lsql
           - name: remorph
-    runs-on: ubuntu-latest
+    runs-on:
+      group: databrickslabs-protected-runner-group
+      labels: linux-ubuntu-latest
     environment: runtime
     permissions:
-      # Access to the integration testing infrastructure.
+      # Access to JFrog and the integration testing infrastructure.
       id-token: write
       # Write test results to the PR.
       pull-requests: write
+    env:
+      UV_FROZEN: 1
+      UV_INDEX_URL: https://databricks.jfrog.io/artifactory/api/pypi/db-pypi/simple  # Authentication needed, below.
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
@@ -45,10 +50,20 @@ jobs:
           version: "0.11.2"
           checksum: "7ac2ca0449c8d68dae9b99e635cd3bc9b22a4cb1de64b7c43716398447d42981"  # uv-x86_64-unknown-linux-gnu.tar.gz
 
-      - name: Acceptance
-        uses: databrickslabs/sandbox/downstreams@3313d06ce86227537b3f37f5974f7eecb2a8e59a  # acceptance/v0.4.4
-        with:
-          repo: ${{ matrix.downstream.name }}
-          org: databrickslabs
+      - name: Authenticate against JFrog
+        id: jfrog-auth
+        uses: ./.github/actions/jfrog-auth
+
+      - name: Configure uv authentication for JFrog
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          JFROG_ACCESS_TOKEN: "${{ steps.jfrog-auth.outputs.jfrog-access-token }}"
+        run: uv auth login "${UV_INDEX_URL}" --username gha-service-account --password "${JFROG_ACCESS_TOKEN}"
+
+      - name: Acceptance
+        run: printf '::error::%s\n' "Downstream tests disabled pending repository lockdown."
+      #  uses: databrickslabs/sandbox/downstreams@3313d06ce86227537b3f37f5974f7eecb2a8e59a  # acceptance/v0.4.4
+      #  with:
+      #    repo: ${{ matrix.downstream.name }}
+      #    org: databrickslabs
+      #  env:
+      #    GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
