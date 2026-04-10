@@ -41,28 +41,7 @@ jobs:
       - name: Configure uv authentication for JFrog
         env:
           JFROG_ACCESS_TOKEN: "${{ steps.jfrog-auth.outputs.jfrog-access-token }}"
-        run: |
-          find "$(uv auth dir)" -ls || printf "No auth dir before\n"
-          uv auth login "${UV_INDEX_URL}" --username gha-service-account --password "${JFROG_ACCESS_TOKEN}"
-          find "$(uv auth dir)" -ls || printf "No auth dir after\n"
-
-      - name: Debug pre_setup
-        run: |
-          set -ex
-          which make
-          which uv
-          uv --version
-          make dev
-          ls -la .venv/bin/python
-          .venv/bin/python -c "import pytest; print(pytest.__version__)"
-          .venv/bin/python -c "import databricks.labs.blueprint; print('project importable')"
-          cd tests/integration && ../../.venv/bin/python -c "
-          import pytest
-          class C:
-              def pytest_sessionfinish(self, session):
-                  print(f'Collected {len(session.items)} tests')
-          pytest.main(['--collect-only', '-q'], plugins=[C()])
-          "
+        run: uv auth login "${UV_INDEX_URL}" --username gha-service-account --password "${JFROG_ACCESS_TOKEN}"
 
       - name: Acceptance
         uses: databrickslabs/sandbox/acceptance@3313d06ce86227537b3f37f5974f7eecb2a8e59a  # acceptance/v0.4.4

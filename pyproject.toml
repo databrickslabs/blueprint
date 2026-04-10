@@ -55,7 +55,7 @@ pytest = [
 test = [
     { include-group = "pytest" },
 ]
-# Ensure we can use yq in a way that it (and dependencies) are subject to the cooldown policy.
+# Ensure we can use yq in a way that it (and dependencies) are pinned.
 yq = [
     "yq~=3.4.3"
 ]
