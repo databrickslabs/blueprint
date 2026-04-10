@@ -1,5 +1,6 @@
 name: 'Authenticate for JFrog'
 description: 'Authenticate with JFrog using OIDC based on the GitHub repository.'
+# TODO: Factor out into an external action, once releases are allowed.
 outputs:
   jfrog-access-token:
     description: "Access token for JFrog"
