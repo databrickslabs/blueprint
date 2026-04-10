@@ -5,15 +5,23 @@ on:
     types: [opened, synchronize, ready_for_review]
 
 permissions:
-  id-token: write
   contents: read
-  pull-requests: write
 
 jobs:
   integration:
     if: github.event_name == 'pull_request' && github.event.pull_request.draft == false
     environment: runtime
-    runs-on: larger
+    permissions:
+      # Access to JFrog and the integration testing infrastructure.
+      id-token: write
+      # Write test results to the PR.
+      pull-requests: write
+    runs-on:
+      group: larger-runners
+      labels: larger
+    env:
+      UV_FROZEN: 1
+      UV_INDEX_URL: https://databricks.jfrog.io/artifactory/api/pypi/db-pypi/simple  # Authentication needed, below.
     steps:
       - name: Checkout Code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
@@ -25,6 +33,15 @@ jobs:
         with:
           version: "0.11.2"
           checksum: "7ac2ca0449c8d68dae9b99e635cd3bc9b22a4cb1de64b7c43716398447d42981"  # uv-x86_64-unknown-linux-gnu.tar.gz
+
+      - name: Authenticate against JFrog
+        id: jfrog-auth
+        uses: ./.github/actions/jfrog-auth
+
+      - name: Configure uv authentication for JFrog
+        env:
+          JFROG_ACCESS_TOKEN: "${{ steps.jfrog-auth.outputs.jfrog-access-token }}"
+        run: uv auth login "${UV_INDEX_URL}" --username gha-service-account --password "${JFROG_ACCESS_TOKEN}"
 
       - name: Acceptance
         uses: databrickslabs/sandbox/acceptance@3313d06ce86227537b3f37f5974f7eecb2a8e59a  # acceptance/v0.4.4

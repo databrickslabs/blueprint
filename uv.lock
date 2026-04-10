@@ -7,12 +7,14 @@ resolution-markers = [
     "python_full_version < '3.11'",
 ]
 
-[options]
-exclude-newer = "2026-03-23T15:46:33.215334Z"
-exclude-newer-span = "P7D"
-
-[options.exclude-newer-package]
-databricks-sdk = false
+[[package]]
+name = "argcomplete"
+version = "3.6.3"
+source = { registry = "https://pypi-proxy.dev.databricks.com/simple/" }
+sdist = { url = "https://files.pythonhosted.org/packages/38/61/0b9ae6399dd4a58d8c1b1dc5a27d6f2808023d0b5dd3104bb99f45a33ff6/argcomplete-3.6.3.tar.gz", hash = "sha256:62e8ed4fd6a45864acc8235409461b72c9a28ee785a2011cc5eb78318786c89c", size = 73754, upload-time = "2025-10-20T03:33:34.741Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/74/f5/9373290775639cb67a2fce7f629a1c240dce9f12fe927bc32b2736e16dfc/argcomplete-3.6.3-py3-none-any.whl", hash = "sha256:f5007b3a600ccac5d25bbce33089211dfd49eab4a7718da3f10e3082525a92ce", size = 43846, upload-time = "2025-10-20T03:33:33.021Z" },
+]
 
 [[package]]
 name = "astroid"
@@ -434,7 +436,6 @@ yaml = [
 [package.dev-dependencies]
 dev = [
     { name = "coverage", extra = ["toml"] },
-    { name = "databricks-labs-blueprint", extra = ["yaml"] },
     { name = "databricks-labs-pylint" },
     { name = "mypy" },
     { name = "pylint" },
@@ -469,13 +470,15 @@ pytest = [
 ]
 test = [
     { name = "coverage", extra = ["toml"] },
-    { name = "databricks-labs-blueprint", extra = ["yaml"] },
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "pytest-cov" },
     { name = "pytest-mock" },
     { name = "pytest-timeout" },
     { name = "pytest-xdist" },
+]
+yq = [
+    { name = "yq" },
 ]
 
 [package.metadata]
@@ -489,7 +492,6 @@ provides-extras = ["yaml"]
 [package.metadata.requires-dev]
 dev = [
     { name = "coverage", extras = ["toml"], specifier = "~=7.13.4" },
-    { name = "databricks-labs-blueprint", extras = ["yaml"] },
     { name = "databricks-labs-pylint", specifier = "~=0.3.0" },
     { name = "mypy", specifier = "~=1.19.1" },
     { name = "pylint", specifier = "~=4.0.5" },
@@ -524,7 +526,6 @@ pytest = [
 ]
 test = [
     { name = "coverage", extras = ["toml"], specifier = "~=7.13.4" },
-    { name = "databricks-labs-blueprint", extras = ["yaml"] },
     { name = "pytest", specifier = "~=9.0.2" },
     { name = "pytest-asyncio", specifier = "~=1.3.0" },
     { name = "pytest-cov", specifier = "~=7.0.0" },
@@ -532,6 +533,7 @@ test = [
     { name = "pytest-timeout", specifier = "~=2.4.0" },
     { name = "pytest-xdist", specifier = "~=3.8.0" },
 ]
+yq = [{ name = "yq", specifier = "~=3.4.3" }]
 
 [[package]]
 name = "databricks-labs-pylint"
@@ -1207,4 +1209,28 @@ source = { registry = "https://pypi-proxy.dev.databricks.com/simple/" }
 sdist = { url = "https://files.pythonhosted.org/packages/c7/24/5f1b3bdffd70275f6661c76461e25f024d5a38a46f04aaca912426a2b1d3/urllib3-2.6.3.tar.gz", hash = "sha256:1b62b6884944a57dbe321509ab94fd4d3b307075e0c2eae991ac71ee15ad38ed", size = 435556, upload-time = "2026-01-07T16:24:43.925Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/39/08/aaaad47bc4e9dc8c725e68f9d04865dbcb2052843ff09c97b08904852d84/urllib3-2.6.3-py3-none-any.whl", hash = "sha256:bf272323e553dfb2e87d9bfd225ca7b0f467b919d7bbd355436d3fd37cb0acd4", size = 131584, upload-time = "2026-01-07T16:24:42.685Z" },
+]
+
+[[package]]
+name = "xmltodict"
+version = "1.0.4"
+source = { registry = "https://pypi-proxy.dev.databricks.com/simple/" }
+sdist = { url = "https://files.pythonhosted.org/packages/19/70/80f3b7c10d2630aa66414bf23d210386700aa390547278c789afa994fd7e/xmltodict-1.0.4.tar.gz", hash = "sha256:6d94c9f834dd9e44514162799d344d815a3a4faec913717a9ecbfa5be1bb8e61", size = 26124, upload-time = "2026-02-22T02:21:22.074Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/38/34/98a2f52245f4d47be93b580dae5f9861ef58977d73a79eb47c58f1ad1f3a/xmltodict-1.0.4-py3-none-any.whl", hash = "sha256:a4a00d300b0e1c59fc2bfccb53d7b2e88c32f200df138a0dd2229f842497026a", size = 13580, upload-time = "2026-02-22T02:21:21.039Z" },
+]
+
+[[package]]
+name = "yq"
+version = "3.4.3"
+source = { registry = "https://pypi-proxy.dev.databricks.com/simple/" }
+dependencies = [
+    { name = "argcomplete" },
+    { name = "pyyaml" },
+    { name = "tomlkit" },
+    { name = "xmltodict" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/38/6a/eb9721ed0929d0f55d167c2222d288b529723afbef0a07ed7aa6cca72380/yq-3.4.3.tar.gz", hash = "sha256:ba586a1a6f30cf705b2f92206712df2281cd320280210e7b7b80adcb8f256e3b", size = 33214, upload-time = "2024-04-27T15:39:43.29Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f2/ba/d1b21f3e57469030bd6536b91bb28fedd2511d4e68b5a575f2bdb3a3dbb6/yq-3.4.3-py3-none-any.whl", hash = "sha256:547e34bc3caacce83665fd3429bf7c85f8e8b6b9aaee3f953db1ad716ff3434d", size = 18812, upload-time = "2024-04-27T15:39:41.652Z" },
 ]

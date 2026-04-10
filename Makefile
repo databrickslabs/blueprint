@@ -1,17 +1,23 @@
 all: clean lint fmt test coverage
 
-# Ensure that all uv commands are locked and don't automatically update the lock file.
+# Ensure that all uv commands don't automatically update the lock file. If UV_FROZEN=1 (from the environment)
+# then UV_LOCKED should _not_ be set, but otherwise it needs to be set to ensure the lock-file is only ever
+# deliberately updated.
+ifneq ($(UV_FROZEN),1)
 export UV_LOCKED := 1
+endif
+# Ensure that hatchling is pinned when builds are needed.
+export UV_BUILD_CONSTRAINT := .build-constraints.txt
 
-UV_RUN := uv run
-UV_TEST := $(UV_RUN) pytest -n 2 --timeout 30 --durations 20
+UV_RUN := uv run --exact --all-extras
+UV_TEST := $(UV_RUN) pytest -n 4 --timeout 30 --durations 20
 
 clean:
 	rm -fr .venv clean htmlcov .mypy_cache .pytest_cache .ruff_cache .coverage coverage.xml
 	find . -name '__pycache__' -print0 | xargs -0 rm -fr
 
 dev:
-	uv sync
+	uv sync --all-extras
 
 lint:
 	$(UV_RUN) isort . --check-only
@@ -37,5 +43,15 @@ coverage:
 	$(UV_TEST) --cov src --cov-report=html tests/unit
 	open htmlcov/index.html
 
+build:
+	uv build --require-hashes --build-constraints=.build-constraints.txt
+
+lock-dependencies: UV_LOCKED := 0
+lock-dependencies:
+	uv lock
+	$(UV_RUN) --group yq tomlq -r '.["build-system"].requires[]' pyproject.toml | \
+	    uv pip compile --generate-hashes --universal --no-header - > build-constraints-new.txt
+	mv build-constraints-new.txt .build-constraints.txt
+
 .DEFAULT: all
-.PHONY: all clean dev lint fmt test integration coverage
+.PHONY: all clean dev lint fmt test integration coverage build lock-dependencies

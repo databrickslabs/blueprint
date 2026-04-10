@@ -54,11 +54,16 @@ pytest = [
 ]
 test = [
     { include-group = "pytest" },
-    "databricks-labs-blueprint[yaml]",
+]
+# Ensure we can use yq in a way that it (and dependencies) are pinned.
+yq = [
+    "yq~=3.4.3"
 ]
 
 [build-system]
-requires = ["hatchling"]
+requires = [
+    "hatchling~=1.29.0"
+]
 build-backend = "hatchling.build"
 
 [tool.hatch.build]
@@ -105,8 +110,6 @@ line-length = 120
 known-first-party = ["databricks.labs.blueprint"]
 
 [tool.uv]
-exclude-newer = "7 days"
-exclude-newer-package = { "databricks-sdk" = false }
 required-version = "~= 0.11.0"
 
 [tool.pylint.main]
