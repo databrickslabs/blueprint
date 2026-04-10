@@ -29,8 +29,6 @@ jobs:
     permissions:
       id-token: write  # JFrog OIDC
     env:
-      UV_FROZEN: 1
-      UV_INDEX_URL: https://databricks.jfrog.io/artifactory/api/pypi/db-pypi/simple  # Authentication needed, below.
       UV_PYTHON: "${{ matrix.python }}"
     steps:
       - name: Checkout
@@ -45,11 +43,6 @@ jobs:
       - name: Authenticate against JFrog
         id: jfrog-auth
         uses: ./.github/actions/jfrog-auth
-
-      - name: Configure uv authentication for JFrog
-        env:
-          JFROG_ACCESS_TOKEN: "${{ steps.jfrog-auth.outputs.jfrog-access-token }}"
-        run: uv auth login "${UV_INDEX_URL}" --username gha-service-account --password "${JFROG_ACCESS_TOKEN}"
 
       - name: Initialize the project
         run: make dev
@@ -68,9 +61,6 @@ jobs:
       labels: linux-ubuntu-latest
     permissions:
       id-token: write  # JFrog OIDC
-    env:
-      UV_FROZEN: 1
-      UV_INDEX_URL: https://databricks.jfrog.io/artifactory/api/pypi/db-pypi/simple  # Authentication needed, below.
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
@@ -84,11 +74,6 @@ jobs:
       - name: Authenticate against JFrog
         id: jfrog-auth
         uses: ./.github/actions/jfrog-auth
-
-      - name: Configure uv authentication for JFrog
-        env:
-          JFROG_ACCESS_TOKEN: "${{ steps.jfrog-auth.outputs.jfrog-access-token }}"
-        run: uv auth login "${UV_INDEX_URL}" --username gha-service-account --password "${JFROG_ACCESS_TOKEN}"
 
       - name: Initialize the project
         run: make dev
