@@ -280,11 +280,11 @@ class WheelsV2(AbstractContextManager):
         :param no_deps: bool:  (Default value = True)
         :param dirs_exist_ok: bool:  (Default value = False)
         """
-        stdout = subprocess.STDOUT
-        stderr = subprocess.STDOUT
-        if not verbose:
-            stdout = subprocess.DEVNULL
-            stderr = subprocess.DEVNULL
+        stdout: int | None = subprocess.DEVNULL
+        stderr = subprocess.DEVNULL
+        if verbose:
+            stdout = None  # Pass-through.
+            stderr = subprocess.STDOUT  # Redirected to stdout
         checkout_root = self._product_info.checkout_root()
         if self._product_info.is_git_checkout() and self._product_info.is_unreleased_version():
             # working copy becomes project root for building a wheel
