@@ -66,11 +66,20 @@ requires = [
 ]
 build-backend = "hatchling.build"
 
+[tool.hatch.build.targets.sdist]
+only-include = [
+    "/.build-constraints.txt",
+    "/README.*",
+    "/LICEN[CS]E",
+    "/NOTICE",
+    "/pyproject.toml",
+    "/src/",
+    "/tests/",
+    "/uv.lock",
+]
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/databricks"]
-
-[tool.hatch.build.targets.sdist]
-only-include = ["src", "README.md", "LICENSE", "NOTICE"]
 
 [tool.hatch.version]
 path = "src/databricks/labs/blueprint/__about__.py"
