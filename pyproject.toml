@@ -67,7 +67,6 @@ requires = [
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-sources = ["src"]
 packages = ["src/databricks"]
 
 [tool.hatch.build.targets.sdist]
