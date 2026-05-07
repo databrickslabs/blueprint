@@ -3,7 +3,7 @@
     "src/databricks/labs/blueprint/__about__.py": "__version__ = \"$VERSION\""
   },
   "toolchain": {
-    "required": ["make","uv"],
+    "required": ["make", "uv"],
     "pre_setup": ["make dev"],
     "prepend_path": ".venv/bin",
     "acceptance_path": "tests/integration",
