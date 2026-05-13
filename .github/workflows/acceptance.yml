@@ -10,7 +10,9 @@ permissions:
 jobs:
   integration:
     if: github.event_name == 'pull_request' && github.event.pull_request.draft == false
-    environment: runtime
+    environment:
+      name: runtime
+      deployment: false
     permissions:
       # Access to JFrog and the integration testing infrastructure.
       id-token: write

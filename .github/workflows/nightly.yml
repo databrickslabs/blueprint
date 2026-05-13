@@ -14,7 +14,9 @@ concurrency:
 
 jobs:
   integration:
-    environment: runtime
+    environment:
+      name: runtime
+      deployment: false
     permissions:
       # Access to JFrog and the integration testing infrastructure.
       id-token: write

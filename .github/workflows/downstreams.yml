@@ -29,7 +29,9 @@ jobs:
     runs-on:
       group: databrickslabs-protected-runner-group
       labels: linux-ubuntu-latest
-    environment: runtime
+    environment:
+      name: runtime
+      deployment: false
     permissions:
       # Access to JFrog and the integration testing infrastructure.
       id-token: write
