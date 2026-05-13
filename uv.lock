@@ -492,7 +492,7 @@ provides-extras = ["yaml"]
 [package.metadata.requires-dev]
 dev = [
     { name = "coverage", extras = ["toml"], specifier = "~=7.13.4" },
-    { name = "databricks-labs-pylint", specifier = "~=0.3.0" },
+    { name = "databricks-labs-pylint", specifier = "~=0.5.0" },
     { name = "mypy", specifier = "~=1.20.2" },
     { name = "pylint", specifier = "~=4.0.5" },
     { name = "pylint-pytest", specifier = "==2.0.0a1" },
@@ -507,7 +507,7 @@ dev = [
     { name = "types-requests", specifier = "~=2.31.0" },
 ]
 lint = [
-    { name = "databricks-labs-pylint", specifier = "~=0.3.0" },
+    { name = "databricks-labs-pylint", specifier = "~=0.5.0" },
     { name = "mypy", specifier = "~=1.20.2" },
     { name = "pylint", specifier = "~=4.0.5" },
     { name = "pylint-pytest", specifier = "==2.0.0a1" },
@@ -537,7 +537,7 @@ yq = [{ name = "yq", specifier = "~=3.4.3" }]
 
 [[package]]
 name = "databricks-labs-pylint"
-version = "0.3.0"
+version = "0.5.0"
 source = { registry = "https://pypi.org/simple/" }
 dependencies = [
     { name = "astroid" },
@@ -545,9 +545,9 @@ dependencies = [
     { name = "eradicate" },
     { name = "pylint" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/6d/55/b980a30b141b5d8f79f13d9f671d66b543e2c909ec645f6b3d878a956826/databricks_labs_pylint-0.3.0.tar.gz", hash = "sha256:97569a8c0147ec5d4c149a5a1632101fbfdb254437c544fc734c117d02d9548f", size = 28896, upload-time = "2024-04-22T16:27:31.138Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/b4/be/2bff3b16e8e2918af28420180ecdd053c22aabd5d0e04c4151e24f6992a1/databricks_labs_pylint-0.5.0.tar.gz", hash = "sha256:7a4add66ee95a567b8af6830ad6c645d1b699cd626360272708bcedb43686a67", size = 30287, upload-time = "2024-10-03T16:32:56.074Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/03/d6/51aa35e96b941a7d6db9d020558ab6ec20718cb721a74f8df5aeead94bc4/databricks_labs_pylint-0.3.0-py3-none-any.whl", hash = "sha256:fb1ceac8f073d59b747a42ef3848b29fe15af7912bbc098b5531271617e73d68", size = 21005, upload-time = "2024-04-22T16:27:30.028Z" },
+    { url = "https://files.pythonhosted.org/packages/51/9e/ad559ac4e20877fd55da09412bedf1884e207030d6279aa60f8fd6250b63/databricks_labs_pylint-0.5.0-py3-none-any.whl", hash = "sha256:38df1187eabe52f725cd3bab786df499b1cea9856fad255a198d14a877c35481", size = 22567, upload-time = "2024-10-03T16:32:54.232Z" },
 ]
 
 [[package]]
