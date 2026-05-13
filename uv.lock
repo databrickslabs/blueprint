@@ -484,7 +484,7 @@ yq = [
 [package.metadata]
 requires-dist = [
     { name = "databricks-sdk", specifier = ">=0.16.0" },
-    { name = "pip", specifier = "~=26.0" },
+    { name = "pip", specifier = "~=26.1" },
     { name = "pyyaml", marker = "extra == 'yaml'", specifier = ">=6.0.0,<7.0.0" },
 ]
 provides-extras = ["yaml"]

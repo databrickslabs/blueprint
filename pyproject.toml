@@ -19,7 +19,7 @@ classifiers = [
 ]
 dependencies = [
     "databricks-sdk>=0.16.0",
-    "pip~=26.0",
+    "pip~=26.1",
 ]
 
 [project.optional-dependencies]
