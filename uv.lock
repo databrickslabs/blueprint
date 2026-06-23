@@ -533,7 +533,7 @@ provides-extras = ["yaml"]
 dev = [
     { name = "coverage", extras = ["toml"], specifier = "~=7.14.1" },
     { name = "databricks-labs-pylint", specifier = "~=0.5.0" },
-    { name = "mypy", specifier = ">=1.20.2,<2.2.0" },
+    { name = "mypy", specifier = "~=2.1.0" },
     { name = "pylint", specifier = "~=4.0.5" },
     { name = "pylint-pytest", specifier = "==2.0.0a1" },
     { name = "pytest", specifier = "~=9.0.3" },
@@ -548,7 +548,7 @@ dev = [
 ]
 lint = [
     { name = "databricks-labs-pylint", specifier = "~=0.5.0" },
-    { name = "mypy", specifier = ">=1.20.2,<2.2.0" },
+    { name = "mypy", specifier = "~=2.1.0" },
     { name = "pylint", specifier = "~=4.0.5" },
     { name = "pylint-pytest", specifier = "==2.0.0a1" },
     { name = "ruff", specifier = "~=0.3.4" },
