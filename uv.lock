@@ -504,7 +504,7 @@ dev = [
     { name = "pytest-xdist", specifier = "~=3.8.0" },
     { name = "ruff", specifier = "~=0.3.4" },
     { name = "types-pyyaml", specifier = "~=6.0.12" },
-    { name = "types-requests", specifier = ">=2.31,<2.34" },
+    { name = "types-requests", specifier = "~=2.33" },
 ]
 lint = [
     { name = "databricks-labs-pylint", specifier = "~=0.5.0" },
@@ -513,7 +513,7 @@ lint = [
     { name = "pylint-pytest", specifier = "==2.0.0a1" },
     { name = "ruff", specifier = "~=0.3.4" },
     { name = "types-pyyaml", specifier = "~=6.0.12" },
-    { name = "types-requests", specifier = ">=2.31,<2.34" },
+    { name = "types-requests", specifier = "~=2.33" },
 ]
 pytest = [
     { name = "coverage", extras = ["toml"], specifier = "~=7.13.4" },
