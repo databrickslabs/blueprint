@@ -39,7 +39,7 @@ lint = [
     "mypy~=2.1.0",
     "pylint~=4.0.5",
     "pylint-pytest==2.0.0a1",
-    "ruff~=0.3.4",
+    "ruff>=0.3.4,<0.16.0",
     "types-PyYAML~=6.0.12",
     "types-requests~=2.33",
 ]
