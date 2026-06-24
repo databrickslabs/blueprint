@@ -484,7 +484,7 @@ class Installation:
         """The `_get_type_ref` method is a private method that is used to determine the type of an object. This method
         is called by the `save` method."""
         type_ref = type(inst)
-        if type_ref == list:
+        if type_ref is list:
             return cls._get_list_type_ref(inst)
         return type_ref
 
@@ -509,9 +509,9 @@ class Installation:
             return inst.as_dict(), True
         if dataclasses.is_dataclass(type_ref):
             return self._marshal_dataclass(type_ref, path, inst)
-        if type_ref == list:
+        if type_ref is list:
             return self._marshal_raw_list(path, inst)
-        if type_ref == dict:
+        if type_ref is dict:
             return self._marshal_raw_dict(path, inst)
         if isinstance(type_ref, enum.EnumMeta):
             return self._marshal_enum(inst)
@@ -532,7 +532,7 @@ class Installation:
             if type_ref.__origin__ in (dict, list) or isinstance(type_ref, types.GenericAlias):
                 return self._marshal_generic(type_ref, path, inst)
             return self._marshal_generic_alias(type_ref, inst)
-        raise SerdeError(f'{".".join(path)}: unknown: {inst}')
+        raise SerdeError(f"{'.'.join(path)}: unknown: {inst}")
 
     def _marshal_union(self, type_ref: type, path: list[str], inst: Any) -> tuple[Any, bool]:
         """The `_marshal_union` method is a private method that is used to serialize an object of type `type_ref` to
@@ -543,7 +543,7 @@ class Installation:
             if ok:
                 return value, True
             combo.append(self._explain_why(variant, [*path, f"(as {variant})"], inst))
-        raise SerdeError(f'{".".join(path)}: union: {" or ".join(combo)}')
+        raise SerdeError(f"{'.'.join(path)}: union: {' or '.join(combo)}")
 
     def _marshal_generic(self, type_ref: type, path: list[str], inst: Any) -> tuple[Any, bool]:
         """The `_marshal_generic` method is a private method that is used to serialize an object of type `type_ref`
@@ -719,10 +719,10 @@ class Installation:
             _UnionGenericAlias,
         )
 
-        if type_ref == list:
+        if type_ref is list:
             msg = f"{'.'.join(path)}: raw list encountered; use list[type] instead: {inst}"
             raise SerdeError(msg)
-        if type_ref == dict:
+        if type_ref is dict:
             msg = f"{'.'.join(path)}: raw dict encountered; use dict[str,type] instead: {inst}"
             raise SerdeError(msg)
 
@@ -730,7 +730,7 @@ class Installation:
             return cls._unmarshal_union(inst, path, type_ref)
         if isinstance(type_ref, (_GenericAlias, types.GenericAlias)):
             return cls._unmarshal_generic(inst, path, type_ref)
-        raise SerdeError(f'{".".join(path)}: unknown: {type_ref}: {inst}')
+        raise SerdeError(f"{'.'.join(path)}: unknown: {type_ref}: {inst}")
 
     @classmethod
     def _unmarshal_dataclass(cls, inst, path, type_ref):
@@ -858,7 +858,7 @@ class Installation:
         # Some special cases:
         #  - str -> bool: only accept "true" or "false" (case-insensitive).
         #  - float -> int: refuse to truncate
-        if type_ref == bool:
+        if type_ref is bool:
             if isinstance(inst, str):
                 if inst.lower() == "true":
                     return True
@@ -866,7 +866,7 @@ class Installation:
                     return False
             msg = f"{'.'.join(path)}: Expected bool, got: {inst}"
             raise SerdeError(msg)
-        if type_ref == int and isinstance(inst, float):
+        if type_ref is int and isinstance(inst, float):
             msg = f"{'.'.join(path)}: Expected int, got float: {inst}"
             raise SerdeError(msg)
 
@@ -885,7 +885,7 @@ class Installation:
         if raw is None:
             raw = "value is missing"
         type_name = getattr(type_ref, "__name__", str(type_ref))
-        return f'{".".join(path)}: not a {type_name}: {raw}'
+        return f"{'.'.join(path)}: not a {type_name}: {raw}"
 
     @staticmethod
     def _dump_json(as_dict: JsonValue, _: type) -> bytes:
@@ -1071,7 +1071,7 @@ class MockInstallation(Installation):
                 if expected:
                     assert loc[name] == expected, f"{filename} content missmatch"
                 return
-            raise AssertionError(f'Cannot find {filename.pattern} among {", ".join(loc.keys())}')
+            raise AssertionError(f"Cannot find {filename.pattern} among {', '.join(loc.keys())}")
         assert filename in loc, f"{filename} had no writes"
         if expected:
             assert loc[filename] == expected, f"{filename} content missmatch"

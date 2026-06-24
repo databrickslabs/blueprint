@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 class ManyError(RuntimeError):
     def __init__(self, errs: Sequence[BaseException]):
         strs = sorted({f"{_.__class__.__name__}: {_!s}" for _ in errs})
-        msg = f'Detected {len(errs)} failures: {", ".join(strs)}'
+        msg = f"Detected {len(errs)} failures: {', '.join(strs)}"
         super().__init__(msg)
         self.errs = errs
 
