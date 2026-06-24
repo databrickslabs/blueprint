@@ -174,9 +174,9 @@ def test_cpu_count_source_process_cpu_count() -> None:
     ):
         assert Threads.available_cpu_count() == 13, "Should use os.process_cpu_count() if available"
     assert mock_process_cpu_count.called, "os.process_cpu_count() should be called"
-    assert (
-        not mock_sched_getaffinity.called
-    ), "os.sched_getaffinity() should not be called if os.process_cpu_count() is available"
+    assert not mock_sched_getaffinity.called, (
+        "os.sched_getaffinity() should not be called if os.process_cpu_count() is available"
+    )
     assert not mock_cpu_count.called, "os.cpu_count() should not be called if os.process_cpu_count() is available"
 
 
