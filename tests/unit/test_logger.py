@@ -477,13 +477,13 @@ async def test_readlines_small_reads() -> None:
         ((b"1", b"12\n45\n78\n0", b"12\n"), ("112", "45", "78", "012")),
         # A very long line, with some existing data in the buffer, and leaving some remainder.
         (
-            (b"12", b"3456789012" b"3456789012" b"3456789012" b"34567890\n1234"),
+            (b"12", b"3456789012" + b"3456789012" + b"3456789012" + b"34567890\n1234"),
             ("1234567890+", "1234567890+", "1234567890+", "1234567890+", "", "1234!"),
         ),
         # A \r\n newline split across reads.
         ((b"1234\r", b"\nabcd\n"), ("1234", "abcd")),
         # A \r\n split exactly on the limit.
-        ((b"123456789\r" b"\nabcd\n",), ("123456789+", "", "abcd")),
+        ((b"123456789\r" + b"\nabcd\n",), ("123456789+", "", "abcd")),
     ),
 )
 async def test_readlines_line_exceeds_limit(data_chunks: Sequence[bytes], expected_messages: Sequence[str]) -> None:
