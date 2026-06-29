@@ -9,6 +9,7 @@ updates:
     schedule:
       interval: "daily"
     groups:
+      # Patch-level updates are low-risk, and can be batched together into a single PR to reduce update noise.
       batch-patch-updates:
         update-types:
           - "patch"
