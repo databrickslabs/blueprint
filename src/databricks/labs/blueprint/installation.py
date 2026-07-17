@@ -379,6 +379,7 @@ class Installation:
         converters: dict[str, Callable[[Any, type], bytes]] = {
             "json": self._dump_json,
             "yml": self._dump_yaml,
+            "yaml": self._dump_yaml,
             "csv": self._dump_csv,
         }
         extension = filename.split(".")[-1]
@@ -421,6 +422,7 @@ class Installation:
         converters: dict[str, Callable[[BinaryIO], Any]] = {
             "json": json.load,
             "yml": cls._load_yaml,
+            "yaml": cls._load_yaml,
             "csv": cls._load_csv,
         }
         extension = filename.split(".")[-1]
